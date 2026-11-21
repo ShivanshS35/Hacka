@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Preloader } from './components/Preloader';
 import { EditorialShowcase } from './components/EditorialShowcase';
-import { CommandCenter } from './components/CommandCenter';
+import { WarMonitorLiveApp } from './components/WarMonitorLiveApp';
 
 export function App() {
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -10,8 +10,8 @@ export function App() {
   const [currentView, setCurrentView] = useState<'EDITORIAL' | 'COMMAND'>('EDITORIAL');
 
   return (
-    <div className="min-h-screen bg-[#080808] text-white overflow-x-hidden">
-      {/* 1. Melon Studio Signature Preloader Animation */}
+    <div className="min-h-screen bg-[#070A10] text-white overflow-x-hidden font-sans">
+      {/* 1. Melon Studio Signature Preloader Animation (~4s with system status & skip) */}
       {!hasLoaded && (
         <Preloader onComplete={() => setHasLoaded(true)} />
       )}
@@ -35,14 +35,14 @@ export function App() {
           ) : (
             <motion.div
               key="command-view"
-              initial={{ opacity: 0, scale: 1.02 }}
+              initial={{ opacity: 0, scale: 1.01 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, y: 20, transition: { duration: 0.3 } }}
               transition={{ duration: 0.45, ease: 'easeOut' }}
               className="h-screen w-screen overflow-hidden"
             >
-              <CommandCenter
-                onReturnToEditorial={() => setCurrentView('EDITORIAL')}
+              <WarMonitorLiveApp
+                onOpenEditorial={() => setCurrentView('EDITORIAL')}
               />
             </motion.div>
           )}

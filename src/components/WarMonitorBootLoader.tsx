@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import { sound } from '../utils/audio';
 
 interface WarMonitorBootLoaderProps {
@@ -12,23 +12,38 @@ export const WarMonitorBootLoader: React.FC<WarMonitorBootLoaderProps> = ({ onCo
   const [authProgress, setAuthProgress] = useState(false);
 
   const bootLogs = [
-    "[INT] Connecting to RSS intelligence aggregators...",
-    "[INT] Initializing CoinGecko market feeds...",
-    "[SEC] Loading conflict zone database (22 active zones)...",
-    "[SEC] Initializing Country Instability Index (CII)...",
-    "[SEC] Loading convergence detection engine...",
-    "[HUD] Configuring tactical HUD overlays...",
-    "[VIS] Loading visual filter modes (8 modes)...",
-    "[CAM] Indexing global CCTV camera feeds...",
-    "[AIS] Connecting to maritime vessel tracking...",
-    "[TRN] Connecting to EU rail APIs (FI/DE/CH)...",
-    "[WX] Loading global weather stations...",
-    "[OK] All systems nominal. 24+ data layers active.",
-    "[OK] PRAHARI OSINT ready. Welcome, operator."
+    "[INT] Connecting to Telethon Telegram OSINT aggregators...",
+    "[INT] Initializing Rajasthan UPI Escrow monitoring endpoints...",
+    "[SEC] Loading District Threat Matrix (33 Rajasthan jurisdictions)...",
+    "[SEC] Loading Hinglish illicit trade dictionary (4,280 terms)...",
+    "[SEC] Initializing Cross-Channel Entity Correlation Engine...",
+    "[HUD] Loading Mapbox Dark vector district geometries...",
+    "[VIS] Configuring Palantir Gotham tactical telemetry overlays...",
+    "[CAM] Indexing CCTV and transport checkpoints in Jaipur/Jodhpur...",
+    "[AIS] Connecting to border surveillance relays (Barmer/Jaisalmer)...",
+    "[BNK] Verifying Section 65B tamper-evident forensic hash vault...",
+    "[OK] All tactical telemetry layers active & verified.",
+    "[OK] PRAHARI OSINT Command Center ready. Welcome, Operator."
   ];
+
+  const handleSkip = useCallback(() => {
+    sound.playSuccessChime();
+    onComplete();
+  }, [onComplete]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleSkip();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleSkip]);
 
   useEffect(() => {
     sound.playRadarPing();
+    // 3.8 - 4.2 seconds total duration
     const timer = setInterval(() => {
       setPercent(prev => {
         if (prev >= 100) {
@@ -37,68 +52,69 @@ export const WarMonitorBootLoader: React.FC<WarMonitorBootLoaderProps> = ({ onCo
           sound.playSuccessChime();
           setTimeout(() => {
             onComplete();
-          }, 1000);
+          }, 800);
           return 100;
         }
-        const next = Math.min(prev + 5, 100);
+
+        const next = Math.min(prev + (prev > 75 ? 2 : 2), 100);
         const logIndex = Math.floor((next / 100) * bootLogs.length);
         setTerminalLines(bootLogs.slice(0, logIndex + 1));
         if (next % 20 === 0) sound.playClick();
         return next;
       });
-    }, 60);
+    }, 75);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [onComplete]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#04070a] flex flex-col items-center justify-center p-4 font-mono select-none">
+    <div className="fixed inset-0 z-50 bg-[#070A10] flex flex-col items-center justify-center p-4 font-mono select-none">
       {/* Background radial ring */}
       <div className="relative mb-8 flex flex-col items-center">
         {/* Concentric radar rings */}
-        <div className="relative w-24 h-24 flex items-center justify-center mb-6">
-          <div className="absolute inset-0 rounded-full border border-emerald-500/20" />
-          <div className="absolute inset-3 rounded-full border border-emerald-500/30" />
-          <div className="absolute inset-6 rounded-full border border-emerald-500/40" />
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_12px_#10B981] animate-ping" />
+        <div className="relative w-20 h-20 flex items-center justify-center mb-5">
+          <div className="absolute inset-0 rounded-full border border-cyan-500/20" />
+          <div className="absolute inset-2.5 rounded-full border border-cyan-500/30" />
+          <div className="absolute inset-5 rounded-full border border-cyan-500/40" />
+          <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_12px_#22D3EE] animate-ping" />
         </div>
 
         {/* Title */}
-        <h1 className="text-2xl sm:text-3xl font-black tracking-[0.25em] text-emerald-400 text-center mb-2 font-mono">
-          PRAHARI // WARMONITOR
+        <h1 className="text-2xl sm:text-3xl font-black tracking-[0.25em] text-white text-center mb-1 font-sans">
+          PRAHARI // COMMAND
         </h1>
-        <div className="text-[11px] tracking-[0.3em] text-slate-500 uppercase text-center mb-4">
-          GLOBAL INTELLIGENCE & ILLICIT TRADE PLATFORM
+        <div className="text-[11px] tracking-[0.3em] text-cyan-400 uppercase text-center mb-4">
+          Rajasthan Police Cross-Channel OSINT Platform
         </div>
 
-        <div className="border border-red-500/40 bg-red-950/20 text-red-400 text-[10px] tracking-widest px-3 py-0.5 rounded font-bold uppercase">
-          UNCLASSIFIED // FOUO
+        <div className="border border-white/[0.08] bg-white/[0.03] text-slate-300 text-[10px] tracking-widest px-3 py-0.5 rounded font-mono uppercase">
+          DEFCON 2 // LAW ENFORCEMENT RESTRICTED
         </div>
       </div>
 
       {/* Progress bar */}
-      <div className="w-full max-w-lg mb-2 flex items-center justify-between text-[11px] text-emerald-400">
-        <span className="tracking-widest">INITIALIZING</span>
-        <span className="font-bold">{percent}%</span>
+      <div className="w-full max-w-lg mb-2 flex items-center justify-between text-[11px] text-slate-300 font-mono">
+        <span className="tracking-widest text-slate-400">INITIALIZING SYSTEM MATRIX</span>
+        <span className="font-semibold text-cyan-400">{percent}%</span>
       </div>
-      <div className="w-full max-w-lg h-1 bg-slate-900 rounded-full overflow-hidden mb-4">
+      <div className="w-full max-w-lg h-1.5 bg-white/[0.06] rounded-full overflow-hidden mb-4">
         <div
-          className="h-full bg-emerald-400 shadow-[0_0_10px_#10B981] transition-all duration-75"
+          className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 shadow-[0_0_10px_#22D3EE] transition-all duration-75"
           style={{ width: `${percent}%` }}
         />
       </div>
 
       {/* Terminal log box */}
-      <div className="w-full max-w-lg h-56 bg-[#030508] border border-slate-800 rounded-lg p-4 font-mono text-[11px] overflow-hidden flex flex-col justify-between text-slate-400 shadow-2xl">
-        <div className="space-y-1 overflow-y-auto">
+      <div className="w-full max-w-lg h-60 bg-[#0C101A] border border-white/[0.08] rounded-xl p-4 font-mono text-[11px] overflow-hidden flex flex-col justify-between text-slate-400 shadow-2xl">
+        <div className="space-y-1.5 overflow-y-auto pr-1">
           {terminalLines.map((line, idx) => (
             <div
               key={idx}
               className={`${
                 line.includes('[OK]')
-                  ? 'text-emerald-400 font-bold'
+                  ? 'text-emerald-400 font-medium'
                   : line.includes('[SEC]')
-                  ? 'text-amber-400'
+                  ? 'text-cyan-300'
                   : 'text-slate-400'
               }`}
             >
@@ -110,12 +126,12 @@ export const WarMonitorBootLoader: React.FC<WarMonitorBootLoaderProps> = ({ onCo
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="pt-2 border-t border-slate-800 text-slate-300 space-y-0.5"
+              className="pt-2 border-t border-white/[0.08] text-slate-300 space-y-0.5"
             >
-              <div className="text-cyan-400 font-bold">[AUTH] CREDENTIAL VERIFICATION</div>
-              <div className="text-slate-400">OPERATOR: <span className="text-white">SIERRA-7X</span> ✓</div>
-              <div className="text-slate-400">CLEARANCE: <span className="text-red-400">TS//SCI//NOFORN</span> ✓</div>
-              <div className="text-emerald-400">AUTH TOKEN: <span className="tracking-widest">••••••••</span> █</div>
+              <div className="text-cyan-400 font-bold">[AUTH] CIPHER PROTOCOL VERIFIED</div>
+              <div className="text-slate-400">OPERATOR: <span className="text-white">SIERRA-RAJ-09</span> ✓</div>
+              <div className="text-slate-400">JURISDICTION: <span className="text-rose-400">STATE CYBER CELL</span> ✓</div>
+              <div className="text-emerald-400">TOKEN: <span className="tracking-widest">••••••••••••••••</span> █</div>
             </motion.div>
           )}
         </div>
@@ -123,11 +139,8 @@ export const WarMonitorBootLoader: React.FC<WarMonitorBootLoaderProps> = ({ onCo
 
       {/* Skip button */}
       <button
-        onClick={() => {
-          sound.playSuccessChime();
-          onComplete();
-        }}
-        className="mt-6 text-[10px] tracking-widest text-slate-500 hover:text-emerald-400 transition-colors uppercase"
+        onClick={handleSkip}
+        className="mt-6 text-[10px] tracking-widest text-slate-500 hover:text-white transition-colors uppercase font-mono px-3 py-1 rounded bg-white/[0.02] border border-white/[0.06]"
       >
         PRESS TO SKIP [ESC]
       </button>
