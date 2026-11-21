@@ -33,19 +33,19 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({ post }) => {
   };
 
   return (
-    <div className="h-full flex flex-col bg-[#0b0f16] font-mono text-xs overflow-y-auto select-none">
+    <div className="h-full flex flex-col bg-[#0C101A] font-sans text-xs overflow-y-auto select-none">
       {/* Dossier Header */}
-      <div className="p-4 bg-[#0e1420] border-b border-slate-800 space-y-2">
+      <div className="p-4 border-b border-white/[0.07] space-y-1.5 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Lock className="w-4 h-4 text-emerald-400" />
-            <span className="font-bold text-white tracking-wider">FORENSIC CHAIN OF CUSTODY</span>
+            <span className="font-semibold text-white tracking-wide text-[13px]">Chain of Custody Dossier</span>
           </div>
-          <span className="bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">
+          <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 px-2 py-0.5 rounded text-[10px] font-mono">
             SEC 65B SEALED
           </span>
         </div>
-        <div className="text-[11px] text-cyan-400">
+        <div className="text-[11px] text-cyan-400 font-mono">
           CASE #INV-RAJ-2026-{post.id.toUpperCase()}
         </div>
       </div>
@@ -53,67 +53,69 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({ post }) => {
       {/* Dossier Content Body */}
       <div className="p-4 space-y-4 flex-1">
         {/* Section 65B Admissibility Stamp */}
-        <div className="p-3 bg-cyan-950/30 border border-cyan-500/40 rounded-xl space-y-1">
-          <div className="flex items-center justify-between text-cyan-400 font-bold text-[10px]">
-            <span>INDIAN EVIDENCE ACT // SECTION 65B</span>
-            <span className="text-emerald-400">✓ CERTIFIED TRANSCRIPT</span>
+        <div className="p-3 bg-white/[0.02] border border-white/[0.08] rounded-xl space-y-1.5">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="font-medium text-cyan-300">Indian Evidence Act // Sec 65B</span>
+            <span className="text-emerald-400 text-[10px] font-mono flex items-center gap-1">
+              <Check className="w-3 h-3" /> CERTIFIED TRANSCRIPT
+            </span>
           </div>
-          <p className="text-[10px] text-slate-400 leading-relaxed font-sans">
-            Automated hash timestamped upon initial Telethon protocol packet capture. Cryptographically tamper-evident for judicial submission.
+          <p className="text-[11px] text-[#94A3B8] leading-relaxed">
+            Automated hash timestamped upon Telethon protocol packet capture. Cryptographically tamper-evident for judicial submission.
           </p>
         </div>
 
         {/* Telemetry Grid */}
-        <div className="bg-[#080c12] border border-slate-800 rounded-xl p-3 space-y-2 text-[11px]">
-          <div className="flex justify-between">
-            <span className="text-slate-500">SOURCE CHANNEL:</span>
-            <span className="text-cyan-400 font-bold">{post.channel}</span>
+        <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-3.5 space-y-2 text-[11px]">
+          <div className="flex justify-between items-center">
+            <span className="text-[#94A3B8]">SOURCE CHANNEL:</span>
+            <span className="text-cyan-400 font-mono font-medium">{post.channel}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-slate-500">AUDIENCE REACH:</span>
-            <span className="text-slate-300">{post.channelSubscribers || 'Public Forum'}</span>
+          <div className="flex justify-between items-center">
+            <span className="text-[#94A3B8]">AUDIENCE REACH:</span>
+            <span className="text-[#F1F5F9] font-mono">{post.channelSubscribers || 'Public Forum'}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-slate-500">POST TIMESTAMP:</span>
-            <span className="text-slate-300">{post.timestamp}</span>
+          <div className="flex justify-between items-center">
+            <span className="text-[#94A3B8]">POST TIMESTAMP:</span>
+            <span className="text-[#94A3B8] font-mono">{post.timestamp}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-slate-500">CAPTURED AT:</span>
-            <span className="text-slate-400">{post.capturedAt}</span>
+          <div className="flex justify-between items-center">
+            <span className="text-[#94A3B8]">CAPTURED AT:</span>
+            <span className="text-[#94A3B8] font-mono">{post.capturedAt}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-slate-500">DISTRICT NEXUS:</span>
-            <span className="text-yellow-400 font-bold">{post.districtName.toUpperCase()}</span>
+          <div className="flex justify-between items-center">
+            <span className="text-[#94A3B8]">DISTRICT NEXUS:</span>
+            <span className="text-amber-400 font-medium">{post.districtName}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-slate-500">CRIME CATEGORY:</span>
-            <span className="text-red-400 font-bold">[{post.categories.join(' / ')}]</span>
+          <div className="flex justify-between items-center">
+            <span className="text-[#94A3B8]">CATEGORY:</span>
+            <span className="text-rose-400 font-mono font-medium">{post.categories.join(' / ')}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-slate-500">CONFIDENCE:</span>
-            <span className="text-emerald-400 font-bold">{(post.confidence * 100).toFixed(0)}% MATCH</span>
+          <div className="flex justify-between items-center">
+            <span className="text-[#94A3B8]">CONFIDENCE:</span>
+            <span className="text-emerald-400 font-mono font-semibold">{(post.confidence * 100).toFixed(0)}% MATCH</span>
           </div>
         </div>
 
         {/* Raw Text Snapshot */}
-        <div className="space-y-1">
-          <div className="text-[10px] text-slate-500 font-bold">RAW INTERCEPT TRANSCRIPT:</div>
-          <div className="p-3 bg-[#080c12] border border-slate-800 rounded-xl text-slate-200 font-sans text-xs leading-relaxed">
+        <div className="space-y-1.5">
+          <div className="text-[10px] text-[#94A3B8] font-mono uppercase tracking-wider">RAW INTERCEPT TRANSCRIPT</div>
+          <div className="p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl text-[#F1F5F9] text-xs leading-relaxed">
             "{post.rawText}"
           </div>
         </div>
 
         {/* Cryptographic SHA-256 Hash Display */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-[10px]">
-            <span className="text-slate-500 font-bold flex items-center gap-1">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="text-[#94A3B8] flex items-center gap-1 font-mono text-[10px] uppercase">
               <Hash className="w-3 h-3 text-cyan-400" />
-              SHA-256 INTEGRITY CHECKSUM:
+              SHA-256 INTEGRITY CHECKSUM
             </span>
-            <span className="text-emerald-400 text-[9px]">MATCH: VALID</span>
+            <span className="text-emerald-400 font-mono text-[10px]">MATCH: VALID</span>
           </div>
 
-          <div className="p-3 bg-slate-950 rounded-xl border border-cyan-500/40 text-cyan-300 text-[10px] break-all leading-relaxed shadow-inner">
+          <div className="p-3 bg-[#070A10] rounded-xl border border-white/[0.08] text-cyan-300 font-mono text-[10px] break-all leading-relaxed select-all">
             {post.sha256}
           </div>
 
@@ -121,18 +123,18 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({ post }) => {
           <div className="flex flex-col gap-2 pt-2">
             <button
               onClick={handleCopyHash}
-              className="w-full flex items-center justify-center gap-2 bg-[#121924] hover:bg-slate-800 border border-cyan-500/50 text-cyan-400 py-2.5 rounded-lg text-xs font-bold transition-all"
+              className="w-full flex items-center justify-center gap-2 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-cyan-300 hover:text-cyan-200 py-2.5 rounded-xl text-xs font-medium transition-all"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copied ? 'HASH COPIED TO CLIPBOARD' : 'COPY SHA-256 HASH'}</span>
+              <span>{copied ? 'Hash Copied to Clipboard' : 'Copy SHA-256 Hash'}</span>
             </button>
 
             <button
               onClick={handleDownloadPDF}
-              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white py-2.5 rounded-lg text-xs font-bold transition-all shadow-[0_0_20px_rgba(255,59,48,0.35)]"
+              className="w-full flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-500 text-white py-2.5 rounded-xl text-xs font-semibold transition-all shadow-[0_0_15px_rgba(244,63,94,0.3)]"
             >
               <FileText className="w-3.5 h-3.5" />
-              <span>DOWNLOAD COURT-READY PDF REPORT</span>
+              <span>Download Court-Ready PDF Report</span>
             </button>
           </div>
         </div>

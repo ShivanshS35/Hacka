@@ -149,9 +149,9 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
   };
 
   return (
-    <div className="h-screen w-screen bg-[#080B10] text-slate-100 flex flex-col overflow-hidden font-sans select-none">
-      {/* TOP TACTICAL TELEMETRY HEADER */}
-      <header className="bg-[#0b1019] border-b border-slate-800 px-4 py-2 flex flex-wrap items-center justify-between font-mono text-xs z-30 shrink-0">
+    <div className="h-screen w-screen bg-[#070A10] text-[#F1F5F9] flex flex-col overflow-hidden font-sans select-none">
+      {/* TOP COMMAND BAR (Palantir Gotham / Linear 52px Glass Header) */}
+      <header className="h-[52px] bg-[#070A10]/80 backdrop-blur-md border-b border-white/[0.07] px-4 flex items-center justify-between z-30 shrink-0">
         {/* Left: Branding & Return Button */}
         <div className="flex items-center gap-3">
           <button
@@ -159,67 +159,82 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
               sound.playClick();
               onReturnToEditorial();
             }}
-            className="flex items-center gap-1.5 bg-[#121924] hover:bg-slate-800 border border-slate-700 text-slate-300 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all"
+            className="flex items-center gap-1.5 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-[#94A3B8] hover:text-white px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors"
             title="Return to Product Showcase"
           >
             <ArrowLeft className="w-3.5 h-3.5 text-cyan-400" />
             <span className="hidden sm:inline">EDITORIAL</span>
           </button>
 
+          <div className="h-4 w-[1px] bg-white/[0.1] hidden sm:block" />
+
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded bg-cyan-950 border border-cyan-400 flex items-center justify-center">
+            <div className="w-6 h-6 rounded-md bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
               <Shield className="w-3.5 h-3.5 text-cyan-400" />
             </div>
-            <div>
-              <span className="font-bold text-white tracking-wider">PRAHARI // COMMAND CENTER</span>
-              <span className="text-[10px] text-cyan-400 font-normal ml-2 hidden md:inline">
-                RAJASTHAN POLICE CYBER CELL
+            <div className="flex items-baseline gap-2">
+              <span className="font-semibold text-white tracking-wide text-[13px]">PRAHARI</span>
+              <span className="text-[10px] text-[#94A3B8] font-mono uppercase tracking-widest hidden md:inline">
+                Rajasthan Police Cyber Cell
               </span>
             </div>
           </div>
         </div>
 
-        {/* Center: Live Telemetry Metrics */}
-        <div className="hidden lg:flex items-center gap-6 text-[11px]">
+        {/* Center: Live Telemetry Metrics (Clean Borderless Blocks) */}
+        <div className="hidden lg:flex items-center gap-5 text-[11px]">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            <span className="text-slate-400">STATUS:</span>
-            <span className="text-emerald-400 font-bold">ONLINE // 14ms</span>
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="text-[#94A3B8]">GRID:</span>
+            <span className="text-emerald-400 font-mono font-medium">LIVE // 14ms</span>
           </div>
+
+          <div className="h-3.5 w-[1px] bg-white/[0.08]" />
 
           <div className="flex items-center gap-1.5">
-            <span className="text-slate-400">CHANNELS:</span>
-            <span className="text-cyan-400 font-bold">1,428 ACTIVE</span>
+            <span className="text-[#94A3B8]">CHANNELS:</span>
+            <span className="text-cyan-400 font-mono font-semibold">1,428</span>
           </div>
+
+          <div className="h-3.5 w-[1px] bg-white/[0.08]" />
 
           <div className="flex items-center gap-1.5">
-            <span className="text-slate-400">INTERCEPTS:</span>
-            <span className="text-red-400 font-bold">{posts.length + 8940}</span>
+            <span className="text-[#94A3B8]">INTERCEPTS:</span>
+            <span className="text-rose-400 font-mono font-semibold">{posts.length + 8940}</span>
           </div>
+
+          <div className="h-3.5 w-[1px] bg-white/[0.08]" />
 
           <div className="flex items-center gap-1.5">
-            <span className="text-slate-400">ENTITIES LINKED:</span>
-            <span className="text-yellow-400 font-bold">3,114</span>
+            <span className="text-[#94A3B8]">ENTITIES:</span>
+            <span className="text-amber-400 font-mono font-semibold">3,114</span>
           </div>
 
-          <div className="bg-red-950/80 text-red-400 border border-red-800/80 px-2 py-0.5 rounded text-[10px] font-bold">
-            DEFCON 2 // AMBER
+          <div className="h-3.5 w-[1px] bg-white/[0.08]" />
+
+          {/* Refined DEFCON Status Pill */}
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/25 text-rose-400 text-[10px] font-mono">
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
+            <span>DEFCON 2 // AMBER</span>
           </div>
         </div>
 
         {/* Right: Sound Toggle, Clock, Ingest Modal */}
         <div className="flex items-center gap-3">
-          <div className="hidden sm:flex items-center gap-1.5 text-slate-400 text-[11px]">
+          <div className="hidden sm:flex items-center gap-1.5 text-[#94A3B8] font-mono text-[11px]">
             <Clock className="w-3.5 h-3.5 text-cyan-400" />
             <span>{clock}</span>
           </div>
 
           <button
             onClick={toggleSound}
-            className="p-1.5 bg-[#121924] hover:bg-slate-800 border border-slate-700 text-slate-300 rounded-lg transition-colors"
+            className="p-1.5 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-[#94A3B8] hover:text-white rounded-md transition-colors"
             title="Toggle Sound Effects"
           >
-            {isMuted ? <VolumeX className="w-3.5 h-3.5 text-red-400" /> : <Volume2 className="w-3.5 h-3.5 text-cyan-400" />}
+            {isMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-cyan-400" />}
           </button>
 
           <button
@@ -227,18 +242,18 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
               sound.playClick();
               setIsUploadModalOpen(true);
             }}
-            className="flex items-center gap-1.5 bg-gradient-to-r from-cyan-500 to-cyan-400 text-black px-3 py-1 rounded-lg text-[11px] font-bold hover:brightness-110 transition-all shadow-[0_0_15px_rgba(0,229,255,0.3)]"
+            className="flex items-center gap-1.5 bg-cyan-400 hover:bg-cyan-300 text-slate-950 px-3 py-1 rounded-md text-[11px] font-semibold transition-all shadow-[0_0_12px_rgba(34,211,238,0.25)]"
           >
-            <Upload className="w-3.5 h-3.5 fill-black" />
-            <span>IMPORT</span>
+            <Upload className="w-3.5 h-3.5" />
+            <span>IMPORT INTEL</span>
           </button>
         </div>
       </header>
 
       {/* MAIN 3-PANEL TACTICAL WORKSPACE */}
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-12 overflow-hidden">
+      <div className="flex-1 grid grid-cols-1 md:grid-cols-12 overflow-hidden bg-[#070A10]">
         {/* LEFT PANEL: Live Intercept Feed & Filters (3.5 cols on lg) */}
-        <div className="md:col-span-4 lg:col-span-3 h-full overflow-hidden">
+        <div className="md:col-span-4 lg:col-span-3 h-full overflow-hidden border-r border-white/[0.07]">
           <LiveInterceptFeed
             posts={posts}
             selectedPost={selectedPost}
@@ -257,7 +272,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
         </div>
 
         {/* CENTERPIECE: Interactive Rajasthan Vector Map (5 cols on lg) */}
-        <div className="md:col-span-8 lg:col-span-5 h-full p-2 bg-[#06090e] overflow-hidden flex flex-col">
+        <div className="md:col-span-8 lg:col-span-5 h-full p-2 bg-[#070A10] overflow-hidden flex flex-col">
           <RajasthanMap
             districts={districts}
             connections={connections}
@@ -273,7 +288,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
         </div>
 
         {/* RIGHT PANEL: Entity Graph & Forensic Dossier (4 cols on lg) */}
-        <div className="hidden lg:block lg:col-span-4 h-full overflow-hidden">
+        <div className="hidden lg:block lg:col-span-4 h-full overflow-hidden border-l border-white/[0.07]">
           <InspectorPanel
             selectedPost={selectedPost}
             selectedDistrict={selectedDistrict}

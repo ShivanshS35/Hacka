@@ -17,7 +17,7 @@ import { sound } from '../utils/audio';
 const rajasthanGeoUrl = '/rajasthan-districts.json';
 const DEFAULT_CENTER: [number, number] = [73.9, 26.7];
 
-// District name normalization map for 2011 Census TopoJSON spellings and common variations
+// District name normalization map for TopoJSON spellings and variations
 export const DISTRICT_NAME_NORMALIZATION: Record<string, string> = {
   ganganagar: 'Sri Ganganagar',
   jalor: 'Jalore',
@@ -134,12 +134,10 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
     d: DistrictIntel,
     dynamicMap?: Map<string, [number, number]>
   ): [number, number] | null => {
-    // 1. Direct coordinates on district object
     if (d.coordinates && d.coordinates.length === 2) {
       return d.coordinates;
     }
 
-    // 2. Dynamic centroid map computed from TopoJSON
     if (dynamicMap) {
       const norm = normalizeDistrictName(d.name).toLowerCase();
       if (dynamicMap.has(norm)) return dynamicMap.get(norm)!;
@@ -147,7 +145,6 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
       if (dynamicMap.has(d.id.toLowerCase())) return dynamicMap.get(d.id.toLowerCase())!;
     }
 
-    // 3. Static table fallback
     const idKey = d.id.toLowerCase();
     if (DISTRICT_COORDINATES[idKey]) return DISTRICT_COORDINATES[idKey];
     const nameKey = d.name.toLowerCase().trim();
@@ -158,68 +155,46 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
     return null;
   };
 
-  const getCategoryColor = (cat: CrimeCategory) => {
-    switch (cat) {
-      case 'DRUGS':
-        return '#FF3B30'; // red
-      case 'ARMS':
-        return '#F59E0B'; // amber/orange
-      case 'DOCUMENTS':
-        return '#8B5CF6'; // purple
-      case 'FINANCIAL':
-        return '#10B981'; // emerald
-    }
-  };
-
   const getConnectionColor = (conn: DistrictConnection) => {
-    if (conn.type === 'UPI') return '#22d3ee'; // cyan
-    if (conn.type === 'PHONE' || conn.category === 'ARMS') return '#f59e0b'; // amber
-    if (conn.type === 'CRYPTO' || conn.category === 'DRUGS') return '#ef4444'; // crimson
-    return getCategoryColor(conn.category);
+    if (conn.type === 'UPI') return '#22D3EE'; // cyan
+    if (conn.type === 'PHONE' || conn.category === 'ARMS') return '#F59E0B'; // amber
+    if (conn.type === 'CRYPTO' || conn.category === 'DRUGS') return '#F43F5E'; // rose
+    return '#818CF8';
   };
 
   const getThreatColor = (level: string) => {
     switch (level) {
       case 'CRITICAL':
-        return '#FF3B30';
+        return '#F43F5E';
       case 'HIGH':
         return '#F59E0B';
       case 'ELEVATED':
-        return '#00E5FF';
+        return '#22D3EE';
       default:
         return '#64748B';
     }
   };
 
   return (
-    <div className="relative w-full h-full bg-[#070a0f] rounded-2xl border border-slate-800 overflow-hidden flex flex-col select-none touch-none">
-      {/* Background Radar Grid & Coordinates */}
-      <div className="absolute inset-0 radar-grid opacity-60 pointer-events-none" />
-      <div className="absolute inset-0 crt-overlay opacity-30 pointer-events-none" />
+    <div className="relative w-full h-full bg-[#070A10] overflow-hidden flex flex-col select-none touch-none">
+      {/* Soft background grid - 5% opacity per Palantir/Mapbox spec */}
+      <div className="absolute inset-0 radar-grid opacity-5 pointer-events-none" />
 
-      {/* Map Header Overlay Bar */}
-      <div className="relative z-20 bg-[#0c121b]/85 backdrop-blur-md px-4 py-2.5 border-b border-slate-800 flex flex-wrap items-center justify-between text-xs font-mono">
-        <div className="flex items-center gap-2">
-          <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
-          <span className="text-white font-bold">RAJASTHAN TACTICAL GIS // THREAT RADAR</span>
-          <span className="text-slate-500 hidden sm:inline">|</span>
-          <span className="text-cyan-400 hidden sm:inline">PROJECTION: EPSG:4326 // WGS 84</span>
-        </div>
-
-        {/* Tactical Map Toggles */}
-        <div className="flex items-center gap-2 mt-2 sm:mt-0">
+      {/* Floating Compact Glass Toolbar (Top Center/Right) */}
+      <div className="absolute top-3.5 right-4 z-20 flex items-center gap-2">
+        <div className="bg-[#0C101A]/85 backdrop-blur-md border border-white/[0.08] px-2.5 py-1.5 rounded-xl flex items-center gap-2 shadow-xl">
           <button
             onClick={() => {
               sound.playClick();
               setShowArcs(!showArcs);
             }}
-            className={`px-2.5 py-1 rounded text-[10px] font-bold border transition-colors ${
+            className={`px-2 py-0.5 rounded text-[11px] font-sans font-medium transition-all ${
               showArcs
-                ? 'bg-cyan-950/80 border-cyan-500/50 text-cyan-300'
-                : 'bg-slate-900 border-slate-700 text-slate-500'
+                ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
+                : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            SYNDICATE ARCS: {showArcs ? 'ON' : 'OFF'}
+            Syndicate Arcs
           </button>
 
           <button
@@ -227,61 +202,60 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
               sound.playClick();
               setShowRadar(!showRadar);
             }}
-            className={`px-2.5 py-1 rounded text-[10px] font-bold border transition-colors ${
+            className={`px-2 py-0.5 rounded text-[11px] font-sans font-medium transition-all ${
               showRadar
-                ? 'bg-red-950/80 border-red-500/50 text-red-300'
-                : 'bg-slate-900 border-slate-700 text-slate-500'
+                ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            RADAR: {showRadar ? 'ON' : 'OFF'}
+            Radar Pulse
           </button>
 
-          <div className="flex items-center gap-1 border-l border-slate-800 pl-2">
-            <button
-              onClick={() => {
-                sound.playClick();
-                setZoomLevel((prev) => Math.min(prev + 0.3, 4));
-              }}
-              className="p-1 text-slate-400 hover:text-cyan-400 hover:bg-slate-800 rounded"
-              title="Zoom In"
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => {
-                sound.playClick();
-                setZoomLevel((prev) => Math.max(prev - 0.3, 0.8));
-              }}
-              className="p-1 text-slate-400 hover:text-cyan-400 hover:bg-slate-800 rounded"
-              title="Zoom Out"
-            >
-              <ZoomOut className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => {
-                sound.playClick();
-                setZoomLevel(1);
-                setMapCenter(DEFAULT_CENTER);
-              }}
-              className="p-1 text-slate-400 hover:text-cyan-400 hover:bg-slate-800 rounded"
-              title="Reset Zoom & Pan"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </button>
-          </div>
+          <div className="h-3.5 w-px bg-white/[0.08] mx-0.5" />
+
+          <button
+            onClick={() => {
+              sound.playClick();
+              setZoomLevel((prev) => Math.min(prev + 0.3, 4));
+            }}
+            className="p-1 text-slate-400 hover:text-white rounded hover:bg-white/[0.05]"
+            title="Zoom In"
+          >
+            <ZoomIn className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => {
+              sound.playClick();
+              setZoomLevel((prev) => Math.max(prev - 0.3, 0.8));
+            }}
+            className="p-1 text-slate-400 hover:text-white rounded hover:bg-white/[0.05]"
+            title="Zoom Out"
+          >
+            <ZoomOut className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => {
+              sound.playClick();
+              setZoomLevel(1);
+              setMapCenter(DEFAULT_CENTER);
+            }}
+            className="p-1 text-slate-400 hover:text-white rounded hover:bg-white/[0.05]"
+            title="Reset View"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 
-      {/* Main Vector Canvas */}
-      <div className="relative flex-1 w-full h-full flex items-center justify-center p-2 overflow-hidden touch-none cursor-grab active:cursor-grabbing">
-        {/* Animated Radar Sweep Overlay */}
+      {/* Main Vector Map Canvas */}
+      <div className="relative flex-1 w-full h-full flex items-center justify-center overflow-hidden touch-none cursor-grab active:cursor-grabbing">
+        {/* Ultra-faint concentric radar sweep rings (border-white/[0.04]) */}
         {showRadar && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
-            <div className="w-[580px] h-[580px] rounded-full border border-cyan-500/30 relative">
-              <div className="absolute inset-0 rounded-full border border-dashed border-cyan-500/20" />
-              <div className="absolute inset-16 rounded-full border border-cyan-500/20" />
-              <div className="absolute inset-32 rounded-full border border-cyan-500/20" />
-              <div className="w-full h-full rounded-full bg-gradient-to-tr from-transparent via-transparent to-cyan-500/20 animate-radar-sweep origin-center" />
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-25">
+            <div className="w-[580px] h-[580px] rounded-full border border-white/[0.04] relative">
+              <div className="absolute inset-16 rounded-full border border-white/[0.03]" />
+              <div className="absolute inset-32 rounded-full border border-white/[0.02]" />
+              <div className="w-full h-full rounded-full bg-gradient-to-tr from-transparent via-transparent to-cyan-500/[0.04] animate-radar-sweep origin-center" />
             </div>
           </div>
         )}
@@ -307,7 +281,6 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
             >
               <Geographies geography={rajasthanGeoUrl}>
                 {({ geographies, borders, outline }) => {
-                  // Dynamically compute centroids for all geographies via geoCentroid(geo)
                   const dynamicCentroidMap = new Map<string, [number, number]>();
                   geographies.forEach((geo) => {
                     const rawName = (geo.properties as Record<string, any> | null)?.district as
@@ -316,17 +289,19 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
                     if (rawName) {
                       const centroid = geoCentroid(geo) as [number, number];
                       dynamicCentroidMap.set(rawName.toLowerCase(), centroid);
-                      dynamicCentroidMap.set(normalizeDistrictName(rawName).toLowerCase(), centroid);
+                      dynamicCentroidMap.set(
+                        normalizeDistrictName(rawName).toLowerCase(),
+                        centroid
+                      );
                     }
                   });
 
                   return (
                     <>
-                      {/* Base Geographic District Boundaries & Threat Theming */}
+                      {/* Base Geographic Districts with Mapbox Dark Elevation */}
                       {geographies.map((geo) => {
-                        const topoName = (geo.properties as Record<string, any> | null)?.district as
-                          | string
-                          | undefined;
+                        const topoName = (geo.properties as Record<string, any> | null)
+                          ?.district as string | undefined;
                         const matchedDistrict = getDistrictByName(topoName);
                         const normalizedTopo = normalizeDistrictName(topoName).toLowerCase();
                         const isSelected = Boolean(
@@ -341,16 +316,19 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
                               normalizeDistrictName(hoveredDistrict.name).toLowerCase() ===
                                 normalizedTopo)
                         );
-                        const threatStroke = matchedDistrict
-                          ? getThreatColor(matchedDistrict.threatLevel)
-                          : '#1e293b';
-                        const fillColor = matchedDistrict
-                          ? isSelected
-                            ? '#0e3a4e'
-                            : isHovered
-                            ? '#164e63'
-                            : '#0b1320'
-                          : '#070c14';
+
+                        // Mapbox Dark Palette: Subtle obsidian-slate fills with hairline stroke
+                        const strokeColor = isSelected
+                          ? '#22D3EE'
+                          : isHovered
+                          ? '#38BDF8'
+                          : 'rgba(255, 255, 255, 0.08)';
+
+                        const fillColor = isSelected
+                          ? 'rgba(34, 211, 238, 0.12)'
+                          : isHovered
+                          ? 'rgba(255, 255, 255, 0.06)'
+                          : '#0B0F19';
 
                         return (
                           <Geography
@@ -367,40 +345,40 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
                               }
                             }}
                             fill={fillColor}
-                            stroke={isSelected ? '#22d3ee' : isHovered ? '#38bdf8' : threatStroke}
-                            strokeWidth={isSelected ? 1.6 : isHovered ? 1.2 : 0.6}
+                            stroke={strokeColor}
+                            strokeWidth={isSelected ? 1.4 : isHovered ? 1.0 : 0.5}
                             style={{
                               outline: 'none',
                               cursor: matchedDistrict ? 'pointer' : 'default',
-                              transition: 'fill 0.2s, stroke 0.2s',
+                              transition: 'fill 0.15s ease, stroke 0.15s ease',
                             }}
                           />
                         );
                       })}
 
-                      {/* Internal District Borders */}
+                      {/* Subtle Internal District Boundaries */}
                       {borders?.svgPath && (
                         <path
                           d={borders.svgPath}
                           fill="none"
-                          stroke="#1e293b"
-                          strokeWidth={0.75}
+                          stroke="rgba(255, 255, 255, 0.05)"
+                          strokeWidth={0.5}
                           pointerEvents="none"
                         />
                       )}
 
-                      {/* Outer Rajasthan State Border */}
+                      {/* State Perimeter Boundary */}
                       {outline?.svgPath && (
                         <path
                           d={outline.svgPath}
                           fill="none"
-                          stroke="#0284c7"
-                          strokeWidth={1.5}
+                          stroke="rgba(34, 211, 238, 0.35)"
+                          strokeWidth={1.2}
                           pointerEvents="none"
                         />
                       )}
 
-                      {/* Syndicate Arcs (Connections) */}
+                      {/* Smooth Curved Syndicate Arcs */}
                       {showArcs &&
                         filteredConnections.map((conn) => {
                           const fromDist = getDistrictById(conn.from);
@@ -418,16 +396,16 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
                               from={fromCoords}
                               to={toCoords}
                               stroke={arcColor}
-                              strokeWidth={1.8}
+                              strokeWidth={1.4}
                               strokeDasharray="4 3"
-                              strokeOpacity={0.85}
+                              strokeOpacity={0.75}
                               className="animate-pulse"
                               style={{ pointerEvents: 'none' }}
                             />
                           );
                         })}
 
-                      {/* District Tactical Markers (Labels & Badges) */}
+                      {/* Decluttered District Markers: Clean glowing dots; labels show for Hovered/Selected or Hotspots */}
                       {districts.map((district) => {
                         const coords = getDistrictCoordinates(district, dynamicCentroidMap);
                         if (!coords) return null;
@@ -440,6 +418,11 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
                           hoveredDistrict?.id === district.id ||
                           normalizeDistrictName(hoveredDistrict?.name).toLowerCase() ===
                             normalizeDistrictName(district.name).toLowerCase();
+                        const isHotspot =
+                          district.threatLevel === 'CRITICAL' || district.threatLevel === 'HIGH';
+
+                        // Show label if selected, hovered, or high-threat hotspot to prevent clutter
+                        const showLabel = isSelected || isHovered || isHotspot;
                         const threatColor = getThreatColor(district.threatLevel);
 
                         return (
@@ -454,64 +437,65 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
                             onMouseLeave={() => setHoveredDistrict(null)}
                             style={{ cursor: 'pointer' }}
                           >
-                            {/* Outer Pulse Ring for Selected District */}
+                            {/* Outer Pulse Ping for Selected Node */}
                             {isSelected && (
                               <circle
-                                r={10}
+                                r={8}
                                 fill="none"
-                                stroke="#22d3ee"
-                                strokeWidth={1.5}
+                                stroke="#22D3EE"
+                                strokeWidth={1.2}
                                 className="animate-ping"
-                                opacity={0.75}
+                                opacity={0.6}
                               />
                             )}
 
-                            {/* Centroid Tactical Node */}
+                            {/* Minimal Glowing District Centroid Dot */}
                             <circle
-                              r={isSelected ? 4 : isHovered ? 3.5 : 2.5}
-                              fill={isSelected ? '#22d3ee' : isHovered ? '#38bdf8' : threatColor}
-                              stroke="#070a0f"
+                              r={isSelected ? 3.5 : isHovered ? 3 : 2}
+                              fill={isSelected ? '#22D3EE' : isHovered ? '#38BDF8' : threatColor}
+                              stroke="#070A10"
                               strokeWidth={1}
                             />
 
-                            {/* District Label */}
-                            <text
-                              textAnchor="middle"
-                              y={11}
-                              fill={isSelected ? '#38bdf8' : isHovered ? '#f1f5f9' : '#94a3b8'}
-                              fontSize={isSelected ? 8.5 : 7}
-                              fontFamily="monospace"
-                              fontWeight={isSelected || isHovered ? 'bold' : 'normal'}
-                              letterSpacing="0.4"
-                              style={{
-                                pointerEvents: 'none',
-                                userSelect: 'none',
-                                textShadow: '0 1px 4px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.9)',
-                              }}
-                            >
-                              {district.name.toUpperCase()}
-                            </text>
+                            {/* Full Label Rendered Decluttered */}
+                            {showLabel && (
+                              <text
+                                textAnchor="middle"
+                                y={10}
+                                fill={isSelected ? '#38BDF8' : isHovered ? '#F1F5F9' : '#94A3B8'}
+                                fontSize={isSelected ? 8 : 6.5}
+                                fontFamily="sans-serif"
+                                fontWeight={isSelected || isHovered ? '600' : '500'}
+                                style={{
+                                  pointerEvents: 'none',
+                                  userSelect: 'none',
+                                  textShadow: '0 1px 3px rgba(0,0,0,0.9)',
+                                }}
+                              >
+                                {district.name}
+                              </text>
+                            )}
 
-                            {/* Flagged Count Badge */}
-                            {district.flaggedCount > 0 && (
-                              <g transform="translate(5, -7)" style={{ pointerEvents: 'none' }}>
+                            {/* Minimal Pill Badge for Flagged Count */}
+                            {showLabel && district.flaggedCount > 0 && (
+                              <g transform="translate(6, -7)" style={{ pointerEvents: 'none' }}>
                                 <rect
-                                  x={-3}
-                                  y={-6}
-                                  width={district.flaggedCount > 9 ? 16 : 12}
-                                  height={9}
-                                  rx={2.5}
-                                  fill="#090d16"
+                                  x={-2}
+                                  y={-5}
+                                  width={district.flaggedCount > 9 ? 14 : 10}
+                                  height={8}
+                                  rx={2}
+                                  fill="#070A10"
                                   stroke={threatColor}
-                                  strokeWidth={0.8}
-                                  opacity={0.95}
+                                  strokeWidth={0.6}
+                                  opacity={0.9}
                                 />
                                 <text
                                   x={district.flaggedCount > 9 ? 5 : 3}
                                   y={1}
                                   textAnchor="middle"
                                   fill={threatColor}
-                                  fontSize={6.5}
+                                  fontSize={5.5}
                                   fontFamily="monospace"
                                   fontWeight="bold"
                                 >
@@ -530,82 +514,101 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
           </ComposableMap>
         </div>
 
-        {/* Floating HUD Tooltip for Hovered District */}
+        {/* Compact, Translucent Floating Pill Legend (Bottom Left) */}
+        <div className="absolute bottom-3.5 left-4 z-20 bg-[#0C101A]/85 backdrop-blur-md border border-white/[0.08] px-3.5 py-1.5 rounded-full flex items-center gap-3.5 text-[10px] font-sans text-slate-400 shadow-xl">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.5)]" />
+            <span className="text-slate-300 font-medium">Critical</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-amber-500" />
+            <span className="text-slate-300 font-medium">High</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-cyan-400" />
+            <span className="text-slate-300 font-medium">Elevated</span>
+          </div>
+          <div className="h-3 w-px bg-white/[0.08]" />
+          <div className="flex items-center gap-2 font-mono text-[9px] text-slate-400">
+            <span className="text-cyan-300">● UPI</span>
+            <span className="text-amber-300">● Phone</span>
+            <span className="text-rose-300">● Crypto</span>
+          </div>
+        </div>
+
+        {/* Floating Minimal HUD Tooltip for Hovered District */}
         <AnimatePresence>
           {hoveredDistrict && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 10 }}
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="absolute top-14 left-4 z-30 bg-[#0a0f18]/95 backdrop-blur-md border border-cyan-500/50 p-4 rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.8),0_0_20px_rgba(0,229,255,0.2)] font-mono text-xs w-64 pointer-events-none"
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="absolute top-14 left-4 z-30 bg-[#0C101A]/95 backdrop-blur-xl border border-white/[0.1] p-3.5 rounded-xl shadow-2xl w-60 pointer-events-none"
             >
-              <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
                 <div>
-                  <div className="text-white font-bold text-sm">
-                    {hoveredDistrict.name}{' '}
-                    <span className="text-slate-500 text-xs">({hoveredDistrict.hindiName})</span>
+                  <div className="text-white font-sans font-semibold text-xs flex items-center gap-1.5">
+                    <span>{hoveredDistrict.name}</span>
+                    <span className="text-slate-500 text-[10px] font-normal">
+                      ({hoveredDistrict.hindiName})
+                    </span>
                   </div>
-                  <div className="text-[10px] text-cyan-400">DISTRICT DOSSIER</div>
+                  <div className="text-[10px] text-slate-400 font-sans mt-0.5">District Intelligence</div>
                 </div>
                 <span
-                  className="px-2 py-0.5 rounded text-[10px] font-bold"
+                  className="px-2 py-0.5 rounded text-[9px] font-sans font-semibold"
                   style={{
-                    backgroundColor: `${getThreatColor(hoveredDistrict.threatLevel)}20`,
+                    backgroundColor: `${getThreatColor(hoveredDistrict.threatLevel)}15`,
                     color: getThreatColor(hoveredDistrict.threatLevel),
-                    border: `1px solid ${getThreatColor(hoveredDistrict.threatLevel)}40`,
+                    border: `1px solid ${getThreatColor(hoveredDistrict.threatLevel)}30`,
                   }}
                 >
                   {hoveredDistrict.threatLevel}
                 </span>
               </div>
 
-              <div className="mt-3 space-y-2 text-[11px]">
-                <div className="flex justify-between">
+              <div className="mt-2.5 space-y-1.5 text-[11px] font-sans">
+                <div className="flex justify-between items-center">
                   <span className="text-slate-400">Flagged Cases:</span>
-                  <span className="text-red-400 font-bold">
-                    {hoveredDistrict.flaggedCount} alerts
+                  <span className="text-slate-200 font-mono font-medium">
+                    {hoveredDistrict.flaggedCount}
                   </span>
                 </div>
 
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span className="text-slate-400">Top Threats:</span>
-                  <span className="text-slate-200">
+                  <span className="text-slate-300 text-[10px]">
                     {hoveredDistrict.topCategories.join(', ')}
                   </span>
                 </div>
 
-                <div className="pt-2 border-t border-slate-800/80">
-                  <span className="text-slate-400 text-[10px]">Active Channels:</span>
-                  <div className="text-cyan-300 text-[10px] truncate">
+                <div className="pt-2 border-t border-white/[0.06]">
+                  <span className="text-[10px] text-slate-500 block mb-0.5">Active Channels:</span>
+                  <div className="text-cyan-300 font-mono text-[10px] truncate">
                     {hoveredDistrict.activeChannels.join(', ')}
                   </div>
-                </div>
-
-                <div className="text-right text-[9px] text-cyan-400/80 pt-1">
-                  CLICK TO DRILL-DOWN DOSSIER
                 </div>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Selected District Callout (Bottom Bar on Map) */}
+        {/* Selected District Callout (Sleek Mapbox Glass Bar) */}
         {selectedDistrict && (
-          <div className="absolute bottom-4 left-4 right-4 z-20 bg-[#0c131e]/90 backdrop-blur-md border border-cyan-400/60 p-3 rounded-xl flex items-center justify-between font-mono text-xs shadow-xl">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-cyan-950 border border-cyan-400 flex items-center justify-center">
-                <MapPin className="w-4 h-4 text-cyan-400" />
+          <div className="absolute bottom-3.5 right-4 z-20 bg-[#0C101A]/90 backdrop-blur-md border border-white/[0.08] px-3 py-2 rounded-xl flex items-center gap-3.5 shadow-xl text-xs font-sans">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
+                <MapPin className="w-3.5 h-3.5 text-cyan-400" />
               </div>
               <div>
-                <div className="text-white font-bold flex items-center gap-2">
-                  <span>{selectedDistrict.name.toUpperCase()} FOCUS ACTIVE</span>
-                  <span className="text-red-400 text-[10px] font-bold">
-                    [{selectedDistrict.flaggedCount} INTERCEPTS]
+                <div className="text-white font-medium text-xs flex items-center gap-1.5">
+                  <span>{selectedDistrict.name} Focused</span>
+                  <span className="font-mono text-[10px] text-cyan-400 font-semibold bg-cyan-950/40 px-1.5 py-0.2 rounded border border-cyan-500/20">
+                    {selectedDistrict.flaggedCount} cases
                   </span>
                 </div>
-                <div className="text-[10px] text-slate-400">
-                  Top Entity: {selectedDistrict.topIdentifiers[0]} | Channels:{' '}
-                  {selectedDistrict.activeChannels.join(', ')}
+                <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                  Top Entity: {selectedDistrict.topIdentifiers[0]}
                 </div>
               </div>
             </div>
@@ -615,37 +618,12 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
                 sound.playClick();
                 onSelectDistrict(selectedDistrict);
               }}
-              className="bg-cyan-500 hover:bg-cyan-400 text-black px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-[0_0_15px_rgba(0,229,255,0.4)]"
+              className="bg-white/[0.08] hover:bg-white/[0.12] text-white px-2.5 py-1 rounded-lg text-xs font-medium transition-all"
             >
-              VIEW DISTRICT DOSSIER
+              View Dossier
             </button>
           </div>
         )}
-      </div>
-
-      {/* Map Legend Footer */}
-      <div className="relative z-10 bg-[#090d14] px-4 py-2 border-t border-slate-800 flex flex-wrap items-center justify-between text-[11px] font-mono text-slate-400">
-        <div className="flex items-center gap-4">
-          <span className="text-slate-500">LEGEND:</span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" />
-            <span className="text-slate-300">CRITICAL</span>
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-yellow-500 inline-block" />
-            <span className="text-slate-300">HIGH</span>
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block" />
-            <span className="text-slate-300">ELEVATED</span>
-          </span>
-        </div>
-
-        <div className="flex items-center gap-3 text-[10px]">
-          <span className="text-cyan-400">● CYAN ARC: UPI MULE LINK</span>
-          <span className="text-amber-400">● AMBER ARC: ARMS BROKER PHONE</span>
-          <span className="text-red-400">● CRIMSON ARC: CRYPTO ESCROW</span>
-        </div>
       </div>
     </div>
   );

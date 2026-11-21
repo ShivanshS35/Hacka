@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Radio, Search, Filter, Upload, AlertCircle, Clock, Eye, ShieldAlert, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Search, Upload, AlertCircle, Clock, Eye, Radio, Sparkles } from 'lucide-react';
 import { InterceptPost, CrimeCategory } from '../types';
 import { sound } from '../utils/audio';
 
@@ -22,15 +22,21 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
   onSelectCategory,
   onOpenUploadModal,
   isSimulating,
-  onToggleSimulate
+  onToggleSimulate,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [minConfidence, setMinConfidence] = useState(0.85);
 
-  const categories: (CrimeCategory | 'ALL')[] = ['ALL', 'DRUGS', 'ARMS', 'DOCUMENTS', 'FINANCIAL'];
+  const categories: (CrimeCategory | 'ALL')[] = [
+    'ALL',
+    'DRUGS',
+    'ARMS',
+    'DOCUMENTS',
+    'FINANCIAL',
+  ];
 
   // Filter posts based on category, search, and confidence
-  const filteredPosts = posts.filter(post => {
+  const filteredPosts = posts.filter((post) => {
     if (activeCategory !== 'ALL' && !post.categories.includes(activeCategory)) {
       return false;
     }
@@ -46,8 +52,8 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
         ...post.entities.phones,
         ...post.entities.upis,
         ...post.entities.handles,
-        ...post.entities.wallets
-      ].some(e => e.toLowerCase().includes(q));
+        ...post.entities.wallets,
+      ].some((e) => e.toLowerCase().includes(q));
 
       if (!matchText && !matchChannel && !matchDistrict && !matchEntity) {
         return false;
@@ -56,25 +62,26 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
     return true;
   });
 
-  const getCategoryBadgeClass = (cat: CrimeCategory) => {
+  const getCategoryDot = (cat: CrimeCategory) => {
     switch (cat) {
       case 'DRUGS':
-        return 'bg-red-950/80 text-red-400 border-red-500/40';
+        return 'bg-rose-400';
       case 'ARMS':
-        return 'bg-amber-950/80 text-amber-400 border-amber-500/40';
+        return 'bg-amber-400';
       case 'DOCUMENTS':
-        return 'bg-purple-950/80 text-purple-400 border-purple-500/40';
+        return 'bg-violet-400';
       case 'FINANCIAL':
-        return 'bg-emerald-950/80 text-emerald-400 border-emerald-500/40';
+        return 'bg-emerald-400';
     }
   };
 
-  // Helper to highlight matched slang terms in text
+  // Sleek subtle keyword highlighter without harsh background boxes
   const highlightSlang = (text: string, matchedTerms: string[]) => {
     if (!matchedTerms || matchedTerms.length === 0) return text;
 
-    // Build regex to match any of the slang terms case-insensitively
-    const escaped = matchedTerms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    const escaped = matchedTerms
+      .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('|');
     if (!escaped) return text;
     const regex = new RegExp(`(${escaped})`, 'gi');
 
@@ -82,10 +89,7 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
     return parts.map((part, index) => {
       if (regex.test(part)) {
         return (
-          <span
-            key={index}
-            className="bg-red-500/25 text-red-300 font-semibold px-1 rounded border-b border-red-400"
-          >
+          <span key={index} className="text-rose-400 font-medium tracking-tight">
             {part}
           </span>
         );
@@ -95,34 +99,43 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
   };
 
   return (
-    <div className="h-full bg-[#0b0f16] border-r border-slate-800 flex flex-col font-mono text-xs select-none">
-      {/* Panel Header */}
-      <div className="p-3.5 border-b border-slate-800 bg-[#0e141e] space-y-3">
+    <div className="h-full bg-[#070A10] border-r border-white/[0.07] flex flex-col select-none">
+      {/* Refined Panel Header (Palantir/Linear style) */}
+      <div className="p-4 border-b border-white/[0.07] bg-[#0C101A]/60 backdrop-blur-md space-y-3.5">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Radio className="w-4 h-4 text-cyan-400 animate-pulse" />
-            <span className="font-bold text-white tracking-wider">LIVE TELEGRAM INTERCEPT FEED</span>
+          <div className="flex items-center gap-2.5">
+            <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_rgba(34,211,238,0.5)]" />
+            <span className="font-sans font-semibold text-xs text-slate-200 tracking-wide uppercase">
+              Signals Feed
+            </span>
           </div>
-          <span className="bg-red-950/80 text-red-400 border border-red-800 px-2 py-0.5 rounded text-[10px] font-bold">
-            {filteredPosts.length} ACTIVE
-          </span>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-mono font-medium text-slate-400 bg-white/[0.04] border border-white/[0.06] px-2 py-0.5 rounded-full">
+              {filteredPosts.length} active
+            </span>
+          </div>
         </div>
 
-        {/* Live Simulation & Import Buttons */}
+        {/* Minimal Actions Bar */}
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
               sound.playClick();
               onToggleSimulate();
             }}
-            className={`flex-1 py-1.5 px-2.5 rounded-lg border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all ${
+            className={`flex-1 py-1.5 px-3 rounded-lg border text-xs font-sans font-medium flex items-center justify-center gap-2 transition-all ${
               isSimulating
-                ? 'bg-cyan-950 border-cyan-400 text-cyan-300 shadow-[0_0_12px_rgba(0,229,255,0.3)]'
-                : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200'
+                ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-300'
+                : 'bg-white/[0.02] border-white/[0.06] text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
             }`}
           >
-            <span className={`w-2 h-2 rounded-full ${isSimulating ? 'bg-cyan-400 animate-ping' : 'bg-slate-600'}`} />
-            <span>SIMULATOR: {isSimulating ? 'ACTIVE' : 'PAUSED'}</span>
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                isSimulating ? 'bg-cyan-400 animate-ping' : 'bg-slate-600'
+              }`}
+            />
+            <span>Simulation {isSimulating ? 'Live' : 'Paused'}</span>
           </button>
 
           <button
@@ -130,70 +143,80 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
               sound.playClick();
               onOpenUploadModal();
             }}
-            className="py-1.5 px-3 bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-cyan-500/50 text-cyan-400 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-colors"
+            className="py-1.5 px-3 bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.06] text-slate-300 hover:text-white rounded-lg text-xs font-sans font-medium flex items-center gap-1.5 transition-colors"
           >
-            <Upload className="w-3.5 h-3.5" />
-            <span>IMPORT</span>
+            <Upload className="w-3.5 h-3.5 text-slate-400" />
+            <span>Import</span>
           </button>
         </div>
 
-        {/* Search Bar */}
+        {/* Sleek Search Bar */}
         <div className="relative">
-          <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
+          <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
           <input
             type="text"
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search slang, UPI, handle, channel..."
-            className="w-full bg-[#06080d] border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-400 text-xs"
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search channels, identifiers, keywords..."
+            className="w-full bg-white/[0.02] border border-white/[0.08] rounded-lg pl-8 pr-3 py-1.5 text-slate-200 placeholder-slate-500 text-xs focus:outline-none focus:border-cyan-500/50 transition-colors"
           />
         </div>
 
-        {/* Category Filter Pills */}
-        <div className="flex flex-wrap gap-1.5 pt-1">
-          {categories.map(cat => (
+        {/* Sleek Underline / Minimal Ghost Tabs */}
+        <div className="flex items-center gap-1 overflow-x-auto pb-0.5 no-scrollbar">
+          {categories.map((cat) => (
             <button
               key={cat}
               onClick={() => {
                 sound.playClick();
                 onSelectCategory(cat);
               }}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+              className={`px-2.5 py-1 rounded-md text-[11px] font-sans font-medium transition-all ${
                 activeCategory === cat
-                  ? 'bg-cyan-400 text-black shadow-[0_0_10px_rgba(0,229,255,0.4)]'
-                  : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+                  ? 'bg-white/[0.08] text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]'
               }`}
             >
-              {cat}
+              {cat === 'ALL'
+                ? 'All'
+                : cat === 'DOCUMENTS'
+                ? 'Docs'
+                : cat.charAt(0) + cat.slice(1).toLowerCase()}
             </button>
           ))}
         </div>
 
-        {/* Confidence Threshold Slider */}
-        <div className="pt-1 flex items-center justify-between text-[10px] text-slate-400">
-          <span>MIN CONFIDENCE:</span>
-          <input
-            type="range"
-            min="0.50"
-            max="0.95"
-            step="0.05"
-            value={minConfidence}
-            onChange={e => setMinConfidence(parseFloat(e.target.value))}
-            className="w-24 accent-cyan-400 cursor-pointer"
-          />
-          <span className="text-cyan-400 font-bold">{(minConfidence * 100).toFixed(0)}%</span>
+        {/* Clean Confidence Threshold Slider */}
+        <div className="pt-0.5 flex items-center justify-between text-[11px] font-sans text-slate-400">
+          <span className="text-[10px] uppercase tracking-wider text-slate-500">
+            Confidence Floor
+          </span>
+          <div className="flex items-center gap-2">
+            <input
+              type="range"
+              min="0.50"
+              max="0.95"
+              step="0.05"
+              value={minConfidence}
+              onChange={(e) => setMinConfidence(parseFloat(e.target.value))}
+              className="w-20 h-1 bg-white/[0.08] rounded-lg appearance-none cursor-pointer accent-cyan-400"
+            />
+            <span className="font-mono text-cyan-400 text-xs font-semibold">
+              {(minConfidence * 100).toFixed(0)}%
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Feed List Container */}
-      <div className="flex-1 overflow-y-auto divide-y divide-slate-800/80 p-2 space-y-2">
+      {/* Intercepts List Container (Linear/Palantir clean cards) */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
         {filteredPosts.length === 0 ? (
-          <div className="p-8 text-center text-slate-500">
-            <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p>No intercepts matching current criteria.</p>
+          <div className="py-16 text-center text-slate-500">
+            <AlertCircle className="w-6 h-6 mx-auto mb-2 opacity-40 text-slate-400" />
+            <p className="text-xs font-sans">No signals matching current criteria.</p>
           </div>
         ) : (
-          filteredPosts.map(post => {
+          filteredPosts.map((post) => {
             const isSelected = selectedPost?.id === post.id;
             return (
               <div
@@ -202,79 +225,85 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
                   sound.playClick();
                   onSelectPost(post);
                 }}
-                className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
                   isSelected
-                    ? 'bg-[#141e2e] border-cyan-400 shadow-[0_0_20px_rgba(0,229,255,0.2)]'
-                    : 'bg-[#0d121c] border-slate-800/80 hover:border-slate-700 hover:bg-[#101724]'
+                    ? 'bg-white/[0.05] border-cyan-500/40 shadow-lg shadow-cyan-950/20'
+                    : 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04] hover:border-white/[0.12]'
                 }`}
               >
-                {/* Post Header: Channel, Category Badge, Confidence */}
+                {/* Post Header: Channel, Category Indicator, Confidence */}
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-cyan-400 font-bold">{post.channel}</span>
-                    <span className="text-[10px] text-slate-500">({post.districtName})</span>
+                    <span className="font-mono font-medium text-xs text-slate-200">
+                      {post.channel}
+                    </span>
+                    <span className="text-[10px] text-slate-500">
+                      · {post.districtName}
+                    </span>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
-                    {post.categories.map(c => (
-                      <span
-                        key={c}
-                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${getCategoryBadgeClass(c)}`}
-                      >
-                        {c}
+                  <div className="flex items-center gap-2">
+                    {post.categories.map((c) => (
+                      <span key={c} className="flex items-center gap-1 text-[10px] font-sans text-slate-400">
+                        <span className={`w-1.5 h-1.5 rounded-full ${getCategoryDot(c)}`} />
+                        <span>{c === 'DOCUMENTS' ? 'Docs' : c.charAt(0) + c.slice(1).toLowerCase()}</span>
                       </span>
                     ))}
-                    <span className="bg-slate-900 text-emerald-400 border border-slate-700 px-1.5 py-0.5 rounded text-[9px] font-bold">
-                      {post.confidence.toFixed(2)}
+                    <span className="font-mono text-[10px] text-cyan-400/90 font-semibold bg-cyan-950/40 border border-cyan-500/20 px-1.5 py-0.2 rounded">
+                      {(post.confidence * 100).toFixed(0)}%
                     </span>
                   </div>
                 </div>
 
-                {/* Raw Text with Slang Highlighting */}
-                <p className="text-slate-200 font-sans text-xs leading-relaxed mb-2">
+                {/* Raw Text with Subtle Highlight */}
+                <p className="text-slate-300 font-sans text-xs leading-relaxed mb-2.5">
                   "{highlightSlang(post.rawText, post.matchedSlang)}"
                 </p>
 
-                {/* Extracted Identifiers Pills */}
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {post.entities.upis.map(u => (
+                {/* Extracted Identifiers (Minimal uniform monospace chips) */}
+                <div className="flex flex-wrap gap-1.5 mb-2.5">
+                  {post.entities.upis.map((u) => (
                     <span
                       key={u}
-                      className="bg-cyan-950/80 text-cyan-300 border border-cyan-800/80 px-1.5 py-0.2 rounded text-[9px]"
+                      className="bg-white/[0.03] text-slate-300 border border-white/[0.06] px-2 py-0.5 rounded font-mono text-[10px]"
                     >
-                      UPI: {u}
+                      UPI: <span className="text-cyan-300 font-medium">{u}</span>
                     </span>
                   ))}
-                  {post.entities.phones.map(p => (
+                  {post.entities.phones.map((p) => (
                     <span
                       key={p}
-                      className="bg-amber-950/80 text-amber-300 border border-amber-800/80 px-1.5 py-0.2 rounded text-[9px]"
+                      className="bg-white/[0.03] text-slate-300 border border-white/[0.06] px-2 py-0.5 rounded font-mono text-[10px]"
                     >
-                      TEL: {p}
+                      TEL: <span className="text-amber-300 font-medium">{p}</span>
                     </span>
                   ))}
-                  {post.entities.wallets.map(w => (
+                  {post.entities.wallets.map((w) => (
                     <span
                       key={w}
-                      className="bg-red-950/80 text-red-300 border border-red-800/80 px-1.5 py-0.2 rounded text-[9px]"
+                      className="bg-white/[0.03] text-slate-300 border border-white/[0.06] px-2 py-0.5 rounded font-mono text-[10px]"
                     >
-                      CRYPTO: {w.slice(0, 8)}...
+                      CRYPTO: <span className="text-rose-300 font-medium">{w.slice(0, 10)}…</span>
                     </span>
                   ))}
                 </div>
 
                 {/* Footer Telemetry */}
-                <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-800/60">
+                <div className="flex items-center justify-between text-[10px] text-slate-500 pt-2 border-t border-white/[0.04] font-mono">
                   <span className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {new Date(post.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} UTC
+                    <Clock className="w-3 h-3 text-slate-600" />
+                    {new Date(post.timestamp).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}{' '}
+                    UTC
                   </span>
-                  <span className="flex items-center gap-1 text-slate-400">
-                    <Eye className="w-3 h-3" />
-                    {post.views.toLocaleString()} views
+                  <span className="flex items-center gap-1 text-slate-500">
+                    <Eye className="w-3 h-3 text-slate-600" />
+                    {post.views.toLocaleString()}
                   </span>
-                  <span className="text-emerald-400 text-[9px] font-semibold">
-                    ✓ SEC 65B
+                  <span className="text-emerald-400 font-sans text-[10px]">
+                    Sec 65B ✓
                   </span>
                 </div>
               </div>
