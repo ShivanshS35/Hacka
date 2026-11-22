@@ -397,11 +397,15 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25 }}
-            className="w-full h-full bg-[#070A10] flex justify-center p-4 overflow-y-auto"
+            className="w-full h-full overflow-hidden"
           >
-            <div className="max-w-3xl w-full h-full bg-[#0C101A] border border-white/[0.08] rounded-2xl overflow-hidden shadow-2xl flex flex-col">
-              <ForensicDossier post={selectedPost} />
-            </div>
+            <ForensicDossier
+              post={selectedPost}
+              allPosts={posts}
+              onSelectPost={(post) => setSelectedPost(post)}
+              onReturnToCommand={() => setActiveNavTab('COMMAND')}
+              onExploreTopology={() => setActiveNavTab('TOPOLOGY')}
+            />
           </motion.div>
         )}
 

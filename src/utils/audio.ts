@@ -291,6 +291,77 @@ class SoundSystem {
       osc.stop(this.ctx.currentTime + 0.35);
     } catch {}
   }
+
+  // Paper / Parchment Page Turn
+  public playPageTurn() {
+    if (!this.enabled) return;
+    try {
+      this.initCtx();
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      const bufferSize = Math.floor(this.ctx.sampleRate * 0.14);
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(1400, now);
+      filter.frequency.exponentialRampToValueAtTime(380, now + 0.14);
+      filter.Q.value = 1.8;
+
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.09, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      noise.start(now);
+      noise.stop(now + 0.14);
+    } catch {}
+  }
+
+  // Heavy Wax Seal Stamp Thud + Regal Chime
+  public playWaxSealStamp() {
+    if (!this.enabled) return;
+    try {
+      this.initCtx();
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      // 1. Deep low-frequency thud
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(130, now);
+      osc.frequency.exponentialRampToValueAtTime(32, now + 0.18);
+      gain.gain.setValueAtTime(0.28, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.18);
+
+      // 2. High regal chime
+      [1174.66, 1760, 2349.32].forEach((freq, idx) => {
+        const chimeOsc = this.ctx!.createOscillator();
+        const chimeGain = this.ctx!.createGain();
+        chimeOsc.type = 'sine';
+        chimeOsc.frequency.setValueAtTime(freq, now + 0.04 + idx * 0.05);
+        chimeGain.gain.setValueAtTime(0.07, now + 0.04 + idx * 0.05);
+        chimeGain.gain.exponentialRampToValueAtTime(0.001, now + 0.04 + idx * 0.05 + 0.35);
+        chimeOsc.connect(chimeGain);
+        chimeGain.connect(this.ctx!.destination);
+        chimeOsc.start(now + 0.04 + idx * 0.05);
+        chimeOsc.stop(now + 0.04 + idx * 0.05 + 0.35);
+      });
+    } catch {}
+  }
 }
 
 export const sound = new SoundSystem();
