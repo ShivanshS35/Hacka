@@ -591,7 +591,7 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                   <div className="mt-4 pt-3 border-t-2 border-[#8C6B4B]/30 flex items-center justify-between">
                     <div>
                       <div className="text-[10px] font-mono text-stone-600 uppercase">
-                        EXAMINING OFFICER:
+                        EXAMINING OFFICER / I.O.:
                       </div>
                       <div
                         className="text-xs font-bold text-[#3B2210] mt-0.5"
@@ -600,7 +600,7 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                         CYBER CELL INSP. // RAJ-049
                       </div>
                       <div className="text-[9px] font-mono text-emerald-800 font-semibold mt-0.5">
-                        STATUS: DIGITALLY SEALED ✓
+                        STATUS: HASH VERIFIED · AWAITING I.O. ENDORSEMENT
                       </div>
                     </div>
 
@@ -610,7 +610,7 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                       whileTap={{ scale: 0.94 }}
                       onClick={handleWaxSealClick}
                       className="cursor-pointer relative flex flex-col items-center group"
-                      title="Click to stamp & download official PDF report"
+                      title="Click to stamp & download official court-admissible Sec 65B dossier"
                     >
                       {/* Ribbon tails below wax seal */}
                       <div className="absolute top-8 w-6 h-9 flex justify-center pointer-events-none">
@@ -636,7 +636,7 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                       </div>
 
                       <span className="text-[8px] font-mono text-red-900 font-bold uppercase mt-1 tracking-tighter group-hover:underline">
-                        SEAL · EXPORT PDF
+                        SEAL · EXPORT SEC 65B PDF
                       </span>
                     </motion.div>
                   </div>
