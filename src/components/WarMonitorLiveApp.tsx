@@ -72,6 +72,13 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
   const [isMuted, setIsMuted] = useState(!sound.enabled);
   const [clockUtc, setClockUtc] = useState('');
 
+  // Synchronize audio state with global sound system singleton
+  useEffect(() => {
+    return sound.subscribe((enabled) => {
+      setIsMuted(!enabled);
+    });
+  }, []);
+
   // Connect to live FastAPI backend on mount
   useEffect(() => {
     let isMounted = true;
@@ -208,9 +215,8 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
   };
 
   const toggleSound = () => {
-    sound.enabled = !sound.enabled;
-    setIsMuted(!sound.enabled);
-    sound.playClick();
+    sound.playMechanicalClick(true);
+    sound.toggle();
   };
 
   const handleLocateDistrictFromTopology = (districtId: string) => {

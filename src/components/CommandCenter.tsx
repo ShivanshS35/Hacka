@@ -43,6 +43,13 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
   const [isMuted, setIsMuted] = useState(!sound.enabled);
   const [clock, setClock] = useState('');
 
+  // Synchronize audio state with global sound system singleton
+  useEffect(() => {
+    return sound.subscribe((enabled) => {
+      setIsMuted(!enabled);
+    });
+  }, []);
+
   // Clock in IST
   useEffect(() => {
     const updateTime = () => {
@@ -143,9 +150,8 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
   };
 
   const toggleSound = () => {
-    sound.enabled = !sound.enabled;
-    setIsMuted(!sound.enabled);
-    sound.playClick();
+    sound.playMechanicalClick(true);
+    sound.toggle();
   };
 
   return (

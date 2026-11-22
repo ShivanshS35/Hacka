@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Radio, ShieldAlert, Cpu, Sparkles, Volume2, Database, Network } from 'lucide-react';
+import { Radio, ShieldAlert, Volume2, VolumeX, Network } from 'lucide-react';
 import { sound } from '../utils/audio';
 
 interface TacticalConsole3DProps {
@@ -17,6 +17,42 @@ export const TacticalConsole3D: React.FC<TacticalConsole3DProps> = ({
   const [activeAlertIndex, setActiveAlertIndex] = useState(0);
   const [activeMode, setActiveMode] = useState<'SCAN' | 'GRAPH' | 'BURST'>('SCAN');
   const [isPowerOn, setIsPowerOn] = useState(true);
+  const [audioEnabled, setAudioEnabled] = useState(sound.enabled);
+  
+  // Real-time animated equalizer waveform frequency bars
+  const [waveformBars, setWaveformBars] = useState<number[]>([
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2
+  ]);
+
+  // Sync state seamlessly with global sound system singleton
+  useEffect(() => {
+    return sound.subscribe((enabled) => {
+      setAudioEnabled(enabled);
+    });
+  }, []);
+
+  // Real-time equalizer visualizer animation loop when AUDIO is ON
+  useEffect(() => {
+    if (!audioEnabled || !isPowerOn) {
+      // Flatten bars when muted or powered off
+      setWaveformBars([2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setWaveformBars(() =>
+        Array.from({ length: 16 }, (_, idx) => {
+          // Dynamic bell curve distribution with natural jitter for spectrum look
+          const centerDist = Math.abs(idx - 7.5);
+          const baseHeight = Math.max(5, 20 - centerDist * 1.6);
+          const jitter = (Math.random() - 0.5) * 10;
+          return Math.min(Math.max(Math.round(baseHeight + jitter), 4), 22);
+        })
+      );
+    }, 85);
+
+    return () => clearInterval(interval);
+  }, [audioEnabled, isPowerOn]);
 
   const sampleAlerts = [
     {
@@ -59,7 +95,7 @@ export const TacticalConsole3D: React.FC<TacticalConsole3DProps> = ({
     const interval = setInterval(() => {
       setActiveAlertIndex(prev => (prev + 1) % sampleAlerts.length);
       sound.playClick();
-    }, 3800);
+    }, 4200);
     return () => clearInterval(interval);
   }, [isPowerOn, sampleAlerts.length]);
 
@@ -78,6 +114,12 @@ export const TacticalConsole3D: React.FC<TacticalConsole3DProps> = ({
 
   const handleMouseLeave = () => {
     setRotate({ x: 0, y: 0 });
+  };
+
+  const handleToggleAudio = () => {
+    // Play crisp mechanical click sound even if previously muted
+    sound.playMechanicalClick(true);
+    sound.toggle();
   };
 
   const currentAlert = sampleAlerts[activeAlertIndex];
@@ -151,14 +193,18 @@ export const TacticalConsole3D: React.FC<TacticalConsole3DProps> = ({
             </div>
           </div>
 
-          {/* Oscilloscope Mini Waveform Bar */}
-          <div className="flex items-center gap-1 pt-1 opacity-70">
-            {[40, 70, 30, 90, 60, 20, 80, 50, 100, 45, 65, 35, 85, 25, 75, 40].map((h, i) => (
+          {/* Oscilloscope Mini Waveform / Equalizer Visualizer Bar */}
+          <div className="flex items-end gap-1 pt-1.5 h-6">
+            {waveformBars.map((barHeight, i) => (
               <div
                 key={i}
-                className="flex-1 bg-cyan-400/60 rounded-full transition-all duration-300"
+                className={`flex-1 rounded-full transition-all duration-100 ${
+                  audioEnabled
+                    ? 'bg-gradient-to-t from-cyan-500 to-cyan-300 shadow-[0_0_8px_rgba(0,229,255,0.7)]'
+                    : 'bg-slate-800/60 opacity-40'
+                }`}
                 style={{
-                  height: `${isPowerOn ? Math.max(4, (h * (activeAlertIndex + 1)) % 18) : 2}px`
+                  height: `${barHeight}px`
                 }}
               />
             ))}
@@ -170,7 +216,7 @@ export const TacticalConsole3D: React.FC<TacticalConsole3DProps> = ({
           {/* Button 1: SCAN */}
           <button
             onClick={() => {
-              sound.playRadarPing();
+              sound.playRadarChirp();
               setActiveMode('SCAN');
               setActiveAlertIndex(prev => (prev + 1) % sampleAlerts.length);
             }}
@@ -187,7 +233,7 @@ export const TacticalConsole3D: React.FC<TacticalConsole3DProps> = ({
           {/* Button 2: GRAPH */}
           <button
             onClick={() => {
-              sound.playClick();
+              sound.playLockOnChime();
               setActiveMode('GRAPH');
               onExploreGraph();
             }}
@@ -201,22 +247,37 @@ export const TacticalConsole3D: React.FC<TacticalConsole3DProps> = ({
             <span className="text-[10px] font-mono font-bold">GRAPH</span>
           </button>
 
-          {/* Button 3: AUDIO */}
+          {/* Button 3: AUDIO (Toggles Active Tactical Audio Mode + Equalizer) */}
           <button
-            onClick={() => {
-              sound.enabled = !sound.enabled;
-              sound.playClick();
-            }}
-            className="flex flex-col items-center justify-center p-2.5 rounded-xl border border-slate-700 bg-slate-900/90 text-slate-300 hover:border-slate-500 active:translate-y-1 transition-all"
+            onClick={handleToggleAudio}
+            className={`relative flex flex-col items-center justify-center p-2.5 rounded-xl border transition-all duration-150 active:translate-y-1 ${
+              audioEnabled
+                ? 'bg-gradient-to-b from-cyan-950/90 to-[#07131e] border-[#00E5FF] text-cyan-300 shadow-[0_0_18px_rgba(0,229,255,0.45)]'
+                : 'bg-slate-900/90 border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200'
+            }`}
           >
-            <Volume2 className="w-4 h-4 mb-1 text-slate-400" />
-            <span className="text-[10px] font-mono font-bold">AUDIO</span>
+            {/* Active Status LED Dot */}
+            {audioEnabled && (
+              <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00E5FF] shadow-[0_0_6px_#00E5FF]" />
+              </span>
+            )}
+
+            {audioEnabled ? (
+              <Volume2 className="w-4 h-4 mb-1 text-[#00E5FF]" />
+            ) : (
+              <VolumeX className="w-4 h-4 mb-1 text-slate-500" />
+            )}
+            <span className="text-[10px] font-mono font-bold tracking-tight">
+              {audioEnabled ? 'AUDIO: ON' : 'AUDIO: OFF'}
+            </span>
           </button>
 
           {/* Button 4: ENTER / LAUNCH */}
           <button
             onClick={() => {
-              sound.playSuccessChime();
+              sound.playLockOnChime();
               onLaunchCommand();
             }}
             className="flex flex-col items-center justify-center p-2.5 rounded-xl border border-red-500/80 bg-gradient-to-b from-red-600 to-red-800 text-white font-bold shadow-[0_0_20px_rgba(255,59,48,0.4)] hover:brightness-110 active:translate-y-1 transition-all"

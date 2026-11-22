@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Shield,
@@ -39,6 +39,13 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
   const [copiedHash, setCopiedHash] = useState(false);
   const [isMuted, setIsMuted] = useState(!sound.enabled);
 
+  // Synchronize audio state with global sound system singleton
+  useEffect(() => {
+    return sound.subscribe((enabled) => {
+      setIsMuted(!enabled);
+    });
+  }, []);
+
   const sampleHash = "7c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d";
 
   const handleCopyHash = () => {
@@ -54,9 +61,8 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
   };
 
   const toggleSound = () => {
-    sound.enabled = !sound.enabled;
-    setIsMuted(!sound.enabled);
-    sound.playClick();
+    sound.playMechanicalClick(true);
+    sound.toggle();
   };
 
   return (
