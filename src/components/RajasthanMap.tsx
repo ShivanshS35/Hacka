@@ -84,6 +84,7 @@ interface RajasthanMapProps {
   connections: DistrictConnection[];
   selectedDistrict: DistrictIntel | null;
   onSelectDistrict: (district: DistrictIntel) => void;
+  onOpenDossier?: (district: DistrictIntel) => void;
   activeCategory: CrimeCategory | 'ALL';
 }
 
@@ -92,6 +93,7 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
   connections,
   selectedDistrict,
   onSelectDistrict,
+  onOpenDossier,
   activeCategory,
 }) => {
   const [hoveredDistrict, setHoveredDistrict] = useState<DistrictIntel | null>(null);
@@ -616,11 +618,16 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
             <button
               onClick={() => {
                 sound.playClick();
-                onSelectDistrict(selectedDistrict);
+                if (onOpenDossier) {
+                  onOpenDossier(selectedDistrict);
+                } else {
+                  onSelectDistrict(selectedDistrict);
+                }
               }}
-              className="bg-white/[0.08] hover:bg-white/[0.12] text-white px-2.5 py-1 rounded-lg text-xs font-medium transition-all"
+              className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-500/40 px-3 py-1 rounded-lg text-xs font-medium transition-all shadow-sm active:translate-y-0.5 flex items-center gap-1.5"
             >
-              View Dossier
+              <span>View Dossier</span>
+              <span className="text-[10px]">&rarr;</span>
             </button>
           </div>
         )}
