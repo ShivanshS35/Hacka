@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Upload, AlertCircle, Clock, Eye, Radio, Sparkles } from 'lucide-react';
+import { Search, Upload, AlertCircle, Clock, Eye, Radio, Sparkles, Network } from 'lucide-react';
 import { InterceptPost, CrimeCategory } from '../types';
 import { sound } from '../utils/audio';
 
@@ -7,6 +7,7 @@ interface LiveInterceptFeedProps {
   posts: InterceptPost[];
   selectedPost: InterceptPost | null;
   onSelectPost: (post: InterceptPost) => void;
+  onExploreTopology?: (post: InterceptPost) => void;
   activeCategory: CrimeCategory | 'ALL';
   onSelectCategory: (cat: CrimeCategory | 'ALL') => void;
   onOpenUploadModal: () => void;
@@ -18,6 +19,7 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
   posts,
   selectedPost,
   onSelectPost,
+  onExploreTopology,
   activeCategory,
   onSelectCategory,
   onOpenUploadModal,
@@ -298,10 +300,22 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
                     })}{' '}
                     UTC
                   </span>
-                  <span className="flex items-center gap-1 text-slate-500">
-                    <Eye className="w-3 h-3 text-slate-600" />
-                    {post.views.toLocaleString()}
-                  </span>
+                  
+                  {onExploreTopology && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        sound.playClick();
+                        onExploreTopology(post);
+                      }}
+                      className="flex items-center gap-1 text-[10px] font-mono text-cyan-400 hover:text-cyan-300 hover:bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-500/30 transition-all shadow-[0_0_8px_rgba(0,229,255,0.15)]"
+                      title="Inspect 3D Entity Topology for this case"
+                    >
+                      <Network className="w-2.5 h-2.5 text-cyan-400" />
+                      <span>3D TOPOLOGY</span>
+                    </button>
+                  )}
+
                   <span className="text-emerald-400 font-sans text-[10px]">
                     Sec 65B ✓
                   </span>

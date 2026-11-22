@@ -16,33 +16,65 @@ import {
   Layers,
   Sparkles,
   ArrowRight,
+  ArrowLeft,
   Hash,
   Activity,
-  AlertTriangle
+  AlertTriangle,
+  FolderOpen
 } from 'lucide-react';
-import { ENTITY_GRAPH_DATA } from '../data/mockData';
-import { EntityNode, EntityEdge, InterceptPost } from '../types';
+import { ENTITY_GRAPH_DATA, INITIAL_INTERCEPTS } from '../data/mockData';
+import { EntityNode, EntityEdge, InterceptPost, CrimeCategory } from '../types';
 import { sound } from '../utils/audio';
 import { prahariApi } from '../services/api';
 import { NodeAvatarCharacter } from './NodeAvatarCharacter';
 
 interface EntityTopologyPageProps {
+  selectedPost?: InterceptPost | null;
+  allPosts?: InterceptPost[];
+  onSelectPost?: (post: InterceptPost) => void;
   onLocateDistrict?: (districtId: string) => void;
   onOpenDossier?: (postId: string) => void;
   onReturnToCommand?: () => void;
 }
 
 type NodeFilterType = 'ALL' | 'HERO' | 'SELLER' | 'CRYPTO' | 'POSTS';
+type ViewScopeMode = 'CASE' | 'GLOBAL';
 
 export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
+  selectedPost,
+  allPosts = INITIAL_INTERCEPTS,
+  onSelectPost,
   onLocateDistrict,
   onOpenDossier,
   onReturnToCommand,
 }) => {
-  const [graphData, setGraphData] = useState<{ nodes: EntityNode[]; edges: EntityEdge[] }>(ENTITY_GRAPH_DATA);
-  const [selectedNode, setSelectedNode] = useState<EntityNode | null>(
-    ENTITY_GRAPH_DATA.nodes.find((n) => n.isHero) || ENTITY_GRAPH_DATA.nodes[0]
+  // Available cases list (default to allPosts or mock seed)
+  const caseList = useMemo(() => {
+    return allPosts.length > 0 ? allPosts : INITIAL_INTERCEPTS;
+  }, [allPosts]);
+
+  // Active Case being investigated (defaults to selectedPost or first case)
+  const [activeCase, setActiveCase] = useState<InterceptPost>(() => {
+    return selectedPost || caseList[0];
+  });
+
+  // Keep activeCase in sync if parent changes selectedPost
+  useEffect(() => {
+    if (selectedPost) {
+      setActiveCase(selectedPost);
+    }
+  }, [selectedPost]);
+
+  // Mode: Focused Case Investigation vs Master Global Syndicate
+  const [viewScope, setViewScope] = useState<ViewScopeMode>('CASE');
+
+  // Global graph data from backend / mock
+  const [globalGraphData, setGlobalGraphData] = useState<{ nodes: EntityNode[]; edges: EntityEdge[] }>(
+    ENTITY_GRAPH_DATA
   );
+
+  // Selected node for the right-hand Inspector Drawer
+  const [selectedNode, setSelectedNode] = useState<EntityNode | null>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -67,9 +99,7 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
     let isMounted = true;
     prahariApi.getGraph().then((liveGraph) => {
       if (isMounted && liveGraph && liveGraph.nodes.length > 0) {
-        setGraphData(liveGraph);
-        const hero = liveGraph.nodes.find((n) => n.isHero) || liveGraph.nodes[0];
-        if (hero) setSelectedNode(hero);
+        setGlobalGraphData(liveGraph);
       }
     });
     return () => {
@@ -99,13 +129,11 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
     };
   }, []);
 
-  // Pan controls
+  // Pointer Drag Handlers
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
-    // Prevent container drag capture when clicking directly on a node
-    const isNode = (e.target as Element).closest('.node-element');
-    if (isNode) return;
-
+    if ((e.target as Element).closest('.node-element') || (e.target as Element).closest('button')) {
+      return;
+    }
     dragStartRef.current = {
       startX: e.clientX,
       startY: e.clientY,
@@ -114,7 +142,9 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
     };
     hasMovedRef.current = false;
     setIsDragging(true);
-    e.currentTarget.setPointerCapture(e.pointerId);
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {}
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -134,9 +164,7 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
     if (dragStartRef.current) {
       try {
         e.currentTarget.releasePointerCapture(e.pointerId);
-      } catch {
-        // Ignored
-      }
+      } catch {}
     }
     dragStartRef.current = null;
     setIsDragging(false);
@@ -148,9 +176,292 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
     setPan({ x: 0, y: 0 });
   };
 
+  // =========================================================================
+  // DYNAMIC CASE-SPECIFIC GRAPH GENERATOR
+  // Generates a tailored, unique 3D entity topology for the selected case!
+  // =========================================================================
+  const activeCaseGraph = useMemo<{ nodes: EntityNode[]; edges: EntityEdge[]; centerId: string }>(() => {
+    if (!activeCase) return { ...globalGraphData, centerId: '' };
+
+    const primaryCat = activeCase.categories[0] || 'DRUGS';
+    const nodes: EntityNode[] = [];
+    const edges: EntityEdge[] = [];
+    const nodeIds = new Set<string>();
+
+    const addNode = (n: EntityNode) => {
+      if (!nodeIds.has(n.id)) {
+        nodeIds.add(n.id);
+        nodes.push(n);
+      }
+    };
+
+    const addEdge = (e: EntityEdge) => {
+      edges.push(e);
+    };
+
+    // 1. Determine Central Focal Hero Identifier for this case
+    let centerId = '';
+    if (activeCase.entities.upis.length > 0) {
+      centerId = activeCase.entities.upis[0];
+      addNode({
+        id: centerId,
+        label: centerId,
+        type: 'upi',
+        category: primaryCat,
+        channels: [activeCase.channel],
+        riskScore: 0.99,
+        isHero: true,
+      });
+    } else if (activeCase.entities.wallets.length > 0) {
+      centerId = activeCase.entities.wallets[0];
+      const shortWallet = centerId.slice(0, 8) + '…' + centerId.slice(-4);
+      addNode({
+        id: centerId,
+        label: shortWallet,
+        type: 'crypto',
+        category: primaryCat,
+        channels: [activeCase.channel],
+        riskScore: 0.97,
+        isHero: true,
+      });
+    } else if (activeCase.entities.phones.length > 0) {
+      centerId = activeCase.entities.phones[0];
+      addNode({
+        id: centerId,
+        label: centerId,
+        type: 'phone',
+        category: primaryCat,
+        channels: [activeCase.channel],
+        riskScore: 0.96,
+        isHero: true,
+      });
+    } else {
+      // Fallback: case post itself as focal hub
+      centerId = activeCase.id;
+      addNode({
+        id: centerId,
+        label: activeCase.channel,
+        type: 'post',
+        category: primaryCat,
+        channels: [activeCase.channel],
+        riskScore: activeCase.confidence,
+        isHero: true,
+      });
+    }
+
+    // 2. Add Inner Ring Direct Case Intelligence Nodes
+    // Post Intercept Node
+    if (centerId !== activeCase.id) {
+      addNode({
+        id: activeCase.id,
+        label: activeCase.id,
+        type: 'post',
+        category: primaryCat,
+        channels: [activeCase.channel],
+        riskScore: activeCase.confidence,
+      });
+      addEdge({
+        id: `e_${activeCase.id}_${centerId}`,
+        source: activeCase.id,
+        target: centerId,
+        label: activeCase.entities.upis.includes(centerId)
+          ? 'UPI ESCROW'
+          : activeCase.entities.wallets.includes(centerId)
+          ? 'CRYPTO ESCROW'
+          : 'CALL / ORDER',
+        category: primaryCat,
+      });
+    }
+
+    // Channel Broadcast Node
+    addNode({
+      id: activeCase.channel,
+      label: activeCase.channel,
+      type: 'telegram',
+      category: primaryCat,
+      channels: [activeCase.channel],
+      riskScore: 0.92,
+    });
+    addEdge({
+      id: `e_${activeCase.channel}_${centerId}`,
+      source: activeCase.channel,
+      target: centerId,
+      label: 'SYNDICATE CHANNEL',
+      category: primaryCat,
+    });
+
+    // District Jurisdiction Nexus Node
+    const distNodeId = `nexus_${activeCase.districtId}`;
+    addNode({
+      id: distNodeId,
+      label: `${activeCase.districtName} Nexus`,
+      type: 'district',
+      category: primaryCat,
+      channels: [activeCase.channel],
+      riskScore: 0.88,
+    });
+    addEdge({
+      id: `e_${distNodeId}_${centerId}`,
+      source: distNodeId,
+      target: centerId,
+      label: 'POLICE JURISDICTION',
+      category: primaryCat,
+    });
+
+    // Case Specific Phone Numbers
+    activeCase.entities.phones.forEach((phone) => {
+      if (phone !== centerId) {
+        addNode({
+          id: phone,
+          label: phone,
+          type: 'phone',
+          category: primaryCat,
+          channels: [activeCase.channel],
+          riskScore: 0.94,
+        });
+        addEdge({
+          id: `e_${phone}_${centerId}`,
+          source: phone,
+          target: centerId,
+          label: 'DISPATCH BROKER',
+          category: primaryCat,
+        });
+      }
+    });
+
+    // Case Specific Telegram Seller Handles
+    activeCase.entities.handles.forEach((handle) => {
+      if (handle !== activeCase.channel && handle !== centerId) {
+        addNode({
+          id: handle,
+          label: handle,
+          type: 'telegram',
+          category: primaryCat,
+          channels: [activeCase.channel],
+          riskScore: 0.95,
+        });
+        addEdge({
+          id: `e_${handle}_${centerId}`,
+          source: handle,
+          target: centerId,
+          label: 'DARK SELLER',
+          category: primaryCat,
+        });
+      }
+    });
+
+    // Case Specific Cryptocurrency Wallets
+    activeCase.entities.wallets.forEach((wallet) => {
+      if (wallet !== centerId) {
+        const short = wallet.slice(0, 8) + '…' + wallet.slice(-4);
+        addNode({
+          id: wallet,
+          label: short,
+          type: 'crypto',
+          category: primaryCat,
+          channels: [activeCase.channel],
+          riskScore: 0.96,
+        });
+        addEdge({
+          id: `e_${wallet}_${centerId}`,
+          source: wallet,
+          target: centerId,
+          label: 'ESCROW WALLET',
+          category: primaryCat,
+        });
+      }
+    });
+
+    // 3. Add Outer Ring: Cross-Channel Syndicates that share ANY entity with this case!
+    caseList.forEach((otherPost) => {
+      if (otherPost.id === activeCase.id) return;
+
+      let sharedReason = '';
+      let sharedEntityId = '';
+
+      // Check for shared UPI
+      const sharedUpi = otherPost.entities.upis.find((u) => activeCase.entities.upis.includes(u));
+      if (sharedUpi) {
+        sharedReason = 'SHARED MULE UPI';
+        sharedEntityId = sharedUpi;
+      }
+
+      // Check for shared Phone
+      if (!sharedReason) {
+        const sharedPhone = otherPost.entities.phones.find((p) =>
+          activeCase.entities.phones.includes(p)
+        );
+        if (sharedPhone) {
+          sharedReason = 'SHARED ARMS BROKER';
+          sharedEntityId = sharedPhone;
+        }
+      }
+
+      // Check for shared Seller Handle
+      if (!sharedReason) {
+        const sharedHandle = otherPost.entities.handles.find((h) =>
+          activeCase.entities.handles.includes(h)
+        );
+        if (sharedHandle) {
+          sharedReason = 'SHARED SELLER HANDLE';
+          sharedEntityId = sharedHandle;
+        }
+      }
+
+      // Check for shared Crypto Wallet
+      if (!sharedReason) {
+        const sharedWallet = otherPost.entities.wallets.find((w) =>
+          activeCase.entities.wallets.includes(w)
+        );
+        if (sharedWallet) {
+          sharedReason = 'SHARED CRYPTO ESCROW';
+          sharedEntityId = sharedWallet;
+        }
+      }
+
+      // If a cross-channel criminal nexus exists, wire it into the outer ring!
+      if (sharedReason && sharedEntityId) {
+        addNode({
+          id: otherPost.id,
+          label: otherPost.channel,
+          type: 'post',
+          category: otherPost.categories[0],
+          channels: [otherPost.channel],
+          riskScore: otherPost.confidence,
+        });
+        addEdge({
+          id: `e_cross_${otherPost.id}_${sharedEntityId}`,
+          source: otherPost.id,
+          target: sharedEntityId,
+          label: sharedReason,
+          category: otherPost.categories[0],
+        });
+      }
+    });
+
+    return { nodes, edges, centerId };
+  }, [activeCase, caseList, globalGraphData]);
+
+  // Current active graph based on viewScope mode
+  const currentGraphData = viewScope === 'CASE' ? activeCaseGraph : globalGraphData;
+
+  // Initialize selected node on case change
+  useEffect(() => {
+    if (viewScope === 'CASE' && activeCaseGraph.nodes.length > 0) {
+      const hero =
+        activeCaseGraph.nodes.find((n) => n.isHero) ||
+        activeCaseGraph.nodes.find((n) => n.id === activeCaseGraph.centerId) ||
+        activeCaseGraph.nodes[0];
+      setSelectedNode(hero);
+    } else if (viewScope === 'GLOBAL' && globalGraphData.nodes.length > 0) {
+      const hero = globalGraphData.nodes.find((n) => n.isHero) || globalGraphData.nodes[0];
+      setSelectedNode(hero);
+    }
+  }, [viewScope, activeCaseGraph, globalGraphData]);
+
   // Filter and search logic
   const filteredNodes = useMemo(() => {
-    return graphData.nodes.filter((node) => {
+    return currentGraphData.nodes.filter((node) => {
       // Category filter
       if (activeFilter === 'HERO' && !node.isHero && node.type !== 'upi') return false;
       if (activeFilter === 'SELLER' && node.type !== 'telegram') return false;
@@ -168,19 +479,19 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
       }
       return true;
     });
-  }, [graphData.nodes, activeFilter, searchQuery]);
+  }, [currentGraphData.nodes, activeFilter, searchQuery]);
 
   // Edges filtered
   const visibleEdges = useMemo(() => {
     const nodeIds = new Set(filteredNodes.map((n) => n.id));
-    return graphData.edges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target));
-  }, [graphData.edges, filteredNodes]);
+    return currentGraphData.edges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target));
+  }, [currentGraphData.edges, filteredNodes]);
 
   // ========================================================
-  // STRICT TWO-RING CONCENTRIC RADIAL LAYOUT
-  // Core (r = 0): raj.pay@oksbi at (700, 450)
-  // Inner Ring (r = 165px): Linked identifiers (Phone, Telegram, Crypto)
-  // Outer Ring (r = 325px): Flagged post intelligence nodes
+  // STRICT CONCENTRIC RADIAL LAYOUT ENGINE
+  // Center Core (r = 0): Case Hero Nexus at (700, 450)
+  // Inner Ring (r = 175px): Direct Case Identifiers
+  // Outer Ring (r = 330px): Cross-Channel Syndicate Infiltration
   // ========================================================
   const nodePositionMap = useMemo(() => {
     const map: Record<
@@ -188,75 +499,79 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
       { x: number; y: number; districtNexus: string; ring: 'center' | 'inner' | 'outer' }
     > = {};
 
+    // Center focal node
     const hero =
-      filteredNodes.find((n) => n.isHero || n.id === 'raj.pay@oksbi') || filteredNodes[0];
+      filteredNodes.find((n) => n.isHero) ||
+      (activeCaseGraph.centerId ? filteredNodes.find((n) => n.id === activeCaseGraph.centerId) : null) ||
+      filteredNodes[0];
+
     if (hero) {
-      map[hero.id] = { x: 700, y: 450, districtNexus: 'jaipur', ring: 'center' };
+      map[hero.id] = {
+        x: 700,
+        y: 450,
+        districtNexus: activeCase ? activeCase.districtId : 'jaipur',
+        ring: 'center',
+      };
     }
 
     const innerList = filteredNodes.filter((n) => n.id !== hero?.id && n.type !== 'post');
     const outerList = filteredNodes.filter((n) => n.id !== hero?.id && n.type === 'post');
 
-    const R_INNER = 165;
-    // Order innerList symmetrically: North (Phone), East (Crypto), South (@seller_raj), West (Broker/Admin)
-    const prioritizedInner = [...innerList].sort((a, b) => {
-      const getPriority = (item: EntityNode) => {
-        if (item.id === '9876543210') return 1;
-        if (item.type === 'crypto' || item.id.includes('bc1')) return 2;
-        if (item.id === '@seller_raj') return 3;
-        if (item.id === '8995874251' || item.id === '@seller_delhi') return 4;
-        return 5;
-      };
-      return getPriority(a) - getPriority(b);
-    });
-
-    const totalInner = Math.max(prioritizedInner.length, 1);
+    // Inner ring (r = 175)
+    const R_INNER = 175;
+    const totalInner = Math.max(innerList.length, 1);
     const innerAngleStep = (2 * Math.PI) / totalInner;
-    prioritizedInner.forEach((n, idx) => {
-      // Evenly distribute around the circle so no two nodes ever share the same angle
+
+    innerList.forEach((n, idx) => {
       const angle = -Math.PI / 2 + idx * innerAngleStep;
       map[n.id] = {
         x: Math.round(700 + Math.cos(angle) * R_INNER),
         y: Math.round(450 + Math.sin(angle) * R_INNER),
-        districtNexus: n.type === 'phone' ? 'bikaner' : n.type === 'crypto' ? 'ganganagar' : 'sikar',
+        districtNexus: activeCase ? activeCase.districtId : 'jaipur',
         ring: 'inner',
       };
     });
 
-    const R_OUTER = 325;
+    // Outer ring (r = 330)
+    const R_OUTER = 330;
     const totalOuter = Math.max(outerList.length, 1);
-    const angleStep = (2 * Math.PI) / totalOuter;
+    const outerAngleStep = (2 * Math.PI) / totalOuter;
 
     outerList.forEach((n, idx) => {
-      // Evenly distribute around the 360° circle with slight offset so rays pass between inner nodes
-      const angle = -Math.PI / 2 + (idx + 0.5) * angleStep;
+      const angle = -Math.PI / 2 + (idx + 0.5) * outerAngleStep;
       map[n.id] = {
         x: Math.round(700 + Math.cos(angle) * R_OUTER),
         y: Math.round(450 + Math.sin(angle) * R_OUTER),
-        districtNexus: idx % 3 === 0 ? 'jaipur' : idx % 3 === 1 ? 'jodhpur' : 'alwar',
+        districtNexus: activeCase ? activeCase.districtId : 'jaipur',
         ring: 'outer',
       };
     });
 
     return map;
-  }, [filteredNodes]);
+  }, [filteredNodes, activeCase, activeCaseGraph]);
 
-  // Color generator for connections
+  // Color generator for connections based on category & hero links
   const getEdgeColors = (edge: EntityEdge) => {
-    const isHeroConnected =
-      edge.source === 'raj.pay@oksbi' || edge.target === 'raj.pay@oksbi';
-
-    if (isHeroConnected) {
-      return { base: '#00E5FF', stream: '#00FF88' }; // Cyan base with Neon Green stream
+    if (edge.label?.includes('SHARED MULE')) {
+      return { base: '#00E5FF', stream: '#00FF88' };
     }
-    if (edge.category === 'DRUGS') {
-      return { base: '#00FF88', stream: '#00E5FF' }; // Neon Green with Cyan stream
+    if (edge.label?.includes('SHARED ARMS')) {
+      return { base: '#F43F5E', stream: '#F59E0B' };
+    }
+    if (edge.label?.includes('SHARED CRYPTO')) {
+      return { base: '#F59E0B', stream: '#00E5FF' };
+    }
+    if (edge.label?.includes('SHARED SELLER')) {
+      return { base: '#C084FC', stream: '#00FF88' };
     }
     if (edge.category === 'ARMS') {
-      return { base: '#F59E0B', stream: '#00E5FF' }; // Amber with Cyan stream
+      return { base: '#F43F5E', stream: '#F59E0B' };
     }
     if (edge.category === 'DOCUMENTS') {
-      return { base: '#C084FC', stream: '#00FF88' }; // Purple with Green stream
+      return { base: '#C084FC', stream: '#00FF88' };
+    }
+    if (edge.category === 'FINANCIAL') {
+      return { base: '#F59E0B', stream: '#00E5FF' };
     }
     return { base: '#00E5FF', stream: '#00FF88' };
   };
@@ -264,8 +579,8 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
   // Node details for drawer
   const selectedNodeInfo = useMemo(() => {
     if (!selectedNode) return null;
-    const nexusDistrictId = nodePositionMap[selectedNode.id]?.districtNexus || 'jaipur';
-    const connectedEdges = graphData.edges.filter(
+    const nexusDistrictId = nodePositionMap[selectedNode.id]?.districtNexus || (activeCase ? activeCase.districtId : 'jaipur');
+    const connectedEdges = currentGraphData.edges.filter(
       (e) => e.source === selectedNode.id || e.target === selectedNode.id
     );
 
@@ -275,11 +590,113 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
       connectionsCount: connectedEdges.length,
       connectedEdges,
     };
-  }, [graphData.edges, selectedNode, nodePositionMap]);
+  }, [currentGraphData.edges, selectedNode, nodePositionMap, activeCase]);
+
+  // Case category dot color helper
+  const getCategoryDot = (cat?: CrimeCategory | string) => {
+    switch (cat) {
+      case 'DRUGS':
+        return 'bg-cyan-400';
+      case 'ARMS':
+        return 'bg-rose-400';
+      case 'DOCUMENTS':
+        return 'bg-purple-400';
+      case 'FINANCIAL':
+        return 'bg-amber-400';
+      default:
+        return 'bg-slate-400';
+    }
+  };
+
+  const handleSelectCase = (post: InterceptPost) => {
+    sound.playClick();
+    setActiveCase(post);
+    if (onSelectPost) onSelectPost(post);
+  };
 
   return (
     <div className="relative w-full h-full bg-[#070A10] overflow-hidden select-none font-sans">
-      {/* 1. EXPANSIVE CANVAS WITH DRAG & PINCH-TO-ZOOM */}
+      {/* ======================================================== */}
+      {/* 1. TOP CASE NAVIGATION & SCOPE SWITCHER BAR              */}
+      {/* ======================================================== */}
+      <div className="absolute top-3 left-4 right-4 z-30 flex flex-wrap items-center justify-between gap-3 pointer-events-auto">
+        {/* Left: Return & Scope Switcher */}
+        <div className="flex items-center gap-2">
+          {onReturnToCommand && (
+            <button
+              onClick={() => {
+                sound.playClick();
+                onReturnToCommand();
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0C101A]/90 hover:bg-white/[0.08] border border-white/[0.08] text-xs font-mono text-slate-300 hover:text-white transition-colors backdrop-blur-md shadow-lg"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-cyan-400" />
+              <span>COMMAND CENTER</span>
+            </button>
+          )}
+
+          {/* Mode Switcher: FOCUSED CASE vs GLOBAL MASTER */}
+          <div className="flex items-center p-0.5 rounded-lg bg-[#0C101A]/90 border border-white/[0.08] backdrop-blur-md text-xs font-sans">
+            <button
+              onClick={() => {
+                sound.playClick();
+                setViewScope('CASE');
+              }}
+              className={`px-3 py-1 rounded-md transition-all font-medium flex items-center gap-1.5 ${
+                viewScope === 'CASE'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <ShieldAlert className="w-3 h-3 text-cyan-400" />
+              <span>CASE TOPOLOGY</span>
+            </button>
+            <button
+              onClick={() => {
+                sound.playClick();
+                setViewScope('GLOBAL');
+              }}
+              className={`px-3 py-1 rounded-md transition-all font-medium flex items-center gap-1.5 ${
+                viewScope === 'GLOBAL'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Network className="w-3 h-3 text-cyan-400" />
+              <span>GLOBAL SYNDICATE</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Center/Right: Case Selector Pills (Switch case dynamically) */}
+        {viewScope === 'CASE' && (
+          <div className="flex items-center gap-1.5 overflow-x-auto max-w-2xl py-0.5">
+            <span className="text-[10px] font-mono text-slate-500 hidden xl:inline">CASES:</span>
+            {caseList.slice(0, 7).map((p) => {
+              const isActive = activeCase?.id === p.id;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => handleSelectCase(p)}
+                  className={`px-2.5 py-1 rounded-lg border text-xs font-mono transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                    isActive
+                      ? 'bg-cyan-950/80 border-cyan-400 text-cyan-200 shadow-[0_0_12px_rgba(0,229,255,0.3)]'
+                      : 'bg-[#0C101A]/80 border-white/[0.08] text-slate-400 hover:border-white/[0.2] hover:text-slate-200'
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${getCategoryDot(p.categories[0])}`} />
+                  <span>{p.channel}</span>
+                  <span className="text-[9px] text-slate-500 font-sans">({p.districtName})</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ======================================================== */}
+      {/* 2. EXPANSIVE CANVAS WITH DRAG & PINCH-TO-ZOOM             */}
+      {/* ======================================================== */}
       <div
         ref={containerRef}
         onPointerDown={handlePointerDown}
@@ -295,12 +712,18 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
           backgroundSize: '32px 32px',
         }}
       >
-        {/* Ambient Radial Glow centered around raj.pay@oksbi */}
+        {/* Ambient Radial Glow centered around the focal hero */}
         <div
-          className="absolute w-[800px] h-[800px] rounded-full pointer-events-none opacity-20"
+          className="absolute w-[850px] h-[850px] rounded-full pointer-events-none opacity-25"
           style={{
             background:
-              'radial-gradient(circle, rgba(0, 229, 255, 0.22) 0%, rgba(0, 255, 136, 0.06) 40%, transparent 70%)',
+              activeCase?.categories[0] === 'ARMS'
+                ? 'radial-gradient(circle, rgba(244, 63, 94, 0.25) 0%, rgba(245, 158, 11, 0.08) 40%, transparent 70%)'
+                : activeCase?.categories[0] === 'DOCUMENTS'
+                ? 'radial-gradient(circle, rgba(192, 132, 252, 0.25) 0%, rgba(0, 255, 136, 0.06) 40%, transparent 70%)'
+                : activeCase?.categories[0] === 'FINANCIAL'
+                ? 'radial-gradient(circle, rgba(245, 158, 11, 0.25) 0%, rgba(0, 229, 255, 0.08) 40%, transparent 70%)'
+                : 'radial-gradient(circle, rgba(0, 229, 255, 0.25) 0%, rgba(0, 255, 136, 0.08) 40%, transparent 70%)',
             transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
           }}
         />
@@ -327,38 +750,38 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
 
             {/* Central Pedestal Hologram Radial Gradient */}
             <radialGradient id="topo_hero_pedestal" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#00E5FF" stopOpacity="0.35" />
-              <stop offset="60%" stopColor="#00FF88" stopOpacity="0.12" />
+              <stop offset="0%" stopColor="#00E5FF" stopOpacity="0.4" />
+              <stop offset="60%" stopColor="#00FF88" stopOpacity="0.14" />
               <stop offset="100%" stopColor="#070A10" stopOpacity="0" />
             </radialGradient>
           </defs>
 
-          {/* CONCENTRIC ALIGNMENT RINGS (Inner Ring r=165px, Outer Ring r=325px) */}
+          {/* CONCENTRIC ALIGNMENT RINGS (Inner Ring r=175px, Outer Ring r=330px) */}
           <g transform="translate(700, 450)" className="pointer-events-none">
             {/* Central Core Aura */}
             <circle
-              r="75"
+              r="80"
               fill="url(#topo_hero_pedestal)"
               className="animate-pulse"
               style={{ animationDuration: '3.5s' }}
             />
             {/* Inner Ring Guideline */}
             <circle
-              r="165"
+              r="175"
               fill="none"
               stroke="#00E5FF"
               strokeWidth="1"
               strokeDasharray="4 8"
-              strokeOpacity="0.18"
+              strokeOpacity="0.22"
             />
             {/* Outer Ring Guideline */}
             <circle
-              r="325"
+              r="330"
               fill="none"
               stroke="#00FF88"
               strokeWidth="1"
               strokeDasharray="6 10"
-              strokeOpacity="0.14"
+              strokeOpacity="0.16"
             />
           </g>
 
@@ -398,17 +821,17 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
                   onMouseEnter={() => setHoveredEdgeId(edge.id)}
                   onMouseLeave={() => setHoveredEdgeId(null)}
                 >
-                  {/* Layer 1: Base Glowing Glow Tube */}
+                  {/* Layer 1: Base Glowing Tube */}
                   <path
                     d={pathD}
                     fill="none"
                     stroke={colors.base}
                     strokeWidth={isHighlighted ? 3.8 : isHovered ? 2.8 : 1.6}
-                    strokeOpacity={isHighlighted ? 0.95 : isHovered ? 0.75 : 0.32}
+                    strokeOpacity={isHighlighted ? 0.95 : isHovered ? 0.75 : 0.35}
                     filter={isHighlighted || isHovered ? 'url(#topo_glow)' : undefined}
                   />
 
-                  {/* Layer 2: Live Animated Running Stream (stroke-dashoffset running flow) */}
+                  {/* Layer 2: Live Animated Running Stream (continuous running flow) */}
                   <path
                     d={pathD}
                     fill="none"
@@ -438,10 +861,10 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
                   {showEdgeLabel && edge.label && (
                     <g transform={`translate(${controlX}, ${controlY})`} className="pointer-events-none">
                       <rect
-                        x="-46"
-                        y="-9"
-                        width="92"
-                        height="18"
+                        x="-52"
+                        y="-10"
+                        width="104"
+                        height="20"
                         rx="4"
                         fill="#070A10"
                         stroke={colors.base}
@@ -450,8 +873,8 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
                       />
                       <text
                         textAnchor="middle"
-                        y="3.5"
-                        className="font-mono text-[8.5px] tracking-wider fill-cyan-300 font-semibold"
+                        y="4"
+                        className="font-mono text-[9px] tracking-wider fill-cyan-300 font-semibold"
                       >
                         {edge.label}
                       </text>
@@ -470,7 +893,7 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
 
               const isSelected = selectedNode?.id === node.id;
               const isHovered = hoveredNodeId === node.id;
-              const isHero = Boolean(node.isHero || node.id === 'raj.pay@oksbi');
+              const isHero = Boolean(node.isHero || pos.ring === 'center');
 
               // Pedestal neon color
               const pedestalColor = isHero
@@ -481,6 +904,8 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
                 ? '#F59E0B'
                 : node.type === 'telegram'
                 ? '#C084FC'
+                : node.type === 'district'
+                ? '#10B981'
                 : '#00FF88';
 
               // Node Scale: prominent hero and balanced outer nodes
@@ -488,8 +913,8 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
 
               // Display label (clean and truncated to prevent horizontal collisions)
               const displayLabel =
-                node.label.length > 15 ? node.label.slice(0, 14) + '…' : node.label;
-              const pillWidth = Math.min(Math.max(displayLabel.length * 6.5 + 24, 76), 115);
+                node.label.length > 17 ? node.label.slice(0, 16) + '…' : node.label;
+              const pillWidth = Math.min(Math.max(displayLabel.length * 6.5 + 24, 76), 125);
 
               return (
                 <g
@@ -526,15 +951,15 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
                       height="20"
                       rx="5"
                       fill="#070A10"
-                      fillOpacity="0.92"
+                      fillOpacity="0.94"
                       stroke={
                         isSelected
                           ? '#00E5FF'
                           : isHero
                           ? '#00FF88'
-                          : 'rgba(255, 255, 255, 0.14)'
+                          : 'rgba(255, 255, 255, 0.16)'
                       }
-                      strokeWidth={isSelected ? 1.5 : 1}
+                      strokeWidth={isSelected ? 1.6 : 1}
                       filter={isSelected ? 'url(#topo_glow)' : undefined}
                       className="shadow-2xl"
                     />
@@ -544,15 +969,7 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
                       cx={-pillWidth / 2 + 8}
                       cy="0"
                       r="2.5"
-                      fill={
-                        isHero
-                          ? '#00E5FF'
-                          : node.type === 'crypto'
-                          ? '#F43F5E'
-                          : node.type === 'phone'
-                          ? '#F59E0B'
-                          : '#00FF88'
-                      }
+                      fill={pedestalColor}
                     />
 
                     {/* Clean Monospace Identifier Label */}
@@ -562,9 +979,9 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
                       textAnchor="start"
                       className={`font-mono text-[9px] font-medium tracking-wide ${
                         isSelected
-                          ? 'fill-cyan-300'
+                          ? 'fill-cyan-300 font-bold'
                           : isHero
-                          ? 'fill-emerald-300'
+                          ? 'fill-emerald-300 font-semibold'
                           : 'fill-slate-200'
                       }`}
                     >
@@ -578,8 +995,31 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
         </svg>
       </div>
 
-      {/* 2. FLOATING TOP-LEFT FILTER & SEARCH BAR */}
-      <div className="absolute top-4 left-4 z-20 flex flex-col gap-2.5 max-w-md w-full pointer-events-none">
+      {/* ======================================================== */}
+      {/* 3. FLOATING TOP-LEFT FILTER & SEARCH BAR                 */}
+      {/* ======================================================== */}
+      <div className="absolute top-16 left-4 z-20 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+        {/* Active Case Badge */}
+        {viewScope === 'CASE' && activeCase && (
+          <div className="pointer-events-auto bg-[#0C101A]/90 backdrop-blur-xl border border-cyan-500/30 rounded-xl p-2.5 shadow-xl flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${getCategoryDot(activeCase.categories[0])} animate-pulse`} />
+              <div>
+                <div className="text-xs font-mono font-bold text-white flex items-center gap-1.5">
+                  <span>{activeCase.channel}</span>
+                  <span className="text-[10px] text-cyan-400 font-normal">({activeCase.districtName})</span>
+                </div>
+                <div className="text-[10px] text-slate-400 font-sans">
+                  {activeCase.categories.join(' · ')} · {((activeCase.confidence) * 100).toFixed(0)}% MATCH
+                </div>
+              </div>
+            </div>
+            <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              SEC 65B
+            </span>
+          </div>
+        )}
+
         {/* Search Input Card */}
         <div className="pointer-events-auto bg-[#0C101A]/90 backdrop-blur-xl border border-white/[0.08] rounded-xl p-2.5 shadow-2xl flex items-center gap-2">
           <Search className="w-4 h-4 text-cyan-400 shrink-0 ml-1" />
@@ -587,7 +1027,7 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search UPI, telegram, crypto wallet, phone, or post..."
+            placeholder="Search identifier in this topology..."
             className="w-full bg-transparent text-xs text-white placeholder-slate-500 focus:outline-none font-sans"
           />
           {searchQuery && (
@@ -605,10 +1045,10 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
           {(
             [
               { key: 'ALL', label: 'All Nodes' },
-              { key: 'HERO', label: 'Hero / UPI' },
-              { key: 'SELLER', label: 'Sellers' },
+              { key: 'HERO', label: 'Hero / Escrow' },
+              { key: 'SELLER', label: 'Handles' },
               { key: 'CRYPTO', label: 'Crypto' },
-              { key: 'POSTS', label: 'Flagged Posts' },
+              { key: 'POSTS', label: 'Syndicates' },
             ] as const
           ).map((item) => (
             <button
@@ -617,7 +1057,7 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
                 sound.playClick();
                 setActiveFilter(item.key);
               }}
-              className={`px-3 py-1 rounded-lg font-medium whitespace-nowrap transition-colors ${
+              className={`px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition-colors ${
                 activeFilter === item.key
                   ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
                   : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
@@ -632,12 +1072,14 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
         <div className="pointer-events-auto inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.03] border border-white/[0.06] text-[10px] font-mono text-slate-400 self-start">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
           <span>
-            {filteredNodes.length} of {graphData.nodes.length} Network Entities Active
+            {filteredNodes.length} of {currentGraphData.nodes.length} Entities in View
           </span>
         </div>
       </div>
 
-      {/* 3. FLOATING GLASS ENTITY INSPECTOR DRAWER (RIGHT SIDE) */}
+      {/* ======================================================== */}
+      {/* 4. FLOATING GLASS ENTITY INSPECTOR DRAWER (RIGHT SIDE)   */}
+      {/* ======================================================== */}
       <AnimatePresence>
         {selectedNodeInfo && (
           <motion.div
@@ -645,38 +1087,31 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 24 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
-            className="absolute top-4 right-4 bottom-4 z-20 w-[360px] bg-[#0C101A]/90 backdrop-blur-xl border border-white/[0.08] rounded-2xl shadow-2xl flex flex-col overflow-hidden font-sans select-none"
+            className="absolute top-16 right-4 bottom-4 z-20 w-[360px] bg-[#0C101A]/90 backdrop-blur-xl border border-white/[0.08] rounded-2xl shadow-2xl flex flex-col overflow-hidden font-sans select-none"
           >
             {/* Drawer Header */}
-            <div className="px-4 py-3 border-b border-white/[0.07] flex items-center justify-between shrink-0">
+            <div className="p-4 border-b border-white/[0.07] flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-cyan-400" />
-                <span className="text-white font-semibold text-xs tracking-tight">
-                  Entity Intelligence Dossier
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    selectedNodeInfo.node.isHero ? 'bg-cyan-400 animate-ping' : 'bg-emerald-400'
+                  }`}
+                />
+                <span className="text-xs font-mono font-bold tracking-wider text-white uppercase">
+                  {selectedNodeInfo.node.type} // DOSSIER
                 </span>
               </div>
-              <button
-                onClick={() => setSelectedNode(null)}
-                className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/[0.04] text-slate-400 border border-white/[0.06]">
+                {selectedNodeInfo.node.category || activeCase?.categories[0] || 'CRIME'}
+              </span>
             </div>
 
             {/* Scrollable Body */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* Large Figurine Avatar Spotlight Preview */}
-              <div className="relative h-44 bg-[#070A10] rounded-xl border border-white/[0.06] flex items-center justify-center overflow-hidden">
-                <div
-                  className="absolute inset-0 opacity-40 pointer-events-none"
-                  style={{
-                    background:
-                      'radial-gradient(circle at center, rgba(34, 211, 238, 0.25) 0%, transparent 70%)',
-                  }}
-                />
-
-                <svg viewBox="0 0 120 120" className="w-36 h-36 relative z-10">
-                  <g transform="translate(60, 68) scale(1.6)">
+              {/* Avatar Big Preview */}
+              <div className="flex flex-col items-center justify-center p-4 bg-white/[0.02] border border-white/[0.06] rounded-xl relative overflow-hidden">
+                <div className="w-24 h-28 flex items-center justify-center">
+                  <svg viewBox="-30 -70 60 90" className="w-full h-full overflow-visible">
                     <NodeAvatarCharacter
                       node={selectedNodeInfo.node}
                       isSelected={true}
@@ -686,124 +1121,108 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
                           ? '#00E5FF'
                           : selectedNodeInfo.node.type === 'crypto'
                           ? '#F43F5E'
-                          : '#F59E0B'
+                          : selectedNodeInfo.node.type === 'phone'
+                          ? '#F59E0B'
+                          : '#00FF88'
                       }
                       hideInternalLabels={false}
                     />
-                  </g>
-                </svg>
-
-                {/* Role Pill Overlay */}
-                <div className="absolute bottom-2.5 left-2.5 right-2.5 flex items-center justify-between px-2.5 py-1 rounded-lg bg-[#0C101A]/80 backdrop-blur border border-white/[0.08] text-[10px] font-mono">
-                  <span className="text-slate-400 uppercase">
-                    TYPE: {selectedNodeInfo.node.type}
-                  </span>
-                  <span className="text-cyan-400 font-semibold">
-                    {selectedNodeInfo.node.isHero ? 'HERO NEXUS' : 'SYNDICATE NODE'}
-                  </span>
+                  </svg>
+                </div>
+                <div className="mt-2 text-center">
+                  <div className="text-sm font-mono font-bold text-white break-all">
+                    {selectedNodeInfo.node.label}
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                    IDENTIFIER REF // {selectedNodeInfo.node.id}
+                  </div>
                 </div>
               </div>
 
-              {/* Identifier & Category Info */}
-              <div className="space-y-1">
-                <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">
-                  PRIMARY IDENTIFIER
-                </div>
-                <div className="font-mono text-sm text-cyan-300 font-bold break-all bg-white/[0.02] p-2.5 rounded-lg border border-white/[0.06]">
-                  {selectedNodeInfo.node.label}
-                </div>
-              </div>
-
-              {/* Structured Risk Score Meter */}
-              <div className="bg-white/[0.02] p-3.5 rounded-xl border border-white/[0.06] space-y-2">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-400 font-medium">Syndicate Risk Rating</span>
+              {/* Risk Score Meter */}
+              <div className="p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400 font-mono">THREAT RISK CONVICTION</span>
                   <span className="font-mono font-bold text-rose-400">
-                    {Math.round((selectedNodeInfo.node.riskScore || 0.95) * 100)}% CRITICAL
+                    {(selectedNodeInfo.node.riskScore * 100).toFixed(0)}%
                   </span>
                 </div>
-
-                <div className="h-1.5 w-full bg-white/[0.08] rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{
-                      width: `${Math.round((selectedNodeInfo.node.riskScore || 0.95) * 100)}%`,
-                    }}
-                    transition={{ duration: 0.6, ease: 'easeOut' }}
-                    className="h-full bg-gradient-to-r from-amber-400 to-rose-500 rounded-full"
+                <div className="h-1.5 w-full bg-white/[0.06] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-amber-500 via-rose-500 to-red-500 rounded-full"
+                    style={{ width: `${selectedNodeInfo.node.riskScore * 100}%` }}
                   />
-                </div>
-
-                <div className="flex justify-between text-[10px] text-slate-500 font-mono pt-1">
-                  <span>Confidence: 0.98</span>
-                  <span>Cross-Channel Flags: {selectedNodeInfo.connectionsCount}</span>
                 </div>
               </div>
 
               {/* Linked Telegram Channels */}
               <div className="space-y-1.5">
-                <div className="text-[11px] font-medium text-slate-400">
-                  MONITORED TELEGRAM CHANNELS
+                <div className="text-[11px] font-mono text-slate-400 uppercase">
+                  ASSOCIATED BROADCAST CHANNELS
                 </div>
                 <div className="space-y-1">
-                  {(selectedNodeInfo.node.channels || ['@delhi_highs', '@mule_bazaar']).map(
-                    (chan, idx) => (
+                  {(selectedNodeInfo.node.channels || [activeCase?.channel || '@delhi_highs']).map(
+                    (chan) => (
                       <div
-                        key={idx}
-                        className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-white/[0.02] border border-white/[0.05] text-xs font-mono text-cyan-400"
+                        key={chan}
+                        className="p-2 bg-white/[0.02] border border-white/[0.05] rounded-lg text-xs font-mono text-cyan-300 flex items-center justify-between"
                       >
                         <span>{chan}</span>
-                        <span className="text-[10px] text-slate-500">ACTIVE FEED</span>
+                        <span className="text-[10px] text-emerald-400">MONITORED</span>
                       </div>
                     )
                   )}
                 </div>
               </div>
 
-              {/* Cross-Channel Correlation Summary */}
-              <div className="p-3 bg-white/[0.02] rounded-xl border border-white/[0.06] space-y-1.5 text-xs">
-                <div className="text-slate-400 font-medium">Syndicate Nexus Analysis</div>
-                <p className="text-slate-300 leading-relaxed text-[11px]">
-                  {selectedNodeInfo.node.isHero
-                    ? 'Central UPI escrow nexus used for receiving narcotics revenue across Delhi-Jaipur channels and routing payments to mule accounts in Jodhpur.'
-                    : selectedNodeInfo.node.type === 'phone'
-                    ? 'Primary communication broker coordinating arms katte shipments and counterfeit document deliveries across Shekhawati and Bikaner.'
-                    : selectedNodeInfo.node.type === 'crypto'
-                    ? 'Cold escrow wallet utilized for settling cross-border synthetic opioid consignments in Sri Ganganagar.'
-                    : 'Flagged illicit trade entity operating under Telegram channel syndicates.'}
-                </p>
+              {/* Connected Edges */}
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-mono text-slate-400 uppercase">
+                  NETWORK RELATIONS ({selectedNodeInfo.connectionsCount})
+                </div>
+                <div className="space-y-1">
+                  {selectedNodeInfo.connectedEdges.slice(0, 5).map((e) => (
+                    <div
+                      key={e.id}
+                      className="p-2 bg-white/[0.02] border border-white/[0.05] rounded-lg text-xs flex items-center justify-between"
+                    >
+                      <span className="text-slate-300 font-mono text-[11px]">
+                        {e.source === selectedNodeInfo.node.id ? e.target : e.source}
+                      </span>
+                      <span className="text-[10px] font-mono text-cyan-400 font-semibold">
+                        {e.label || 'LINKED'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
-            {/* Action Buttons at Footer */}
-            <div className="p-4 border-t border-white/[0.07] bg-[#0C101A] space-y-2 shrink-0">
-              {/* 1. Locate on Rajasthan Map */}
-              <button
-                onClick={() => {
-                  sound.playSuccessChime();
-                  if (onLocateDistrict) {
-                    onLocateDistrict(selectedNodeInfo.districtId);
-                  }
-                }}
-                className="w-full flex items-center justify-center gap-2 bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-semibold py-2.5 rounded-xl text-xs transition-colors shadow-[0_0_15px_rgba(34,211,238,0.25)]"
-              >
-                <MapPin className="w-3.5 h-3.5" />
-                <span>
-                  Locate on Rajasthan Map ({selectedNodeInfo.districtId.toUpperCase()})
-                </span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-
-              {/* 2. Return to Command Center */}
-              {onReturnToCommand && (
+            {/* Action Footer */}
+            <div className="p-3 border-t border-white/[0.07] bg-[#070A10]/60 space-y-2">
+              {onLocateDistrict && (
                 <button
                   onClick={() => {
                     sound.playClick();
-                    onReturnToCommand();
+                    onLocateDistrict(selectedNodeInfo.districtId);
                   }}
-                  className="w-full flex items-center justify-center gap-2 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 py-2 rounded-xl text-xs transition-colors"
+                  className="w-full py-2 px-3 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
                 >
-                  <span>Return to Command Center Overview</span>
+                  <MapPin className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Locate on Rajasthan Map</span>
+                </button>
+              )}
+
+              {onOpenDossier && activeCase && (
+                <button
+                  onClick={() => {
+                    sound.playSuccessChime();
+                    onOpenDossier(activeCase.id);
+                  }}
+                  className="w-full py-2 px-3 bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors shadow-lg shadow-cyan-950/40"
+                >
+                  <FolderOpen className="w-3.5 h-3.5" />
+                  <span>Inspect Forensic Case Dossier</span>
                 </button>
               )}
             </div>
@@ -811,39 +1230,37 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
         )}
       </AnimatePresence>
 
-      {/* 4. FLOATING BOTTOM-RIGHT ZOOM & PAN CONTROLS */}
-      <div className="absolute bottom-4 right-4 z-20 flex items-center gap-1.5 bg-[#0C101A]/90 backdrop-blur-xl border border-white/[0.08] p-1.5 rounded-xl shadow-2xl">
+      {/* ======================================================== */}
+      {/* 5. FLOATING BOTTOM-RIGHT ZOOM & RESET CONTROLS           */}
+      {/* ======================================================== */}
+      <div className="absolute bottom-4 right-4 z-20 flex items-center gap-1.5 bg-[#0C101A]/90 backdrop-blur-xl border border-white/[0.08] rounded-xl p-1.5 shadow-2xl">
         <button
           onClick={() => {
             sound.playClick();
-            setZoom((z) => Math.min(z + 0.2, 2.8));
+            setZoom((z) => Math.min(z * 1.25, 2.8));
           }}
-          className="p-2 text-slate-400 hover:text-white hover:bg-white/[0.06] rounded-lg transition-colors"
+          className="p-1.5 text-slate-400 hover:text-white hover:bg-white/[0.05] rounded-lg transition-colors"
           title="Zoom In"
         >
           <ZoomIn className="w-4 h-4" />
         </button>
-
         <button
           onClick={() => {
             sound.playClick();
-            setZoom((z) => Math.max(z - 0.2, 0.4));
+            setZoom((z) => Math.max(z * 0.8, 0.4));
           }}
-          className="p-2 text-slate-400 hover:text-white hover:bg-white/[0.06] rounded-lg transition-colors"
+          className="p-1.5 text-slate-400 hover:text-white hover:bg-white/[0.05] rounded-lg transition-colors"
           title="Zoom Out"
         >
           <ZoomOut className="w-4 h-4" />
         </button>
-
         <div className="h-4 w-px bg-white/[0.08]" />
-
         <button
           onClick={resetView}
-          className="px-2.5 py-1 text-slate-300 hover:text-white hover:bg-white/[0.06] rounded-lg text-xs font-mono font-medium flex items-center gap-1.5 transition-colors"
-          title="Reset Zoom & Pan"
+          className="p-1.5 text-slate-400 hover:text-white hover:bg-white/[0.05] rounded-lg transition-colors"
+          title="Reset View"
         >
-          <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
-          <span>{Math.round(zoom * 100)}%</span>
+          <RefreshCw className="w-3.5 h-3.5" />
         </button>
       </div>
     </div>

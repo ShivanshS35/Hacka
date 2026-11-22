@@ -375,6 +375,9 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
             className="w-full h-full"
           >
             <EntityTopologyPage
+              selectedPost={selectedPost}
+              allPosts={posts}
+              onSelectPost={(post) => setSelectedPost(post)}
               onLocateDistrict={handleLocateDistrictFromTopology}
               onOpenDossier={(postId) => {
                 const p = posts.find((post) => post.id === postId);
@@ -415,6 +418,12 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
                   const dist = districts.find((d) => d.id === post.districtId);
                   if (dist) setSelectedDistrict(dist);
                 }}
+                onExploreTopology={(post) => {
+                  setSelectedPost(post);
+                  const dist = districts.find((d) => d.id === post.districtId);
+                  if (dist) setSelectedDistrict(dist);
+                  setActiveNavTab('TOPOLOGY');
+                }}
                 activeCategory={activeCategory}
                 onSelectCategory={setActiveCategory}
                 onOpenUploadModal={() => setIsUploadModalOpen(true)}
@@ -451,17 +460,19 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
                 <div className="flex items-center justify-between text-xs mb-1.5">
                   <span className="font-semibold text-cyan-300 flex items-center gap-1.5">
                     <Network className="w-4 h-4 text-cyan-400" />
-                    <span>3D Entity Topology</span>
+                    <span>3D Case Topology</span>
                   </span>
                   <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                    FULLSCREEN
+                    {selectedPost ? selectedPost.districtName.toUpperCase() : 'CASE'}
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-300 leading-relaxed">
-                  Inspect the organic 3D figurine network constellation connecting UPIs, Telegram handles, and cryptocurrency escrows.
+                  {selectedPost
+                    ? `Explore 3D network connecting ${selectedPost.channel}'s extracted UPIs, Telegram handles, and cross-channel mule nexus.`
+                    : 'Inspect the organic 3D figurine network constellation connecting UPIs, Telegram handles, and cryptocurrency escrows.'}
                 </p>
                 <div className="mt-2.5 flex items-center gap-1 text-xs font-semibold text-cyan-400 group-hover:translate-x-1 transition-transform">
-                  <span>Launch Full 3D Entity Graph</span>
+                  <span>Explore {selectedPost ? selectedPost.channel : 'Active Case'} 3D Graph</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </div>
               </div>
