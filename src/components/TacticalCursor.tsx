@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { motion, useMotionValue, useSpring, AnimatePresence } from 'framer-motion';
+import { motion, useMotionValue, useSpring, useTransform, AnimatePresence } from 'framer-motion';
 
 interface Shockwave {
   id: number;
@@ -19,25 +19,34 @@ export const TacticalCursor: React.FC = () => {
   const [isVisible, setIsVisible] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
   const [isClicking, setIsClicking] = useState(false);
-  const [speed, setSpeed] = useState(0);
   const [shockwaves, setShockwaves] = useState<Shockwave[]>([]);
   const [particles, setParticles] = useState<TrailParticle[]>([]);
 
-  // Raw mouse coordinates
+  // 1. Direct 1:1 hardware coordinates (Zero spring delay on pointer tip)
   const mouseX = useMotionValue(-100);
   const mouseY = useMotionValue(-100);
-  const mouseTilt = useMotionValue(0);
 
-  // Snappy, ultra-low lag spring physics
-  const springX = useSpring(mouseX, { damping: 28, stiffness: 500, mass: 0.15 });
-  const springY = useSpring(mouseY, { damping: 28, stiffness: 500, mass: 0.15 });
-  const springTilt = useSpring(mouseTilt, { damping: 20, stiffness: 350 });
+  // 2. Secondary physics ONLY on decorative visual aura:
+  // - Reticle spring trail (trails smoothly behind the cursor and locks on hover)
+  const reticleSpringX = useSpring(mouseX, { damping: 28, stiffness: 360 });
+  const reticleSpringY = useSpring(mouseY, { damping: 28, stiffness: 360 });
+
+  // - Dynamic velocity tilt spring
+  const mouseTilt = useMotionValue(0);
+  const springTilt = useSpring(mouseTilt, { damping: 22, stiffness: 300 });
+
+  // - Dynamic thruster jet flame spring
+  const thrusterRaw = useMotionValue(0.7);
+  const springThruster = useSpring(thrusterRaw, { damping: 22, stiffness: 320 });
+  const springThrusterWidth = useTransform(springThruster, (val) => Math.min(val, 1.45));
 
   const prevPos = useRef<{ x: number; y: number; time: number }>({ x: 0, y: 0, time: 0 });
+  const lastParticleTime = useRef<number>(0);
+  const lastTargetRef = useRef<EventTarget | null>(null);
   const particleIdCounter = useRef(0);
   const shockwaveIdCounter = useRef(0);
 
-  // Check if touch / mobile device
+  // Check if touch / mobile device (disable custom cursor on coarse touchscreens)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const matchCoarse = window.matchMedia('(pointer: coarse)');
@@ -52,88 +61,110 @@ export const TacticalCursor: React.FC = () => {
     }
   }, []);
 
-  // Mouse movement & velocity tracking
+  // High-performance pointer tracking with zero-latency 1:1 hardware sync
   useEffect(() => {
     if (isTouchDevice) return;
 
-    const handleMouseMove = (e: MouseEvent) => {
+    const handlePointerMove = (e: PointerEvent) => {
+      const x = e.clientX;
+      const y = e.clientY;
+
+      // Make visible immediately on first move
       if (!isVisible) setIsVisible(true);
+
+      // Instant 1:1 position update (bypasses React re-render & spring delay)
+      mouseX.set(x);
+      mouseY.set(y);
 
       const now = performance.now();
       const dt = Math.max(now - prevPos.current.time, 1);
-      const dx = e.clientX - prevPos.current.x;
-      const dy = e.clientY - prevPos.current.y;
-
-      // Calculate pixel velocity (px/ms)
+      const dx = x - prevPos.current.x;
+      const dy = y - prevPos.current.y;
       const currentSpeed = Math.sqrt(dx * dx + dy * dy) / dt;
-      setSpeed(Math.min(currentSpeed * 10, 10));
 
-      // Calculate bank / tilt angle based on horizontal movement
-      const targetTilt = Math.max(Math.min(dx * 1.2, 22), -22);
+      // Secondary physics: banking/tilt angle based on horizontal velocity
+      const targetTilt = Math.max(Math.min(dx * 0.9, 20), -20);
       mouseTilt.set(targetTilt);
 
-      mouseX.set(e.clientX);
-      mouseY.set(e.clientY);
+      // Secondary physics: dynamic thruster flare scaling
+      const targetThruster = Math.min(Math.max(currentSpeed * 0.35 + 0.7, 0.7), 2.1);
+      thrusterRaw.set(targetThruster);
 
-      // Spawn subtle glowing thruster trail particles when moving at medium to high speed
-      if (currentSpeed > 0.8 && Math.random() > 0.35) {
+      // Spawn subtle glowing thruster trail sparks (throttled to >40ms to keep main thread completely free)
+      if (currentSpeed > 0.85 && now - lastParticleTime.current > 40) {
+        lastParticleTime.current = now;
         const newParticle: TrailParticle = {
           id: particleIdCounter.current++,
-          // Spawn near the thruster nozzle (approx dx/dy offset)
-          x: e.clientX + 10 - dx * 0.2,
-          y: e.clientY + 22 - dy * 0.2,
-          size: Math.random() * 2.5 + 1.5,
+          x: x + 10 - dx * 0.15,
+          y: y + 22 - dy * 0.15,
+          size: Math.random() * 2.2 + 1.4,
         };
-
-        setParticles((prev) => [...prev.slice(-10), newParticle]);
+        setParticles((prev) => [...prev.slice(-8), newParticle]);
       }
 
-      prevPos.current = { x: e.clientX, y: e.clientY, time: now };
+      prevPos.current = { x, y, time: now };
 
-      // Interactive target detection (buttons, links, clickable SVG nodes, districts)
-      const target = e.target as HTMLElement | SVGElement | null;
-      if (target) {
-        const isInteractive = Boolean(
-          target.closest(
-            'button, a, input, textarea, select, [role="button"], .cursor-pointer, path.cursor-pointer, g.cursor-pointer, [data-interactive="true"]'
-          )
-        );
-        setIsHovering(isInteractive);
+      // Optimized hit-testing: only run expensive .closest() check when the hovered target DOM node actually changes
+      if (e.target !== lastTargetRef.current) {
+        lastTargetRef.current = e.target;
+        const target = e.target as HTMLElement | SVGElement | null;
+        if (target && typeof target.closest === 'function') {
+          const isInteractive = Boolean(
+            target.closest(
+              'button, a, input, textarea, select, [role="button"], .cursor-pointer, path.cursor-pointer, g.cursor-pointer, [data-interactive="true"], .node-element, .map-district'
+            )
+          );
+          setIsHovering(isInteractive);
+        } else {
+          setIsHovering(false);
+        }
       }
     };
 
-    const handleMouseDown = (e: MouseEvent) => {
-      setIsClicking(true);
+    const handlePointerDown = (e: PointerEvent) => {
+      if (e.button === 0) {
+        setIsClicking(true);
+        thrusterRaw.set(2.4);
 
-      // Trigger expanding cyan radar shockwave at click coordinates
-      const newShockwave: Shockwave = {
-        id: shockwaveIdCounter.current++,
-        x: e.clientX,
-        y: e.clientY,
-      };
-      setShockwaves((prev) => [...prev.slice(-4), newShockwave]);
+        // Emit expanding cyan radar shockwave at click coordinates
+        const newShockwave: Shockwave = {
+          id: shockwaveIdCounter.current++,
+          x: e.clientX,
+          y: e.clientY,
+        };
+        setShockwaves((prev) => [...prev.slice(-3), newShockwave]);
+      }
     };
 
-    const handleMouseUp = () => {
+    const handlePointerUp = () => {
       setIsClicking(false);
+      thrusterRaw.set(0.7);
     };
 
-    const handleMouseLeave = () => {
+    const handlePointerLeave = () => {
       setIsVisible(false);
+      lastTargetRef.current = null;
+      setIsHovering(false);
     };
 
-    window.addEventListener('mousemove', handleMouseMove, { passive: true });
-    window.addEventListener('mousedown', handleMouseDown);
-    window.addEventListener('mouseup', handleMouseUp);
-    document.addEventListener('mouseleave', handleMouseLeave);
+    const handlePointerEnter = () => {
+      setIsVisible(true);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: true });
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('pointerup', handlePointerUp);
+    document.documentElement.addEventListener('pointerleave', handlePointerLeave);
+    document.documentElement.addEventListener('pointerenter', handlePointerEnter);
 
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mousedown', handleMouseDown);
-      window.removeEventListener('mouseup', handleMouseUp);
-      document.removeEventListener('mouseleave', handleMouseLeave);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('pointerup', handlePointerUp);
+      document.documentElement.removeEventListener('pointerleave', handlePointerLeave);
+      document.documentElement.removeEventListener('pointerenter', handlePointerEnter);
     };
-  }, [isTouchDevice, isVisible, mouseX, mouseY, mouseTilt]);
+  }, [isTouchDevice, isVisible, mouseX, mouseY, mouseTilt, thrusterRaw]);
 
   // Clean up faded shockwaves
   const removeShockwave = useCallback((id: number) => {
@@ -145,7 +176,7 @@ export const TacticalCursor: React.FC = () => {
     if (particles.length === 0) return;
     const timeout = setTimeout(() => {
       setParticles((prev) => prev.slice(1));
-    }, 280);
+    }, 240);
     return () => clearTimeout(timeout);
   }, [particles]);
 
@@ -153,26 +184,27 @@ export const TacticalCursor: React.FC = () => {
     return null;
   }
 
-  // Thruster flare intensity based on movement speed and click recoil
-  const thrusterScale = isClicking ? 2.2 : Math.min(Math.max(speed * 0.25 + 0.6, 0.6), 1.9);
-
   return (
-    <div className="fixed inset-0 pointer-events-none z-[999999] overflow-hidden select-none">
+    <div
+      className="fixed inset-0 pointer-events-none z-[9999] overflow-hidden select-none"
+      style={{ willChange: 'transform' }}
+    >
       {/* 1. EXPANDING RADAR SHOCKWAVES ON CLICK */}
       {shockwaves.map((sw) => (
         <motion.div
           key={sw.id}
           initial={{ scale: 0, opacity: 0.9 }}
-          animate={{ scale: 1, opacity: 0 }}
+          animate={{ scale: 1.25, opacity: 0 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.45, ease: 'easeOut' }}
+          transition={{ duration: 0.42, ease: 'easeOut' }}
           onAnimationComplete={() => removeShockwave(sw.id)}
-          className="absolute rounded-full border border-cyan-400 shadow-[0_0_12px_#00E5FF]"
+          className="absolute rounded-full border border-cyan-400 shadow-[0_0_14px_#00E5FF] pointer-events-none"
           style={{
             left: sw.x - 28,
             top: sw.y - 28,
             width: 56,
             height: 56,
+            willChange: 'transform, opacity',
           }}
         />
       ))}
@@ -183,24 +215,63 @@ export const TacticalCursor: React.FC = () => {
           key={p.id}
           initial={{ opacity: 0.75, scale: 1 }}
           animate={{ opacity: 0, scale: 0.2, y: 12 }}
-          transition={{ duration: 0.3, ease: 'easeOut' }}
-          className="absolute rounded-full bg-cyan-400 shadow-[0_0_6px_#00E5FF]"
+          transition={{ duration: 0.28, ease: 'easeOut' }}
+          className="absolute rounded-full bg-cyan-400 shadow-[0_0_6px_#00E5FF] pointer-events-none"
           style={{
             left: p.x - p.size / 2,
             top: p.y - p.size / 2,
             width: p.size,
             height: p.size,
+            willChange: 'transform, opacity',
           }}
         />
       ))}
 
-      {/* 3. MAIN TACTICAL POINTER ROOT CONTAINER */}
+      {/* 3. SECONDARY VISUAL AURA: RETICLE RING TRAILS SMOOTHLY WITH SPRING DYNAMICS */}
       <motion.div
         style={{
-          x: springX,
-          y: springY,
+          x: reticleSpringX,
+          y: reticleSpringY,
+          willChange: 'transform',
         }}
-        className="absolute top-0 left-0"
+        className="absolute top-0 left-0 pointer-events-none"
+      >
+        <AnimatePresence>
+          {isHovering && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1, rotate: 360 }}
+              exit={{ opacity: 0, scale: 0.5 }}
+              transition={{
+                opacity: { duration: 0.15 },
+                scale: { duration: 0.2, ease: 'easeOut' },
+                rotate: { duration: 6, repeat: Infinity, ease: 'linear' },
+              }}
+              className="absolute w-12 h-12 rounded-full border border-dashed border-cyan-400 shadow-[0_0_12px_rgba(0,229,255,0.45)] pointer-events-none"
+              style={{
+                left: -24,
+                top: -24,
+                transformOrigin: '24px 24px',
+              }}
+            >
+              {/* 4 Corner Crosshair Reticle Brackets */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1.5 h-0.5 bg-cyan-300 shadow-[0_0_4px_#00E5FF]" />
+              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1.5 h-0.5 bg-cyan-300 shadow-[0_0_4px_#00E5FF]" />
+              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-1.5 bg-cyan-300 shadow-[0_0_4px_#00E5FF]" />
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-1.5 bg-cyan-300 shadow-[0_0_4px_#00E5FF]" />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+
+      {/* 4. MAIN TACTICAL POINTER ROOT CONTAINER - 1:1 HARDWARE SYNC (ZERO LAG) */}
+      <motion.div
+        style={{
+          x: mouseX,
+          y: mouseY,
+          willChange: 'transform',
+        }}
+        className="absolute top-0 left-0 pointer-events-none"
       >
         {/* Tilting & Recoil Wrapper (Pivot anchored exactly at top-left tip [0, 0]) */}
         <motion.div
@@ -213,37 +284,11 @@ export const TacticalCursor: React.FC = () => {
           }}
           transition={{
             type: 'spring',
-            stiffness: 600,
-            damping: 24,
+            stiffness: 750,
+            damping: 26,
           }}
-          className="relative"
+          className="relative pointer-events-none"
         >
-          {/* ROTATING DASHED TARGET RETICLE ON HOVER */}
-          <AnimatePresence>
-            {isHovering && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.6 }}
-                animate={{ opacity: 1, scale: 1, rotate: 360 }}
-                exit={{ opacity: 0, scale: 0.6 }}
-                transition={{
-                  opacity: { duration: 0.2 },
-                  scale: { duration: 0.25, ease: 'easeOut' },
-                  rotate: { duration: 6, repeat: Infinity, ease: 'linear' },
-                }}
-                className="absolute -top-3.5 -left-3.5 w-11 h-11 rounded-full border border-dashed border-cyan-400 shadow-[0_0_12px_rgba(0,229,255,0.45)] pointer-events-none"
-                style={{
-                  transformOrigin: '14px 14px',
-                }}
-              >
-                {/* 4 Corner Crosshair Reticle Brackets */}
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1 h-1 bg-cyan-300" />
-                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-1 bg-cyan-300" />
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-1 bg-cyan-300" />
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-1 bg-cyan-300" />
-              </motion.div>
-            )}
-          </AnimatePresence>
-
           {/* FUTURISTIC CYAN-OUTLINED THRUSTER ARROW POINTER (Top-left tip at [0, 0]) */}
           <svg
             width="32"
@@ -251,7 +296,7 @@ export const TacticalCursor: React.FC = () => {
             viewBox="0 0 32 36"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
-            className="overflow-visible"
+            className="overflow-visible pointer-events-none"
             style={{
               filter: isHovering
                 ? 'drop-shadow(0 0 8px #00E5FF) drop-shadow(0 0 16px rgba(0,229,255,0.5))'
@@ -292,29 +337,30 @@ export const TacticalCursor: React.FC = () => {
             </defs>
 
             {/* REAR THRUSTER NOZZLE FLAME (Originating at [10, 21]) */}
-            <g
-              transform="translate(10, 21)"
-              style={{
-                transformOrigin: '0px 0px',
-                transform: `scaleY(${thrusterScale}) scaleX(${Math.min(thrusterScale, 1.4)})`,
-                transition: 'transform 0.08s ease-out',
-              }}
-              filter="url(#thruster_glow)"
-            >
-              {/* Outer Cyan Plasma Jet */}
-              <polygon
-                points="-3.5,0 3.5,0 1.5,9.5 0,13 -1.5,9.5"
-                fill="url(#thruster_plasma_flame)"
-                className="animate-pulse"
-                style={{ animationDuration: '0.4s' }}
-              />
+            <g transform="translate(10, 21)">
+              <motion.g
+                style={{
+                  transformOrigin: '0px 0px',
+                  scaleY: springThruster,
+                  scaleX: springThrusterWidth,
+                }}
+                filter="url(#thruster_glow)"
+              >
+                {/* Outer Cyan Plasma Jet */}
+                <polygon
+                  points="-3.5,0 3.5,0 1.5,9.5 0,13 -1.5,9.5"
+                  fill="url(#thruster_plasma_flame)"
+                  className="animate-pulse"
+                  style={{ animationDuration: '0.4s' }}
+                />
 
-              {/* Inner White Hot Core */}
-              <polygon
-                points="-1.5,0 1.5,0 0.8,5 0,7 -0.8,5"
-                fill="#FFFFFF"
-                opacity="0.95"
-              />
+                {/* Inner White Hot Core */}
+                <polygon
+                  points="-1.5,0 1.5,0 0.8,5 0,7 -0.8,5"
+                  fill="#FFFFFF"
+                  opacity="0.95"
+                />
+              </motion.g>
             </g>
 
             {/* MAIN AERODYNAMIC DART ARROW (Hotspot Tip anchored at [1, 1]) */}
