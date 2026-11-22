@@ -4,6 +4,7 @@ import uuid
 import asyncio
 from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, UploadFile, File, Form, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -156,6 +157,198 @@ class ChannelScanRequest(BaseModel):
 # -----------------
 # REST Endpoints
 # -----------------
+@app.get("/", response_class=HTMLResponse)
+def root_dashboard():
+    return f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>PRAHARI OSINT // Backend Engine Status</title>
+      <style>
+        body {{
+          background-color: #070A10;
+          color: #F1F5F9;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+          margin: 0;
+          padding: 40px 20px;
+          display: flex;
+          justify-content: center;
+        }}
+        .container {{
+          max-width: 680px;
+          width: 100%;
+          background: #0C101A;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 16px;
+          padding: 32px;
+          box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(34, 211, 238, 0.1);
+        }}
+        .badge {{
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          background: rgba(16, 185, 129, 0.12);
+          border: 1px solid rgba(16, 185, 129, 0.3);
+          color: #10B981;
+          font-size: 11px;
+          font-weight: 700;
+          padding: 4px 10px;
+          border-radius: 9999px;
+          letter-spacing: 0.05em;
+        }}
+        .dot {{
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #10B981;
+          box-shadow: 0 0 8px #10B981;
+        }}
+        h1 {{
+          font-size: 24px;
+          margin: 16px 0 8px 0;
+          color: #FFFFFF;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }}
+        p {{
+          color: #94A3B8;
+          font-size: 14px;
+          line-height: 1.6;
+          margin: 0 0 24px 0;
+        }}
+        .metrics {{
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 12px;
+          margin-bottom: 24px;
+        }}
+        .metric-box {{
+          background: rgba(255, 255, 255, 0.02);
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          border-radius: 10px;
+          padding: 14px;
+          text-align: center;
+        }}
+        .metric-val {{
+          font-size: 20px;
+          font-weight: 800;
+          color: #22D3EE;
+          font-family: monospace;
+        }}
+        .metric-lbl {{
+          font-size: 10px;
+          color: #64748B;
+          margin-top: 4px;
+          letter-spacing: 0.05em;
+        }}
+        .links {{
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }}
+        .btn {{
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 8px;
+          padding: 12px 16px;
+          color: #F1F5F9;
+          text-decoration: none;
+          font-size: 13px;
+          transition: all 0.15s ease;
+        }}
+        .btn:hover {{
+          background: rgba(34, 211, 238, 0.08);
+          border-color: rgba(34, 211, 238, 0.4);
+          color: #22D3EE;
+        }}
+        .btn-primary {{
+          background: #22D3EE;
+          color: #070A10;
+          font-weight: 700;
+          border-color: #22D3EE;
+        }}
+        .btn-primary:hover {{
+          background: #67E8F9;
+          color: #070A10;
+        }}
+        .footer {{
+          margin-top: 24px;
+          padding-top: 16px;
+          border-top: 1px solid rgba(255, 255, 255, 0.06);
+          font-size: 11px;
+          color: #475569;
+          display: flex;
+          justify-content: space-between;
+        }}
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="badge"><span class="dot"></span> SYSTEM ONLINE · PORT 8000</div>
+        <h1>PRAHARI // OSINT Engine</h1>
+        <p>Cross-Channel OSINT & Illicit Trade Ingestion Engine for Rajasthan Police State Cyber Cell.</p>
+
+        <div class="metrics">
+          <div class="metric-box">
+            <div class="metric-val">{len(INTERCEPTS_STORE)}</div>
+            <div class="metric-lbl">ACTIVE INTERCEPTS</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-val">{len(ENTITY_GRAPH.nodes)}</div>
+            <div class="metric-lbl">GRAPH ENTITIES</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-val">SHA-256</div>
+            <div class="metric-lbl">SEC 65B CHAIN</div>
+          </div>
+        </div>
+
+        <div class="links">
+          <a class="btn btn-primary" href="http://localhost:5173" target="_blank">
+            <span>Launch Web Command Center UI</span>
+            <span>&rarr;</span>
+          </a>
+          <a class="btn" href="/docs" target="_blank">
+            <span>Interactive OpenAPI Swagger Docs</span>
+            <span style="color:#64748B;">/docs</span>
+          </a>
+          <a class="btn" href="/api/health">
+            <span>System Health JSON Telemetry</span>
+            <span style="color:#64748B;">/api/health</span>
+          </a>
+          <a class="btn" href="/api/feed">
+            <span>Live Intercept Feed JSON Stream</span>
+            <span style="color:#64748B;">/api/feed</span>
+          </a>
+          <a class="btn" href="/api/graph">
+            <span>Dynamic Entity Graph JSON</span>
+            <span style="color:#64748B;">/api/graph</span>
+          </a>
+        </div>
+
+        <div class="footer">
+          <span>RAJASTHAN POLICE · R4C HACKATHON 2026</span>
+          <span>WEBSOCKET: ws://localhost:8000/ws/stream</span>
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+
+@app.head("/")
+def root_head():
+    return ""
+
+@app.head("/api/health")
+def health_head():
+    return ""
+
 @app.get("/api/health")
 def health_check():
     return {
