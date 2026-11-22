@@ -41,6 +41,7 @@ import {
 import { sound } from '../utils/audio';
 import { generateDossierPDF } from '../utils/pdfGenerator';
 import { classifyText, generateSHA256 } from '../utils/detectionEngine';
+import { prahariApi } from '../services/api';
 
 interface WarMonitorLiveAppProps {
   onOpenEditorial: () => void;
@@ -63,12 +64,51 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
   const [isIntelModeModalOpen, setIsIntelModeModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isSimulating, setIsSimulating] = useState(true);
+  const [isBackendLive, setIsBackendLive] = useState(false);
 
   // Active state filters
   const [activeCategory, setActiveCategory] = useState<CrimeCategory | 'ALL'>('ALL');
   const [copiedHash, setCopiedHash] = useState(false);
   const [isMuted, setIsMuted] = useState(!sound.enabled);
   const [clockUtc, setClockUtc] = useState('');
+
+  // Connect to live FastAPI backend on mount
+  useEffect(() => {
+    let isMounted = true;
+
+    prahariApi.checkHealth().then((isLive) => {
+      if (isMounted) setIsBackendLive(isLive);
+      if (isLive) {
+        prahariApi.getFeed().then((feed) => {
+          if (isMounted && feed.length > 0) {
+            setPosts((prev) => {
+              const ids = new Set(prev.map((p) => p.id));
+              const uniqueNew = feed.filter((f) => !ids.has(f.id));
+              return [...uniqueNew, ...prev];
+            });
+            setSelectedPost(feed[0]);
+          }
+        });
+      }
+    });
+
+    // Real-time WebSocket connection to Python engine
+    const unsubscribe = prahariApi.subscribeToStream((newPost) => {
+      sound.playRadarPing();
+      setPosts((prev) => [newPost, ...prev.slice(0, 49)]);
+      setSelectedPost(newPost);
+      setDistricts((prev) =>
+        prev.map((d) =>
+          d.id === newPost.districtId ? { ...d, flaggedCount: d.flaggedCount + 1 } : d
+        )
+      );
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
 
   // Clock formatted in UTC / IST
   useEffect(() => {
@@ -267,6 +307,14 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
 
         {/* Right Section: Telemetry pill, Clock, Audio & Ingest Button */}
         <div className="flex items-center gap-3">
+          {/* Real Backend Status Pill */}
+          {isBackendLive && (
+            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-[10px] font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>PYTHON OSINT: ONLINE</span>
+            </div>
+          )}
+
           {/* Status Pill */}
           <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300 text-[11px] font-sans font-medium">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />

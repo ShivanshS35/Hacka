@@ -21,8 +21,9 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { ENTITY_GRAPH_DATA } from '../data/mockData';
-import { EntityNode, InterceptPost } from '../types';
+import { EntityNode, EntityEdge, InterceptPost } from '../types';
 import { sound } from '../utils/audio';
+import { prahariApi } from '../services/api';
 import { NodeAvatarCharacter } from './NodeAvatarCharacter';
 
 interface EntityTopologyPageProps {
@@ -38,12 +39,28 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
   onOpenDossier,
   onReturnToCommand,
 }) => {
+  const [graphData, setGraphData] = useState<{ nodes: EntityNode[]; edges: EntityEdge[] }>(ENTITY_GRAPH_DATA);
   const [selectedNode, setSelectedNode] = useState<EntityNode | null>(
     ENTITY_GRAPH_DATA.nodes.find((n) => n.isHero) || ENTITY_GRAPH_DATA.nodes[0]
   );
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<NodeFilterType>('ALL');
+
+  // Load live graph from FastAPI backend if available
+  useEffect(() => {
+    let isMounted = true;
+    prahariApi.getGraph().then((liveGraph) => {
+      if (isMounted && liveGraph && liveGraph.nodes.length > 0) {
+        setGraphData(liveGraph);
+        const hero = liveGraph.nodes.find((n) => n.isHero) || liveGraph.nodes[0];
+        if (hero) setSelectedNode(hero);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Zoom & Pan state
   const [zoom, setZoom] = useState<number>(1);
@@ -144,9 +161,22 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
     setPan({ x: 0, y: 0 });
   };
 
+  // Get position for any node, supporting dynamic nodes from FastAPI
+  const getNodePos = (node: EntityNode, index: number, total: number) => {
+    if (nodePositions[node.id]) return nodePositions[node.id];
+    // Radial distribution for newly ingested nodes
+    const angle = (index / Math.max(total, 1)) * 2 * Math.PI - Math.PI / 2;
+    const radius = 340;
+    return {
+      x: 700 + Math.cos(angle) * radius,
+      y: 450 + Math.sin(angle) * radius,
+      districtNexus: 'jaipur',
+    };
+  };
+
   // Filter and search logic
   const filteredNodes = useMemo(() => {
-    return ENTITY_GRAPH_DATA.nodes.filter((node) => {
+    return graphData.nodes.filter((node) => {
       // Category filter
       if (activeFilter === 'HERO' && !node.isHero && node.type !== 'upi') return false;
       if (activeFilter === 'SELLER' && node.type !== 'telegram') return false;
@@ -164,16 +194,16 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
       }
       return true;
     });
-  }, [activeFilter, searchQuery]);
+  }, [graphData.nodes, activeFilter, searchQuery]);
 
   // Edges filtered
   const visibleEdges = useMemo(() => {
     const nodeIds = new Set(filteredNodes.map((n) => n.id));
-    return ENTITY_GRAPH_DATA.edges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target));
-  }, [filteredNodes]);
+    return graphData.edges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target));
+  }, [graphData.edges, filteredNodes]);
 
   // Get color for edge/connection
-  const getEdgeStroke = (edge: (typeof ENTITY_GRAPH_DATA.edges)[0]) => {
+  const getEdgeStroke = (edge: EntityEdge) => {
     if (edge.category === 'DRUGS') return '#22D3EE'; // Cyan
     if (edge.category === 'ARMS') return '#F59E0B'; // Amber
     if (edge.category === 'DOCUMENTS') return '#C084FC'; // Purple
@@ -185,7 +215,7 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
   const selectedNodeInfo = useMemo(() => {
     if (!selectedNode) return null;
     const nexusDistrictId = nodePositions[selectedNode.id]?.districtNexus || 'jaipur';
-    const connectedEdges = ENTITY_GRAPH_DATA.edges.filter(
+    const connectedEdges = graphData.edges.filter(
       (e) => e.source === selectedNode.id || e.target === selectedNode.id
     );
 
@@ -195,7 +225,7 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
       connectionsCount: connectedEdges.length,
       connectedEdges,
     };
-  }, [selectedNode]);
+  }, [graphData.edges, selectedNode]);
 
   return (
     <div className="relative w-full h-full bg-[#070A10] overflow-hidden select-none font-sans">
@@ -280,9 +310,12 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
           {/* CURVED BEZIER CONNECTION ARCS */}
           <g className="edges-layer">
             {visibleEdges.map((edge) => {
-              const srcPos = nodePositions[edge.source];
-              const tgtPos = nodePositions[edge.target];
-              if (!srcPos || !tgtPos) return null;
+              const srcIndex = filteredNodes.findIndex((n) => n.id === edge.source);
+              const tgtIndex = filteredNodes.findIndex((n) => n.id === edge.target);
+              const srcNode = filteredNodes[srcIndex] || ({ id: edge.source, type: 'post' } as EntityNode);
+              const tgtNode = filteredNodes[tgtIndex] || ({ id: edge.target, type: 'upi' } as EntityNode);
+              const srcPos = getNodePos(srcNode, srcIndex >= 0 ? srcIndex : 0, filteredNodes.length);
+              const tgtPos = getNodePos(tgtNode, tgtIndex >= 0 ? tgtIndex : 1, filteredNodes.length);
 
               // Generate smooth quadratic Bezier curve
               const midX = (srcPos.x + tgtPos.x) / 2;
@@ -362,9 +395,8 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
 
           {/* 3D FIGURINE NODES */}
           <g className="nodes-layer">
-            {filteredNodes.map((node) => {
-              const pos = nodePositions[node.id];
-              if (!pos) return null;
+            {filteredNodes.map((node, idx) => {
+              const pos = getNodePos(node, idx, filteredNodes.length);
 
               const isSelected = selectedNode?.id === node.id;
               const isHovered = hoveredNodeId === node.id;
@@ -495,7 +527,7 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
         <div className="pointer-events-auto inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.03] border border-white/[0.06] text-[10px] font-mono text-slate-400 self-start">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
           <span>
-            {filteredNodes.length} of {ENTITY_GRAPH_DATA.nodes.length} Network Entities Active
+            {filteredNodes.length} of {graphData.nodes.length} Network Entities Active
           </span>
         </div>
       </div>
