@@ -44,23 +44,9 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
     ENTITY_GRAPH_DATA.nodes.find((n) => n.isHero) || ENTITY_GRAPH_DATA.nodes[0]
   );
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<NodeFilterType>('ALL');
-
-  // Load live graph from FastAPI backend if available
-  useEffect(() => {
-    let isMounted = true;
-    prahariApi.getGraph().then((liveGraph) => {
-      if (isMounted && liveGraph && liveGraph.nodes.length > 0) {
-        setGraphData(liveGraph);
-        const hero = liveGraph.nodes.find((n) => n.isHero) || liveGraph.nodes[0];
-        if (hero) setSelectedNode(hero);
-      }
-    });
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
   // Zoom & Pan state
   const [zoom, setZoom] = useState<number>(1);
@@ -76,23 +62,20 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
   } | null>(null);
   const hasMovedRef = useRef<boolean>(false);
 
-  // Expansive 1400 x 900 coordinate space for generous breathing room
-  const nodePositions: Record<string, { x: number; y: number; districtNexus: string }> = {
-    // Center: Hero Node Nexus
-    'raj.pay@oksbi': { x: 700, y: 450, districtNexus: 'jaipur' },
-
-    // Primary Connected Entities (Radius ~ 240)
-    '9876543210': { x: 700, y: 210, districtNexus: 'bikaner' }, // North: Arms/Phone
-    '@seller_raj': { x: 700, y: 690, districtNexus: 'sikar' }, // South: Dark Seller
-    'bc1qar...mdq': { x: 1040, y: 450, districtNexus: 'ganganagar' }, // East: Crypto Escrow
-
-    // Satellite Posts (Outer perimeter)
-    post_001: { x: 380, y: 220, districtNexus: 'jaipur' }, // NW: Narcotics
-    post_002: { x: 320, y: 450, districtNexus: 'jodhpur' }, // W: Mule Accounts
-    post_003: { x: 380, y: 680, districtNexus: 'alwar' }, // SW: Arms Hub
-    post_004: { x: 1040, y: 210, districtNexus: 'kota' }, // NE: Doc Forge
-    post_005: { x: 1040, y: 690, districtNexus: 'ganganagar' }, // SE: Border Drop
-  };
+  // Load live dynamic graph from FastAPI backend if available
+  useEffect(() => {
+    let isMounted = true;
+    prahariApi.getGraph().then((liveGraph) => {
+      if (isMounted && liveGraph && liveGraph.nodes.length > 0) {
+        setGraphData(liveGraph);
+        const hero = liveGraph.nodes.find((n) => n.isHero) || liveGraph.nodes[0];
+        if (hero) setSelectedNode(hero);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Trackpad pinch-to-zoom and two-finger scroll zoom
   useEffect(() => {
@@ -119,6 +102,10 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
   // Pan controls
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
+    // Prevent container drag capture when clicking directly on a node
+    const isNode = (e.target as Element).closest('.node-element');
+    if (isNode) return;
+
     dragStartRef.current = {
       startX: e.clientX,
       startY: e.clientY,
@@ -161,19 +148,6 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
     setPan({ x: 0, y: 0 });
   };
 
-  // Get position for any node, supporting dynamic nodes from FastAPI
-  const getNodePos = (node: EntityNode, index: number, total: number) => {
-    if (nodePositions[node.id]) return nodePositions[node.id];
-    // Radial distribution for newly ingested nodes
-    const angle = (index / Math.max(total, 1)) * 2 * Math.PI - Math.PI / 2;
-    const radius = 340;
-    return {
-      x: 700 + Math.cos(angle) * radius,
-      y: 450 + Math.sin(angle) * radius,
-      districtNexus: 'jaipur',
-    };
-  };
-
   // Filter and search logic
   const filteredNodes = useMemo(() => {
     return graphData.nodes.filter((node) => {
@@ -202,19 +176,95 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
     return graphData.edges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target));
   }, [graphData.edges, filteredNodes]);
 
-  // Get color for edge/connection
-  const getEdgeStroke = (edge: EntityEdge) => {
-    if (edge.category === 'DRUGS') return '#22D3EE'; // Cyan
-    if (edge.category === 'ARMS') return '#F59E0B'; // Amber
-    if (edge.category === 'DOCUMENTS') return '#C084FC'; // Purple
-    if (edge.category === 'FINANCIAL') return '#34D399'; // Emerald
-    return '#94A3B8';
+  // ========================================================
+  // STRICT TWO-RING CONCENTRIC RADIAL LAYOUT
+  // Core (r = 0): raj.pay@oksbi at (700, 450)
+  // Inner Ring (r = 165px): Linked identifiers (Phone, Telegram, Crypto)
+  // Outer Ring (r = 325px): Flagged post intelligence nodes
+  // ========================================================
+  const nodePositionMap = useMemo(() => {
+    const map: Record<
+      string,
+      { x: number; y: number; districtNexus: string; ring: 'center' | 'inner' | 'outer' }
+    > = {};
+
+    const hero =
+      filteredNodes.find((n) => n.isHero || n.id === 'raj.pay@oksbi') || filteredNodes[0];
+    if (hero) {
+      map[hero.id] = { x: 700, y: 450, districtNexus: 'jaipur', ring: 'center' };
+    }
+
+    const innerList = filteredNodes.filter((n) => n.id !== hero?.id && n.type !== 'post');
+    const outerList = filteredNodes.filter((n) => n.id !== hero?.id && n.type === 'post');
+
+    const R_INNER = 165;
+    // Order innerList symmetrically: North (Phone), East (Crypto), South (@seller_raj), West (Broker/Admin)
+    const prioritizedInner = [...innerList].sort((a, b) => {
+      const getPriority = (item: EntityNode) => {
+        if (item.id === '9876543210') return 1;
+        if (item.type === 'crypto' || item.id.includes('bc1')) return 2;
+        if (item.id === '@seller_raj') return 3;
+        if (item.id === '8995874251' || item.id === '@seller_delhi') return 4;
+        return 5;
+      };
+      return getPriority(a) - getPriority(b);
+    });
+
+    const totalInner = Math.max(prioritizedInner.length, 1);
+    const innerAngleStep = (2 * Math.PI) / totalInner;
+    prioritizedInner.forEach((n, idx) => {
+      // Evenly distribute around the circle so no two nodes ever share the same angle
+      const angle = -Math.PI / 2 + idx * innerAngleStep;
+      map[n.id] = {
+        x: Math.round(700 + Math.cos(angle) * R_INNER),
+        y: Math.round(450 + Math.sin(angle) * R_INNER),
+        districtNexus: n.type === 'phone' ? 'bikaner' : n.type === 'crypto' ? 'ganganagar' : 'sikar',
+        ring: 'inner',
+      };
+    });
+
+    const R_OUTER = 325;
+    const totalOuter = Math.max(outerList.length, 1);
+    const angleStep = (2 * Math.PI) / totalOuter;
+
+    outerList.forEach((n, idx) => {
+      // Evenly distribute around the 360° circle with slight offset so rays pass between inner nodes
+      const angle = -Math.PI / 2 + (idx + 0.5) * angleStep;
+      map[n.id] = {
+        x: Math.round(700 + Math.cos(angle) * R_OUTER),
+        y: Math.round(450 + Math.sin(angle) * R_OUTER),
+        districtNexus: idx % 3 === 0 ? 'jaipur' : idx % 3 === 1 ? 'jodhpur' : 'alwar',
+        ring: 'outer',
+      };
+    });
+
+    return map;
+  }, [filteredNodes]);
+
+  // Color generator for connections
+  const getEdgeColors = (edge: EntityEdge) => {
+    const isHeroConnected =
+      edge.source === 'raj.pay@oksbi' || edge.target === 'raj.pay@oksbi';
+
+    if (isHeroConnected) {
+      return { base: '#00E5FF', stream: '#00FF88' }; // Cyan base with Neon Green stream
+    }
+    if (edge.category === 'DRUGS') {
+      return { base: '#00FF88', stream: '#00E5FF' }; // Neon Green with Cyan stream
+    }
+    if (edge.category === 'ARMS') {
+      return { base: '#F59E0B', stream: '#00E5FF' }; // Amber with Cyan stream
+    }
+    if (edge.category === 'DOCUMENTS') {
+      return { base: '#C084FC', stream: '#00FF88' }; // Purple with Green stream
+    }
+    return { base: '#00E5FF', stream: '#00FF88' };
   };
 
   // Node details for drawer
   const selectedNodeInfo = useMemo(() => {
     if (!selectedNode) return null;
-    const nexusDistrictId = nodePositions[selectedNode.id]?.districtNexus || 'jaipur';
+    const nexusDistrictId = nodePositionMap[selectedNode.id]?.districtNexus || 'jaipur';
     const connectedEdges = graphData.edges.filter(
       (e) => e.source === selectedNode.id || e.target === selectedNode.id
     );
@@ -225,7 +275,7 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
       connectionsCount: connectedEdges.length,
       connectedEdges,
     };
-  }, [graphData.edges, selectedNode]);
+  }, [graphData.edges, selectedNode, nodePositionMap]);
 
   return (
     <div className="relative w-full h-full bg-[#070A10] overflow-hidden select-none font-sans">
@@ -241,16 +291,16 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
         } relative flex items-center justify-center`}
         style={{
           backgroundImage:
-            'radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.05) 1px, transparent 0)',
+            'radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.04) 1px, transparent 0)',
           backgroundSize: '32px 32px',
         }}
       >
         {/* Ambient Radial Glow centered around raj.pay@oksbi */}
         <div
-          className="absolute w-[800px] h-[800px] rounded-full pointer-events-none opacity-25"
+          className="absolute w-[800px] h-[800px] rounded-full pointer-events-none opacity-20"
           style={{
             background:
-              'radial-gradient(circle, rgba(34, 211, 238, 0.18) 0%, rgba(12, 16, 26, 0.05) 65%, transparent 100%)',
+              'radial-gradient(circle, rgba(0, 229, 255, 0.22) 0%, rgba(0, 255, 136, 0.06) 40%, transparent 70%)',
             transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
           }}
         />
@@ -266,123 +316,142 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
           }}
         >
           <defs>
-            {/* Hologram Pulse Animation for Central Hero Node */}
-            <radialGradient id="topo_hero_pedestal" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#22D3EE" stopOpacity="0.45" />
-              <stop offset="70%" stopColor="#0891B2" stopOpacity="0.15" />
-              <stop offset="100%" stopColor="#070A10" stopOpacity="0" />
-            </radialGradient>
-
             {/* Glowing drop shadow filter */}
-            <filter id="topo_glow" x="-30%" y="-30%" width="160%" height="160%">
+            <filter id="topo_glow" x="-40%" y="-40%" width="180%" height="180%">
               <feGaussianBlur stdDeviation="3.5" result="blur" />
               <feMerge>
                 <feMergeNode in="blur" />
                 <feMergeNode in="SourceGraphic" />
               </feMerge>
             </filter>
+
+            {/* Central Pedestal Hologram Radial Gradient */}
+            <radialGradient id="topo_hero_pedestal" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#00E5FF" stopOpacity="0.35" />
+              <stop offset="60%" stopColor="#00FF88" stopOpacity="0.12" />
+              <stop offset="100%" stopColor="#070A10" stopOpacity="0" />
+            </radialGradient>
           </defs>
 
-          {/* Central Hero Radial Aura Rings */}
-          <g transform="translate(700, 450)">
+          {/* CONCENTRIC ALIGNMENT RINGS (Inner Ring r=165px, Outer Ring r=325px) */}
+          <g transform="translate(700, 450)" className="pointer-events-none">
+            {/* Central Core Aura */}
             <circle
-              r="140"
+              r="75"
               fill="url(#topo_hero_pedestal)"
               className="animate-pulse"
-              style={{ animationDuration: '4s' }}
+              style={{ animationDuration: '3.5s' }}
             />
+            {/* Inner Ring Guideline */}
             <circle
-              r="220"
+              r="165"
               fill="none"
-              stroke="rgba(34, 211, 238, 0.12)"
+              stroke="#00E5FF"
               strokeWidth="1"
-              strokeDasharray="4 6"
+              strokeDasharray="4 8"
+              strokeOpacity="0.18"
             />
+            {/* Outer Ring Guideline */}
             <circle
-              r="340"
+              r="325"
               fill="none"
-              stroke="rgba(255, 255, 255, 0.05)"
+              stroke="#00FF88"
               strokeWidth="1"
-              strokeDasharray="6 8"
+              strokeDasharray="6 10"
+              strokeOpacity="0.14"
             />
           </g>
 
-          {/* CURVED BEZIER CONNECTION ARCS */}
+          {/* ANIMATED RUNNING CONNECTION LINES (Green & Blue Data Streams) */}
           <g className="edges-layer">
-            {visibleEdges.map((edge) => {
-              const srcIndex = filteredNodes.findIndex((n) => n.id === edge.source);
-              const tgtIndex = filteredNodes.findIndex((n) => n.id === edge.target);
-              const srcNode = filteredNodes[srcIndex] || ({ id: edge.source, type: 'post' } as EntityNode);
-              const tgtNode = filteredNodes[tgtIndex] || ({ id: edge.target, type: 'upi' } as EntityNode);
-              const srcPos = getNodePos(srcNode, srcIndex >= 0 ? srcIndex : 0, filteredNodes.length);
-              const tgtPos = getNodePos(tgtNode, tgtIndex >= 0 ? tgtIndex : 1, filteredNodes.length);
+            {visibleEdges.map((edge, idx) => {
+              const srcPos = nodePositionMap[edge.source];
+              const tgtPos = nodePositionMap[edge.target];
+              if (!srcPos || !tgtPos) return null;
 
-              // Generate smooth quadratic Bezier curve
+              // Generate gentle curved Bezier line
               const midX = (srcPos.x + tgtPos.x) / 2;
               const midY = (srcPos.y + tgtPos.y) / 2;
-              // Add slight perpendicular curve offset
               const dx = tgtPos.x - srcPos.x;
               const dy = tgtPos.y - srcPos.y;
-              const offset = 36;
-              const controlX = midX - dy * (offset / 400);
-              const controlY = midY + dx * (offset / 400);
+              const offset = 26;
+              const controlX = midX - dy * (offset / 420);
+              const controlY = midY + dx * (offset / 420);
 
               const isHighlighted =
                 selectedNode &&
                 (selectedNode.id === edge.source || selectedNode.id === edge.target);
               const isHovered =
-                hoveredNodeId &&
-                (hoveredNodeId === edge.source || hoveredNodeId === edge.target);
+                (hoveredNodeId && (hoveredNodeId === edge.source || hoveredNodeId === edge.target)) ||
+                hoveredEdgeId === edge.id;
 
-              const strokeColor = getEdgeStroke(edge);
+              const colors = getEdgeColors(edge);
+              const pathD = `M ${srcPos.x} ${srcPos.y - 8} Q ${controlX} ${controlY} ${tgtPos.x} ${tgtPos.y - 8}`;
+
+              // Edge label visibility: ONLY show when edge or connected node is hovered or selected
+              const showEdgeLabel = isHighlighted || isHovered;
 
               return (
-                <g key={edge.id} className="pointer-events-none">
-                  {/* Background halo curve */}
+                <g
+                  key={edge.id}
+                  className="cursor-pointer pointer-events-auto"
+                  onMouseEnter={() => setHoveredEdgeId(edge.id)}
+                  onMouseLeave={() => setHoveredEdgeId(null)}
+                >
+                  {/* Layer 1: Base Glowing Glow Tube */}
                   <path
-                    d={`M ${srcPos.x} ${srcPos.y - 10} Q ${controlX} ${controlY} ${tgtPos.x} ${
-                      tgtPos.y - 10
-                    }`}
+                    d={pathD}
                     fill="none"
-                    stroke={strokeColor}
-                    strokeWidth={isHighlighted ? 4 : isHovered ? 3 : 1.5}
-                    strokeOpacity={isHighlighted ? 0.85 : isHovered ? 0.6 : 0.25}
+                    stroke={colors.base}
+                    strokeWidth={isHighlighted ? 3.8 : isHovered ? 2.8 : 1.6}
+                    strokeOpacity={isHighlighted ? 0.95 : isHovered ? 0.75 : 0.32}
                     filter={isHighlighted || isHovered ? 'url(#topo_glow)' : undefined}
                   />
 
-                  {/* Flowing particle animation pulse */}
+                  {/* Layer 2: Live Animated Running Stream (stroke-dashoffset running flow) */}
                   <path
-                    d={`M ${srcPos.x} ${srcPos.y - 10} Q ${controlX} ${controlY} ${tgtPos.x} ${
-                      tgtPos.y - 10
-                    }`}
+                    d={pathD}
                     fill="none"
-                    stroke="#FFFFFF"
-                    strokeWidth={isHighlighted ? 2.5 : 1.5}
-                    strokeDasharray="8 40"
-                    strokeDashoffset="0"
-                    strokeOpacity={isHighlighted ? 0.9 : 0.45}
-                    className="animate-flow"
-                    style={{ animationDuration: isHighlighted ? '1.5s' : '3.5s' }}
+                    stroke={colors.stream}
+                    strokeWidth={isHighlighted ? 2.4 : 1.6}
+                    strokeDasharray="8 14"
+                    strokeOpacity={isHighlighted ? 1 : isHovered ? 0.85 : 0.65}
+                    className="animate-stream-flow"
+                    style={{ animationDuration: isHighlighted ? '0.9s' : '1.5s' }}
                   />
 
-                  {/* Midpoint Label */}
-                  {edge.label && (
-                    <g transform={`translate(${controlX}, ${controlY})`}>
+                  {/* Layer 3: Directional Traveling Light Pulse / Photon Particle */}
+                  <circle
+                    r={isHighlighted ? '3.5' : '2.5'}
+                    fill={colors.stream}
+                    filter="url(#topo_glow)"
+                    opacity={isHighlighted ? '1' : '0.8'}
+                  >
+                    <animateMotion
+                      path={pathD}
+                      dur={`${1.8 + (idx % 3) * 0.4}s`}
+                      repeatCount="indefinite"
+                    />
+                  </circle>
+
+                  {/* Clean Midpoint Label: REVEAL ONLY ON HOVER OR SELECTION */}
+                  {showEdgeLabel && edge.label && (
+                    <g transform={`translate(${controlX}, ${controlY})`} className="pointer-events-none">
                       <rect
-                        x="-44"
-                        y="-8"
-                        width="88"
-                        height="16"
+                        x="-46"
+                        y="-9"
+                        width="92"
+                        height="18"
                         rx="4"
                         fill="#070A10"
-                        stroke={strokeColor}
-                        strokeWidth="0.8"
-                        strokeOpacity="0.4"
+                        stroke={colors.base}
+                        strokeWidth="1.2"
+                        filter="url(#topo_glow)"
                       />
                       <text
                         textAnchor="middle"
-                        y="3"
-                        className="font-mono text-[8px] tracking-wider fill-slate-300 font-medium"
+                        y="3.5"
+                        className="font-mono text-[8.5px] tracking-wider fill-cyan-300 font-semibold"
                       >
                         {edge.label}
                       </text>
@@ -393,10 +462,11 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
             })}
           </g>
 
-          {/* 3D FIGURINE NODES */}
+          {/* 3D FIGURINE NODES WITH SINGLE CLEAN BOTTOM PILL */}
           <g className="nodes-layer">
-            {filteredNodes.map((node, idx) => {
-              const pos = getNodePos(node, idx, filteredNodes.length);
+            {filteredNodes.map((node) => {
+              const pos = nodePositionMap[node.id];
+              if (!pos) return null;
 
               const isSelected = selectedNode?.id === node.id;
               const isHovered = hoveredNodeId === node.id;
@@ -404,66 +474,101 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
 
               // Pedestal neon color
               const pedestalColor = isHero
-                ? '#22D3EE'
+                ? '#00E5FF'
                 : node.type === 'crypto'
                 ? '#F43F5E'
                 : node.type === 'phone'
                 ? '#F59E0B'
                 : node.type === 'telegram'
-                ? '#A855F7'
-                : '#38BDF8';
+                ? '#C084FC'
+                : '#00FF88';
 
-              // Large, high-detail scale for the dedicated topology view
-              const nodeScale = isHero ? (isSelected ? 1.9 : 1.75) : isSelected ? 1.5 : 1.35;
+              // Node Scale: prominent hero and balanced outer nodes
+              const nodeScale = isHero ? (isSelected ? 1.85 : 1.7) : isSelected ? 1.45 : 1.3;
+
+              // Display label (clean and truncated to prevent horizontal collisions)
+              const displayLabel =
+                node.label.length > 15 ? node.label.slice(0, 14) + '…' : node.label;
+              const pillWidth = Math.min(Math.max(displayLabel.length * 6.5 + 24, 76), 115);
 
               return (
                 <g
                   key={node.id}
+                  className="node-element cursor-pointer pointer-events-auto transition-transform duration-200"
                   transform={`translate(${pos.x}, ${pos.y}) scale(${nodeScale})`}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                  }}
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (!hasMovedRef.current) {
-                      sound.playClick();
-                      setSelectedNode(node);
-                    }
+                    sound.playClick();
+                    setSelectedNode(node);
                   }}
                   onMouseEnter={() => setHoveredNodeId(node.id)}
                   onMouseLeave={() => setHoveredNodeId(null)}
-                  className="cursor-pointer pointer-events-auto transition-transform duration-200"
                 >
-                  {/* Node Avatar 3D Character Figurine */}
+                  {/* 3D Figurine: hideInternalLabels=true removes redundant internal text */}
                   <NodeAvatarCharacter
                     node={node}
                     isSelected={isSelected}
                     isHovered={isHovered}
                     pedestalColor={pedestalColor}
+                    hideInternalLabels={true}
                   />
 
-                  {/* Floating Identifier Monospace Label */}
-                  <g transform="translate(0, 24)">
+                  {/* SINGLE CLEAN PILL BADGE BELOW AVATAR (translateY +36px, Zero Overlap) */}
+                  <g transform="translate(0, 36)" className="pointer-events-none select-none">
+                    {/* Dark Translucent Glass Pill */}
                     <rect
-                      x="-55"
-                      y="0"
-                      width="110"
+                      x={-pillWidth / 2}
+                      y="-10"
+                      width={pillWidth}
                       height="20"
-                      rx="6"
-                      fill="#0C101A"
-                      stroke={isSelected ? '#22D3EE' : 'rgba(255, 255, 255, 0.12)'}
+                      rx="5"
+                      fill="#070A10"
+                      fillOpacity="0.92"
+                      stroke={
+                        isSelected
+                          ? '#00E5FF'
+                          : isHero
+                          ? '#00FF88'
+                          : 'rgba(255, 255, 255, 0.14)'
+                      }
                       strokeWidth={isSelected ? 1.5 : 1}
-                      className="shadow-xl"
+                      filter={isSelected ? 'url(#topo_glow)' : undefined}
+                      className="shadow-2xl"
                     />
+
+                    {/* Status Indicator Dot */}
+                    <circle
+                      cx={-pillWidth / 2 + 8}
+                      cy="0"
+                      r="2.5"
+                      fill={
+                        isHero
+                          ? '#00E5FF'
+                          : node.type === 'crypto'
+                          ? '#F43F5E'
+                          : node.type === 'phone'
+                          ? '#F59E0B'
+                          : '#00FF88'
+                      }
+                    />
+
+                    {/* Clean Monospace Identifier Label */}
                     <text
-                      textAnchor="middle"
-                      y="13"
-                      className={`font-mono text-[9px] font-semibold tracking-wide ${
+                      x={-pillWidth / 2 + 16}
+                      y="3.5"
+                      textAnchor="start"
+                      className={`font-mono text-[9px] font-medium tracking-wide ${
                         isSelected
                           ? 'fill-cyan-300'
                           : isHero
-                          ? 'fill-white'
-                          : 'fill-slate-300'
+                          ? 'fill-emerald-300'
+                          : 'fill-slate-200'
                       }`}
                     >
-                      {node.label.length > 15 ? node.label.slice(0, 14) + '…' : node.label}
+                      {displayLabel}
                     </text>
                   </g>
                 </g>
@@ -578,11 +683,12 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
                       isHovered={false}
                       pedestalColor={
                         selectedNodeInfo.node.isHero
-                          ? '#22D3EE'
+                          ? '#00E5FF'
                           : selectedNodeInfo.node.type === 'crypto'
                           ? '#F43F5E'
                           : '#F59E0B'
                       }
+                      hideInternalLabels={false}
                     />
                   </g>
                 </svg>

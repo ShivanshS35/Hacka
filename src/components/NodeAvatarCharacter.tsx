@@ -6,6 +6,7 @@ interface NodeAvatarCharacterProps {
   isSelected: boolean;
   isHovered: boolean;
   pedestalColor: string;
+  hideInternalLabels?: boolean;
 }
 
 export const NodeAvatarCharacter: React.FC<NodeAvatarCharacterProps> = ({
@@ -13,6 +14,7 @@ export const NodeAvatarCharacter: React.FC<NodeAvatarCharacterProps> = ({
   isSelected,
   isHovered,
   pedestalColor,
+  hideInternalLabels = false,
 }) => {
   const isHero = Boolean(node.isHero || node.id === 'raj.pay@oksbi');
   const isSeller = node.id === '@seller_raj';
@@ -581,51 +583,53 @@ export const NodeAvatarCharacter: React.FC<NodeAvatarCharacterProps> = ({
       {/* ======================================================== */}
       {/* 3. NODE LABEL & ROLE BADGE (Below Pedestal)             */}
       {/* ======================================================== */}
-      <g>
-        {/* Node Identifier Label */}
-        <text
-          x="0"
-          y="13"
-          textAnchor="middle"
-          fill={isSelected ? '#00e5ff' : isHovered ? '#ffffff' : '#e2e8f0'}
-          fontSize="7.5"
-          fontWeight={isSelected || isHero ? 'bold' : 'normal'}
-          fontFamily="monospace"
-          style={{
-            pointerEvents: 'none',
-            userSelect: 'none',
-            textShadow: '0 1px 3px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.9)',
-          }}
-        >
-          {node.label}
-        </text>
-
-        {/* Role Pill Badge */}
-        <g transform="translate(0, 24)" style={{ pointerEvents: 'none' }}>
-          <rect
-            x={-badgeWidth / 2}
-            y="-6"
-            width={badgeWidth}
-            height="10.5"
-            rx="3"
-            fill={`${pedestalColor}20`}
-            stroke={pedestalColor}
-            strokeWidth="0.75"
-          />
+      {!hideInternalLabels && (
+        <g>
+          {/* Node Identifier Label */}
           <text
             x="0"
-            y="1.5"
+            y="13"
             textAnchor="middle"
-            fill={pedestalColor}
-            fontSize="6"
+            fill={isSelected ? '#00e5ff' : isHovered ? '#ffffff' : '#e2e8f0'}
+            fontSize="7.5"
+            fontWeight={isSelected || isHero ? 'bold' : 'normal'}
             fontFamily="monospace"
-            fontWeight="bold"
-            letterSpacing="0.3"
+            style={{
+              pointerEvents: 'none',
+              userSelect: 'none',
+              textShadow: '0 1px 3px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.9)',
+            }}
           >
-            {roleText}
+            {node.label}
           </text>
+
+          {/* Role Pill Badge */}
+          <g transform="translate(0, 24)" style={{ pointerEvents: 'none' }}>
+            <rect
+              x={-badgeWidth / 2}
+              y="-6"
+              width={badgeWidth}
+              height="10.5"
+              rx="3"
+              fill={`${pedestalColor}20`}
+              stroke={pedestalColor}
+              strokeWidth="0.75"
+            />
+            <text
+              x="0"
+              y="1.5"
+              textAnchor="middle"
+              fill={pedestalColor}
+              fontSize="6"
+              fontFamily="monospace"
+              fontWeight="bold"
+              letterSpacing="0.3"
+            >
+              {roleText}
+            </text>
+          </g>
         </g>
-      </g>
+      )}
     </g>
   );
 };
