@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Preloader } from './components/Preloader';
 import { EditorialShowcase } from './components/EditorialShowcase';
 import { WarMonitorLiveApp } from './components/WarMonitorLiveApp';
+import { TacticalCursor } from './components/TacticalCursor';
 
 export function App() {
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -11,6 +12,9 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-[#070A10] text-white overflow-x-hidden font-sans">
+      {/* Custom Tactical Cyan-Outlined Thruster Arrow Cursor */}
+      <TacticalCursor />
+
       {/* 1. Melon Studio Signature Preloader Animation (~4s with system status & skip) */}
       {!hasLoaded && (
         <Preloader onComplete={() => setHasLoaded(true)} />

@@ -33,6 +33,13 @@
   ::-webkit-scrollbar-thumb:hover {
     background: rgba(34, 211, 238, 0.4);
   }
+
+  /* Hide default system cursor on desktop devices with fine pointer */
+  @media (pointer: fine) {
+    *, *:hover, *:active, button, a, input, textarea, select, [role="button"], .cursor-pointer {
+      cursor: none !important;
+    }
+  }
 }
 
 /* Subtle Palantir / Mapbox Dark radar grid (5% opacity) */
