@@ -2,6 +2,7 @@ import datetime
 import json
 import uuid
 import asyncio
+import sqlite3
 from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, UploadFile, File, Form, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
@@ -32,6 +33,66 @@ app.add_middleware(
 INTERCEPTS_STORE: List[Dict[str, Any]] = []
 ENTITY_GRAPH = DynamicEntityGraph()
 ACTIVE_WEBSOCKETS: List[WebSocket] = []
+
+# Persistent SQLite Database initialization
+DB_PATH = "prahari.db"
+
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS intercepts (
+            id TEXT PRIMARY KEY,
+            channel TEXT,
+            raw_text TEXT,
+            categories TEXT,
+            confidence REAL,
+            district_id TEXT,
+            district_name TEXT,
+            sha256 TEXT,
+            views INTEGER,
+            data_json TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def save_to_db(post: Dict[str, Any]):
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT OR REPLACE INTO intercepts 
+            (id, channel, raw_text, categories, confidence, district_id, district_name, sha256, views, data_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            post["id"],
+            post["channel"],
+            post["rawText"],
+            json.dumps(post["categories"]),
+            post["confidence"],
+            post["districtId"],
+            post["districtName"],
+            post["sha256"],
+            post.get("views", 500),
+            json.dumps(post)
+        ))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[!] DB Save Notice: {e}")
+
+def load_from_db() -> List[Dict[str, Any]]:
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT data_json FROM intercepts ORDER BY created_at DESC LIMIT 100")
+        rows = cursor.fetchall()
+        conn.close()
+        return [json.loads(r[0]) for r in rows]
+    except Exception:
+        return []
 
 # District initial counts
 DISTRICT_COUNTS: Dict[str, int] = {
@@ -130,6 +191,9 @@ def process_and_store_post(channel: str, raw_text: str, district_hint: str = "",
     if len(INTERCEPTS_STORE) > 100:
         INTERCEPTS_STORE.pop()
 
+    # Persist to SQLite Database
+    save_to_db(post_record)
+
     # Update Dynamic Entity Graph
     ENTITY_GRAPH.ingest_intercept(post_record)
 
@@ -138,9 +202,17 @@ def process_and_store_post(channel: str, raw_text: str, district_hint: str = "",
 
     return post_record
 
-# Initialize seed data
-for seed in SEED_INTERCEPTS:
-    process_and_store_post(seed["channel"], seed["text"], seed["district"])
+# Initialize SQLite database & Seed Data
+init_db()
+existing_db_posts = load_from_db()
+if existing_db_posts:
+    for p in reversed(existing_db_posts):
+        INTERCEPTS_STORE.insert(0, p)
+        ENTITY_GRAPH.ingest_intercept(p)
+        DISTRICT_COUNTS[p["districtId"]] = DISTRICT_COUNTS.get(p["districtId"], 10) + 1
+else:
+    for seed in SEED_INTERCEPTS:
+        process_and_store_post(seed["channel"], seed["text"], seed["district"])
 
 # -----------------
 # API Models
