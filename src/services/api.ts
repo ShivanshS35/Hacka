@@ -1,7 +1,10 @@
 import { InterceptPost, DistrictIntel, CrimeCategory, EntityNode, EntityEdge } from '../types';
 
-const API_BASE_URL = 'http://localhost:8000/api';
-const WS_URL = 'ws://localhost:8000/ws/stream';
+const RAW_API_URL = (import.meta.env.VITE_API_URL as string) || 'http://localhost:8000';
+const API_BASE_URL = `${RAW_API_URL.replace(/\/+$/, '')}/api`;
+const WS_URL =
+  (import.meta.env.VITE_WS_URL as string) ||
+  `${RAW_API_URL.replace(/\/+$/, '').replace(/^http/, 'ws')}/ws/stream`;
 
 export interface ScanTextPayload {
   text: string;
