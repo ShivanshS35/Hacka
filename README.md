@@ -10,7 +10,7 @@
 
 ---
 
-## 🎯 Executive Overview
+## Executive Overview
 
 > *"The advertisements are public. The networks are not."*
 
@@ -20,7 +20,7 @@ It autonomously monitors public Telegram channels, social media broadcasts, and 
 
 ---
 
-## 📸 Platform Visual Showcase
+## Platform Visual Showcase
 
 ### 1. Hardware Tactical Console & Synthesizer
 *Hardware-style cyber enclave with real-time signal inspection, live Web Audio API synthesis, and animated waveform visualizer.*
@@ -70,23 +70,23 @@ It autonomously monitors public Telegram channels, social media broadcasts, and 
 
 ---
 
-## ⚡ Core Capabilities & Features
+## Core Capabilities & Features
 
-### 🔍 1. Multi-Dialect NLP & Coded Criminal Slang Detection
+### 1. Multi-Dialect NLP & Coded Criminal Slang Detection
 - **Four Core Crime Verticals**:
-  - 💊 **Narcotics**: Detects *afeem*, *charas*, *doda post*, *chitta*, *ice*, *MDMA*, *mephedrone*, and synthetic score keywords.
-  - 🔫 **Illegal Arms**: Identifies country-made *desi katta*, *tamancha*, *.32 bore pistols*, *live cartridges*, and bypass drop points.
-  - 🪪 **Forged Documents**: Flags fake *Aadhaar/PAN* cards, biometric bypasses, forged marksheets, and fake driving licenses.
-  - 💳 **Mule Accounts**: Detects rented *KYC bank kits*, current accounts with ATM kits, net-banking SIM cards, and USDT crypto arbitrage.
+  - **Narcotics**: Detects *afeem*, *charas*, *doda post*, *chitta*, *ice*, *MDMA*, *mephedrone*, and synthetic score keywords.
+  - **Illegal Arms**: Identifies country-made *desi katta*, *tamancha*, *.32 bore pistols*, *live cartridges*, and bypass drop points.
+  - **Forged Documents**: Flags fake *Aadhaar/PAN* cards, biometric bypasses, forged marksheets, and fake driving licenses.
+  - **Mule Accounts**: Detects rented *KYC bank kits*, current accounts with ATM kits, net-banking SIM cards, and USDT crypto arbitrage.
 - **Dialect Support**: Hindi, Hinglish, Marwari/Rajasthani regional slang, Romanized terms, and disguised emoji ciphers.
 
-### 🌐 2. Rajasthan Tactical GIS Surveillance Map
+### 2. Rajasthan Tactical GIS Surveillance Map
 - **High-Resolution Geo-Mesh**: Interactive SVG vector map of all 33 districts of Rajasthan.
 - **Dynamic Threat Coloring**: Categorizes jurisdictions into `CRITICAL`, `HIGH`, `ELEVATED`, and `MODERATE` based on live signal density.
 - **Syndicate Arcs**: Visualizes interstate and inter-district trade corridors (e.g., Mewat-Alwar weapons corridor, Sri Ganganagar border drops, Jaipur-Bikaner narcotics transit).
 - **One-Click Case Dossier Access**: Clicking any district instantly filters intelligence and allows opening its dedicated forensic dossier.
 
-### 🕸️ 3. 3D Force-Directed Cross-Channel Topology Engine
+### 3. 3D Force-Directed Cross-Channel Topology Engine
 - **Entity Resolution**: Automatically extracts and links:
   - **UPI IDs**: `raj.pay@oksbi`, `alwar.drop@paytm`, etc.
   - **Phone / WhatsApp**: Standardized Indian telecom numbers (`+91 9876543210`).
@@ -94,33 +94,33 @@ It autonomously monitors public Telegram channels, social media broadcasts, and 
   - **Cryptocurrency Wallets**: Bitcoin (`bc1q...`), USDT (TRC-20), and Ethereum addresses.
 - **Case-Specific Graphs**: Selecting any case dynamically isolates that entity's first-degree and second-degree nexus with radial and orbital node distributions.
 
-### 📁 4. Investigative Scrapbook Forensic Dossier
+### 4. Investigative Scrapbook Forensic Dossier
 - **Physical Evidence Collage**: Organizes digital seizures into tangible exhibits with brass paperclips, authenticated Telegram screenshots, and threat tags.
 - **Cryptographic Barcode**: Displays full SHA-256 integrity hash with one-click verification and clipboard copy.
 - **Interactive 3D Red Wax Seal Stamp**: Clicking the wax seal triggers an authentic mechanical stamping audio effect and generates the court-admissible PDF report.
 - **Archive Volumes Shelf**: 3D embossed leather book interface allowing investigators to browse cases categorized by criminal volume.
 
-### ⚖️ 5. Court-Admissible Section 65B Evidence Compliance
+### 5. Court-Admissible Section 65B Evidence Compliance
 - Compliant with **Section 65B(4) of the Indian Evidence Act, 1872** and **Section 63 of the Bharatiya Sakshya Adhiniyam, 2023**.
 - Adheres to Supreme Court precedent in ***Arjun Panditrao Khotkar v. Kailash Kushanrao Gorantyal (2020) 7 SCC 1***:
   - **Tier 1 (Automated Machine Witness)**: Platform version, UTC/IST timestamp, and FIPS-180-4 SHA-256 payload integrity digest.
   - **Tier 2 (Human Legal Endorsement)**: Designated Investigating Officer (I.O.) endorsement block with Name, Rank, PPO Number, Police Station, and official seal/stamp area.
 - Precision tabular grid with dynamic height adjustment preventing any text overflow.
 
-### 🔊 6. Tactical Web Audio Sound Engine
+### 6. Tactical Web Audio Sound Engine
 - 100% synthesized in real time via the browser's native **Web Audio API** (zero external MP3 dependencies).
 - Mechanical button clicks, futuristic radar pings, digital lock-on chimes, smooth paper-turning sweeps, and low-frequency wax seal stamps.
 - Synchronized between the hero hardware console and the command center header.
 
-### 🔎 7. Global Cross-Case OSINT Search & Inter-District Syndicate Matrix (`Cmd + K` / `Ctrl + K`)
-- **Instant Cross-Referencing**: Persistent search bar trigger and global hotkey `⌘K` / `CTRL+K` allowing investigators to query any token across all Rajasthan districts, Telegram channels, and forensic evidence records in milliseconds.
+### 7. Global Cross-Case OSINT Search & Inter-District Syndicate Matrix (Cmd + K / Ctrl + K)
+- **Instant Cross-Referencing**: Persistent search bar trigger and global hotkey `Cmd + K` / `Ctrl + K` allowing investigators to query any token across all Rajasthan districts, Telegram channels, and forensic evidence records in milliseconds.
 - **Entity Type Auto-Detection**: Live pill detection for `UPI ID`, `PHONE / WHATSAPP`, `TELEGRAM HANDLE`, `CRYPTO WALLET`, `DISTRICT`, and `KEYWORD`.
 - **Inter-District Syndicate Matrix**: Evaluates multi-jurisdiction nexus across districts (e.g. Jaipur [2 FLAGS], Jodhpur [1 FLAG], Sri Ganganagar [1 FLAG]) with aggregate syndicate risk scoring (99% CRITICAL).
 - **Actionable 1-Click Pivots**: Directly plot the multi-district mesh on the GIS map with glowing animated pulse rings and a floating jurisdiction banner, inspect in 3D topology, or open the Section 65B forensic dossier.
 
 ---
 
-## 🏗️ Technical Architecture
+## Technical Architecture
 
 ```
                                   ┌────────────────────────┐
@@ -159,7 +159,7 @@ It autonomously monitors public Telegram channels, social media broadcasts, and 
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 - **Node.js** >= 18.0.0
@@ -203,7 +203,7 @@ The FastAPI documentation will be accessible at **`http://localhost:8000/docs`**
 
 ---
 
-## 📁 Repository Structure
+## Repository Structure
 
 ```
 prahari-osint/
@@ -239,7 +239,7 @@ prahari-osint/
 
 ---
 
-## ⚖️ Legal & Evidentiary Framework
+## Legal & Evidentiary Framework
 
 In Indian jurisprudence, electronic records admitted under **Section 65B of the Indian Evidence Act, 1872** (now **Section 63 of the Bharatiya Sakshya Adhiniyam, 2023**) require strict proof of non-tampering from capture to presentation:
 
@@ -252,7 +252,7 @@ In Indian jurisprudence, electronic records admitted under **Section 65B of the 
 
 ---
 
-## 🏆 R4C Hackathon 2026 Evaluation Rubric Alignment
+## R4C Hackathon 2026 Evaluation Rubric Alignment
 
 | Dimension | Manual Cyber Cell Analyst | PRAHARI Platform |
 | :--- | :--- | :--- |
@@ -264,7 +264,7 @@ In Indian jurisprudence, electronic records admitted under **Section 65B of the 
 
 ---
 
-## 👥 Authors & Acknowledgments
+## Authors & Acknowledgments
 
 - **Team PRAHARI** — Built with pride for the **Rajasthan Police R4C Hackathon 2026**.
 - Dedicated to modernizing cyber defense, dark web surveillance, and illicit trade prevention for law enforcement agencies across India.
