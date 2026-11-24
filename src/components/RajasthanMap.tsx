@@ -86,6 +86,7 @@ interface RajasthanMapProps {
   onSelectDistrict: (district: DistrictIntel) => void;
   onOpenDossier?: (district: DistrictIntel) => void;
   activeCategory: CrimeCategory | 'ALL';
+  highlightedDistrictIds?: string[];
 }
 
 export const RajasthanMap: React.FC<RajasthanMapProps> = ({
@@ -95,6 +96,7 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
   onSelectDistrict,
   onOpenDossier,
   activeCategory,
+  highlightedDistrictIds = [],
 }) => {
   const [hoveredDistrict, setHoveredDistrict] = useState<DistrictIntel | null>(null);
   const [showArcs, setShowArcs] = useState(true);
@@ -318,16 +320,31 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
                               normalizeDistrictName(hoveredDistrict.name).toLowerCase() ===
                                 normalizedTopo)
                         );
+                        const isHighlighted = Boolean(
+                          highlightedDistrictIds &&
+                            highlightedDistrictIds.length > 0 &&
+                            matchedDistrict &&
+                            highlightedDistrictIds.some(
+                              (hid) =>
+                                hid.toLowerCase() === matchedDistrict.id.toLowerCase() ||
+                                normalizeDistrictName(matchedDistrict.name).toLowerCase() ===
+                                  hid.toLowerCase()
+                            )
+                        );
 
                         // Mapbox Dark Palette: Subtle obsidian-slate fills with hairline stroke
                         const strokeColor = isSelected
                           ? '#22D3EE'
+                          : isHighlighted
+                          ? '#00E5FF'
                           : isHovered
                           ? '#38BDF8'
                           : 'rgba(255, 255, 255, 0.08)';
 
                         const fillColor = isSelected
-                          ? 'rgba(34, 211, 238, 0.12)'
+                          ? 'rgba(34, 211, 238, 0.14)'
+                          : isHighlighted
+                          ? 'rgba(0, 229, 255, 0.16)'
                           : isHovered
                           ? 'rgba(255, 255, 255, 0.06)'
                           : '#0B0F19';
@@ -420,11 +437,21 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
                           hoveredDistrict?.id === district.id ||
                           normalizeDistrictName(hoveredDistrict?.name).toLowerCase() ===
                             normalizeDistrictName(district.name).toLowerCase();
+                        const isHighlighted = Boolean(
+                          highlightedDistrictIds &&
+                            highlightedDistrictIds.length > 0 &&
+                            highlightedDistrictIds.some(
+                              (hid) =>
+                                hid.toLowerCase() === district.id.toLowerCase() ||
+                                normalizeDistrictName(district.name).toLowerCase() ===
+                                  hid.toLowerCase()
+                            )
+                        );
                         const isHotspot =
                           district.threatLevel === 'CRITICAL' || district.threatLevel === 'HIGH';
 
                         // Show label if selected, hovered, or high-threat hotspot to prevent clutter
-                        const showLabel = isSelected || isHovered || isHotspot;
+                        const showLabel = isSelected || isHovered || isHighlighted || isHotspot;
                         const threatColor = getThreatColor(district.threatLevel);
 
                         return (
@@ -439,22 +466,22 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
                             onMouseLeave={() => setHoveredDistrict(null)}
                             style={{ cursor: 'pointer' }}
                           >
-                            {/* Outer Pulse Ping for Selected Node */}
-                            {isSelected && (
+                            {/* Outer Pulse Ping for Selected or Highlighted Node */}
+                            {(isSelected || isHighlighted) && (
                               <circle
-                                r={8}
+                                r={isHighlighted ? 12 : 8}
                                 fill="none"
-                                stroke="#22D3EE"
-                                strokeWidth={1.2}
+                                stroke={isHighlighted ? '#00E5FF' : '#22D3EE'}
+                                strokeWidth={isHighlighted ? 1.6 : 1.2}
                                 className="animate-ping"
-                                opacity={0.6}
+                                opacity={isHighlighted ? 0.8 : 0.6}
                               />
                             )}
 
                             {/* Minimal Glowing District Centroid Dot */}
                             <circle
-                              r={isSelected ? 3.5 : isHovered ? 3 : 2}
-                              fill={isSelected ? '#22D3EE' : isHovered ? '#38BDF8' : threatColor}
+                              r={isSelected ? 3.5 : isHighlighted ? 4 : isHovered ? 3 : 2}
+                              fill={isSelected ? '#22D3EE' : isHighlighted ? '#00E5FF' : isHovered ? '#38BDF8' : threatColor}
                               stroke="#070A10"
                               strokeWidth={1}
                             />

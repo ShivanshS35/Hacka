@@ -32,6 +32,7 @@ import { ForensicDossier } from './ForensicDossier';
 import { EntityTopologyPage } from './EntityTopologyPage';
 import { IntelModeModal } from './IntelModeModal';
 import { UploadModal } from './UploadModal';
+import { GlobalOsintSearchModal } from './GlobalOsintSearchModal';
 import { InterceptPost, DistrictIntel, CrimeCategory, DistrictConnection } from '../types';
 import {
   RAJASTHAN_DISTRICTS,
@@ -63,6 +64,8 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
 
   const [isIntelModeModalOpen, setIsIntelModeModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [highlightedDistricts, setHighlightedDistricts] = useState<string[]>([]);
   const [isSimulating, setIsSimulating] = useState(true);
   const [isBackendLive, setIsBackendLive] = useState(false);
 
@@ -71,6 +74,19 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
   const [copiedHash, setCopiedHash] = useState(false);
   const [isMuted, setIsMuted] = useState(!sound.enabled);
   const [clockUtc, setClockUtc] = useState('');
+
+  // Global shortcut: Cmd + K / Ctrl + K to toggle OSINT Search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        sound.playClick();
+        setIsSearchOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Synchronize audio state with global sound system singleton
   useEffect(() => {
@@ -311,8 +327,41 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
           </button>
         </div>
 
+        {/* Persistent Monospace Tactical Search Bar Trigger (Cmd + K / Ctrl + K) */}
+        <div className="flex-1 max-w-sm lg:max-w-md mx-3 hidden md:block">
+          <button
+            onClick={() => {
+              sound.playClick();
+              setIsSearchOpen(true);
+            }}
+            className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg bg-white/[0.03] hover:bg-white/[0.06] border border-cyan-500/25 hover:border-cyan-400/50 text-xs font-mono text-slate-300 hover:text-white transition-all shadow-[0_0_15px_rgba(0,229,255,0.05)] group"
+            title="Global OSINT Cross-Case Search (Cmd + K / Ctrl + K)"
+          >
+            <div className="flex items-center gap-2 truncate">
+              <Search className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition-transform shrink-0" />
+              <span className="text-slate-400 group-hover:text-slate-200 truncate">
+                Search UPI, phone, handle, wallet, or district...
+              </span>
+            </div>
+            <kbd className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-black/50 border border-white/10 text-[10px] text-cyan-300 font-mono font-medium shrink-0 shadow-inner">
+              <span className="text-[11px]">⌘</span>K
+            </kbd>
+          </button>
+        </div>
+
         {/* Right Section: Telemetry pill, Clock, Audio & Ingest Button */}
         <div className="flex items-center gap-3">
+          {/* Mobile Search Button */}
+          <button
+            onClick={() => {
+              sound.playClick();
+              setIsSearchOpen(true);
+            }}
+            className="md:hidden p-1.5 text-cyan-400 hover:text-cyan-300 hover:bg-white/[0.05] rounded-lg transition-colors border border-cyan-500/30"
+            title="Global Search (⌘K)"
+          >
+            <Search className="w-3.5 h-3.5" />
+          </button>
           {/* Real Backend Status Pill */}
           {isBackendLive && (
             <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-[10px] font-mono">
@@ -438,10 +487,30 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
 
             {/* CENTERPIECE: Wide-Breathing Rajasthan Tactical Map (5.8 cols on lg) */}
             <div className="md:col-span-8 lg:col-span-6 h-full p-2 bg-[#070A10] overflow-hidden flex flex-col relative">
+              {/* Highlighted Syndicate Floating Banner */}
+              {highlightedDistricts.length > 0 && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#090C10]/90 backdrop-blur-md border border-cyan-400/60 shadow-[0_0_20px_rgba(0,229,255,0.25)] text-xs font-mono">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                  <span className="text-cyan-300 font-semibold">
+                    SYNDICATE MESH: {highlightedDistricts.length} DISTRICTS HIGHLIGHTED
+                  </span>
+                  <button
+                    onClick={() => {
+                      sound.playClick();
+                      setHighlightedDistricts([]);
+                    }}
+                    className="ml-1 px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] text-slate-300 hover:text-white"
+                  >
+                    CLEAR
+                  </button>
+                </div>
+              )}
+
               <RajasthanMap
                 districts={districts}
                 connections={connections}
                 selectedDistrict={selectedDistrict}
+                highlightedDistrictIds={highlightedDistricts}
                 onSelectDistrict={(district) => {
                   setSelectedDistrict(district);
                   const distPost = posts.find(
@@ -691,6 +760,35 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
         onIngestPosts={(newPosts) => {
           setPosts((prev) => [...newPosts, ...prev]);
           if (newPosts.length > 0) setSelectedPost(newPosts[0]);
+        }}
+      />
+
+      {/* Global Cross-Case OSINT Search Modal (Cmd + K / Ctrl + K) */}
+      <GlobalOsintSearchModal
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        posts={posts}
+        districts={districts}
+        onSelectPost={(post) => setSelectedPost(post)}
+        onPlotOnMap={(districtIds) => {
+          setHighlightedDistricts(districtIds);
+          if (districtIds.length > 0) {
+            const primary = districts.find(
+              (d) =>
+                d.id.toLowerCase() === districtIds[0].toLowerCase() ||
+                d.name.toLowerCase() === districtIds[0].toLowerCase()
+            );
+            if (primary) setSelectedDistrict(primary);
+          }
+          setActiveNavTab('COMMAND');
+        }}
+        onInspectTopology={(post) => {
+          setSelectedPost(post);
+          setActiveNavTab('TOPOLOGY');
+        }}
+        onOpenDossier={(post) => {
+          setSelectedPost(post);
+          setActiveNavTab('DOSSIER');
         }}
       />
     </div>
