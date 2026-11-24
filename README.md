@@ -58,6 +58,18 @@ It autonomously monitors public Telegram channels, social media broadcasts, and 
 
 ---
 
+### 7. Global Cross-Case OSINT Search (Cmd + K / Ctrl + K)
+*Tactical command palette overlay with real-time entity type auto-detection (UPI, phone, handle, crypto wallet, district) and one-click demo pivots.*
+![Global OSINT Search](docs/screenshots/07-global-osint-search.png)
+
+---
+
+### 8. Inter-District Syndicate Matrix & Geospatial Mesh
+*Cross-jurisdictional intelligence card showing multi-district footprint pills (Jaipur, Jodhpur, Sri Ganganagar), 99% critical syndicate risk score, and one-click GIS plotting with top-banner alert.*
+![Inter-District Syndicate Matrix](docs/screenshots/08-inter-district-syndicate-matrix.png)
+
+---
+
 ## ⚡ Core Capabilities & Features
 
 ### 🔍 1. Multi-Dialect NLP & Coded Criminal Slang Detection
@@ -99,6 +111,12 @@ It autonomously monitors public Telegram channels, social media broadcasts, and 
 - 100% synthesized in real time via the browser's native **Web Audio API** (zero external MP3 dependencies).
 - Mechanical button clicks, futuristic radar pings, digital lock-on chimes, smooth paper-turning sweeps, and low-frequency wax seal stamps.
 - Synchronized between the hero hardware console and the command center header.
+
+### 🔎 7. Global Cross-Case OSINT Search & Inter-District Syndicate Matrix (`Cmd + K` / `Ctrl + K`)
+- **Instant Cross-Referencing**: Persistent search bar trigger and global hotkey `⌘K` / `CTRL+K` allowing investigators to query any token across all Rajasthan districts, Telegram channels, and forensic evidence records in milliseconds.
+- **Entity Type Auto-Detection**: Live pill detection for `UPI ID`, `PHONE / WHATSAPP`, `TELEGRAM HANDLE`, `CRYPTO WALLET`, `DISTRICT`, and `KEYWORD`.
+- **Inter-District Syndicate Matrix**: Evaluates multi-jurisdiction nexus across districts (e.g. Jaipur [2 FLAGS], Jodhpur [1 FLAG], Sri Ganganagar [1 FLAG]) with aggregate syndicate risk scoring (99% CRITICAL).
+- **Actionable 1-Click Pivots**: Directly plot the multi-district mesh on the GIS map with glowing animated pulse rings and a floating jurisdiction banner, inspect in 3D topology, or open the Section 65B forensic dossier.
 
 ---
 
@@ -201,6 +219,7 @@ prahari-osint/
 │   │   ├── EditorialShowcase.tsx    # High-impact landing page & hardware console
 │   │   ├── EntityTopologyPage.tsx   # Interactive 3D force-directed network graph
 │   │   ├── ForensicDossier.tsx      # Scrapbook binder with polaroids & wax seal
+│   │   ├── GlobalOsintSearchModal.tsx # Cross-case OSINT search & syndicate matrix (Cmd+K)
 │   │   ├── LiveInterceptFeed.tsx    # Real-time Telegram signal intercept feed
 │   │   ├── RajasthanMap.tsx         # Interactive 33-district GIS surveillance map
 │   │   ├── TacticalCursor.tsx       # Custom illuminated cyber thruster cursor
