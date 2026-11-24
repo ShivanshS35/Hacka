@@ -266,7 +266,11 @@ In Indian jurisprudence, electronic records admitted under **Section 65B of the 
 
 ## Authors & Acknowledgments
 
-- **Team PRAHARI** — Built with pride for the **Rajasthan Police R4C Hackathon 2026**.
+- **Lead Developer**: Sanskaar Tiwari
+  - LinkedIn: [sanskaar-tiwari](https://www.linkedin.com/in/sanskaar-tiwari/)
+  - Email: [sanskaar0tiwari@gmail.com](mailto:sanskaar0tiwari@gmail.com)
+  - GitHub: [@sanskaar-tiwari](https://github.com/sanskaar-tiwari)
+- **Built for**: Rajasthan Police R4C Hackathon 2026 (State Cyber Crime Cell).
 - Dedicated to modernizing cyber defense, dark web surveillance, and illicit trade prevention for law enforcement agencies across India.
 
 ---
