@@ -6,6 +6,7 @@ export interface ExtractedEntities {
   handles: string[];
   wallets: string[];
   bankAccounts: string[];
+  ifscCodes?: string[];
 }
 
 export interface InterceptPost {
@@ -24,7 +25,13 @@ export interface InterceptPost {
   sha256: string;
   views: number;
   verified: boolean;
-  status: 'PENDING' | 'FLAGGED' | 'INVESTIGATING' | 'SEALED';
+  sourceType?: 'LIVE_TELEGRAM_PREVIEW' | 'ANALYST_SUBMISSION' | 'UPLOADED_DATASET' | 'SYNTHETIC_DEMO' | 'LOCAL_ANALYSIS' | 'LEGACY_UNKNOWN' | 'DEMO';
+  sourceTimestamp?: string | null;
+  sourceReference?: string | null;
+  capturedAtUtc?: string;
+  sha256Scope?: string;
+  section65B?: { certified: false; status: string; hashAlgorithm: string; hashScope: string; packetHash: string; timestampUtc: string };
+  status: 'PENDING' | 'FLAGGED' | 'INVESTIGATING' | 'SEALED' | 'UNCLASSIFIED';
 }
 
 export interface DistrictIntel {
@@ -54,10 +61,9 @@ export interface DistrictConnection {
 export interface EntityNode {
   id: string;
   label: string;
-  type: 'post' | 'upi' | 'phone' | 'telegram' | 'crypto' | 'district';
-  category?: CrimeCategory;
+  type: 'post' | 'upi' | 'phone' | 'telegram' | 'crypto' | 'bank_account' | 'ifsc' | 'district';
+  category?: CrimeCategory | 'UNCLASSIFIED';
   channels?: string[];
-  riskScore: number;
   isHero?: boolean;
 }
 
@@ -66,7 +72,7 @@ export interface EntityEdge {
   source: string;
   target: string;
   label?: string;
-  category?: CrimeCategory;
+  category?: CrimeCategory | 'UNCLASSIFIED';
 }
 
 export type ActiveMode = 'ALL' | 'DRUGS' | 'ARMS' | 'DOCUMENTS' | 'FINANCIAL';

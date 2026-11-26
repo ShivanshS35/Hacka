@@ -186,8 +186,8 @@ export const GlobalOsintSearchModal: React.FC<GlobalOsintSearchModalProps> = ({
     });
   }, [query, activeFilter, posts]);
 
-  // Compute "INTER-DISTRICT SYNDICATE MATRIX" analytics
-  const syndicateMatrix = useMemo(() => {
+  // Summarize matching records across districts; this is not a risk assessment.
+  const matchSummary = useMemo(() => {
     if (matchedPosts.length === 0) return null;
 
     // Collect all unique districts linked to matched posts
@@ -201,7 +201,6 @@ export const GlobalOsintSearchModal: React.FC<GlobalOsintSearchModalProps> = ({
       wallets: new Set<string>(),
     };
 
-    let totalViews = 0;
 
     matchedPosts.forEach((p) => {
       // District count
@@ -226,21 +225,10 @@ export const GlobalOsintSearchModal: React.FC<GlobalOsintSearchModalProps> = ({
       p.entities.handles.forEach((h) => allEntities.handles.add(h));
       p.entities.wallets.forEach((w) => allEntities.wallets.add(w));
 
-      totalViews += p.views || 800;
     });
 
     const districtList = Object.values(districtMap).sort((a, b) => b.count - a.count);
     const isMultiDistrict = districtList.length > 1;
-
-    // Calculate aggregated risk score
-    let riskPercentage = 88;
-    if (isMultiDistrict && categoriesSet.size > 1) {
-      riskPercentage = 99;
-    } else if (isMultiDistrict || matchedPosts.length >= 3) {
-      riskPercentage = 96;
-    } else if (matchedPosts.length >= 2) {
-      riskPercentage = 92;
-    }
 
     return {
       districts: districtList,
@@ -250,9 +238,7 @@ export const GlobalOsintSearchModal: React.FC<GlobalOsintSearchModalProps> = ({
       channels: Array.from(channelsSet),
       channelCount: channelsSet.size,
       totalIntercepts: matchedPosts.length,
-      riskPercentage,
       primaryPost: matchedPosts[0],
-      totalViews,
     };
   }, [matchedPosts]);
 
@@ -477,9 +463,9 @@ export const GlobalOsintSearchModal: React.FC<GlobalOsintSearchModalProps> = ({
             className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 divide-y divide-white/[0.06]"
           >
             {/* ======================================================== */}
-            {/* 3. "INTER-DISTRICT SYNDICATE MATRIX" (CORE ANALYTICAL OUTPUT) */}
+            {/* 3. Inter-district record matches */}
             {/* ======================================================== */}
-            {syndicateMatrix && (
+            {matchSummary && (
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -497,28 +483,28 @@ export const GlobalOsintSearchModal: React.FC<GlobalOsintSearchModalProps> = ({
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="text-xs sm:text-sm font-bold font-mono tracking-wider text-cyan-300 uppercase">
-                          INTER-DISTRICT SYNDICATE MATRIX
+                          INTER-DISTRICT RECORD MATCHES
                         </h3>
-                        {syndicateMatrix.isMultiDistrict && (
+                        {matchSummary.isMultiDistrict && (
                           <span className="px-2 py-0.5 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-300 text-[10px] font-mono font-semibold animate-pulse flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
-                            <span>MULTI-JURISDICTION NEXUS</span>
+                            <span>MULTIPLE DISTRICTS MATCHED</span>
                           </span>
                         )}
                       </div>
                       <p className="text-[11px] text-slate-400 mt-0.5">
-                        Correlated digital footprints across Rajasthan Police jurisdiction boundaries
+                        Demonstration entity links across Rajasthan district boundaries
                       </p>
                     </div>
                   </div>
 
-                  {/* Risk Score Pill */}
+                  {/* Matched record counts, not a risk assessment */}
                   <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-lg border border-white/10">
                     <span className="text-[10px] font-mono text-slate-400 uppercase">
-                      SYNDICATE RISK:
+                      MATCHES:
                     </span>
-                    <span className="text-xs font-mono font-bold text-rose-400">
-                      {syndicateMatrix.riskPercentage}% CRITICAL
+                    <span className="text-xs font-mono font-bold text-cyan-300">
+                      {matchSummary.totalIntercepts} records · {matchSummary.channelCount} channels · {matchSummary.districts.length} districts
                     </span>
                   </div>
                 </div>
@@ -529,11 +515,11 @@ export const GlobalOsintSearchModal: React.FC<GlobalOsintSearchModalProps> = ({
                   <div className="md:col-span-7 space-y-2">
                     <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
                       <MapPin className="w-3 h-3 text-cyan-400" />
-                      CROSS-DISTRICT FOOTPRINT ({syndicateMatrix.districts.length} DISTRICTS):
+                      MATCHED DISTRICTS ({matchSummary.districts.length}):
                     </span>
 
                     <div className="flex flex-wrap items-center gap-2">
-                      {syndicateMatrix.districts.map((dist) => (
+                      {matchSummary.districts.map((dist) => (
                         <div
                           key={dist.id}
                           className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/[0.04] border border-cyan-500/30 text-xs font-mono text-slate-200 shadow-sm"
@@ -550,8 +536,8 @@ export const GlobalOsintSearchModal: React.FC<GlobalOsintSearchModalProps> = ({
                     {/* Illicit Categories & Channels Spanned */}
                     <div className="flex flex-wrap items-center gap-3 pt-2 text-[11px] text-slate-400 font-mono">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-slate-500">CRIME VERTICALS:</span>
-                        {syndicateMatrix.categories.map((cat) => (
+                        <span className="text-slate-500">RULE CATEGORIES:</span>
+                        {matchSummary.categories.map((cat) => (
                           <span
                             key={cat}
                             className="px-1.5 py-0.5 rounded text-[10px] bg-white/[0.06] text-amber-300 border border-white/10"
@@ -564,9 +550,9 @@ export const GlobalOsintSearchModal: React.FC<GlobalOsintSearchModalProps> = ({
                       <div className="flex items-center gap-1.5">
                         <span className="text-slate-500">CHANNELS:</span>
                         <span className="text-slate-200">
-                          {syndicateMatrix.channels.slice(0, 2).join(', ')}
-                          {syndicateMatrix.channelCount > 2 &&
-                            ` +${syndicateMatrix.channelCount - 2} more`}
+                          {matchSummary.channels.slice(0, 2).join(', ')}
+                          {matchSummary.channelCount > 2 &&
+                            ` +${matchSummary.channelCount - 2} more`}
                         </span>
                       </div>
                     </div>
@@ -582,7 +568,7 @@ export const GlobalOsintSearchModal: React.FC<GlobalOsintSearchModalProps> = ({
                     <button
                       onClick={() => {
                         sound.playRadarPing();
-                        onPlotOnMap(syndicateMatrix.districtIds);
+                        onPlotOnMap(matchSummary.districtIds);
                         onClose();
                       }}
                       className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-300 text-xs font-mono font-medium transition-all group"
@@ -598,7 +584,7 @@ export const GlobalOsintSearchModal: React.FC<GlobalOsintSearchModalProps> = ({
                     <button
                       onClick={() => {
                         sound.playClick();
-                        onInspectTopology(syndicateMatrix.primaryPost);
+                        onInspectTopology(matchSummary.primaryPost);
                         onClose();
                       }}
                       className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/40 text-purple-300 text-xs font-mono font-medium transition-all group"
@@ -614,7 +600,7 @@ export const GlobalOsintSearchModal: React.FC<GlobalOsintSearchModalProps> = ({
                     <button
                       onClick={() => {
                         sound.playSuccessChime();
-                        onOpenDossier(syndicateMatrix.primaryPost);
+                        onOpenDossier(matchSummary.primaryPost);
                         onClose();
                       }}
                       className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 text-xs font-mono font-medium transition-all group"
@@ -779,7 +765,7 @@ export const GlobalOsintSearchModal: React.FC<GlobalOsintSearchModalProps> = ({
               <span>PRAHARI OSINT KERNEL // SHA-256 LEDGER READY</span>
             </div>
             <div className="flex items-center gap-3">
-              <span>Section 65B(4) IEA Compliant</span>
+              <span>Prototype · No legal certification</span>
               <span className="text-slate-600">|</span>
               <span className="text-cyan-400">Press ESC to exit</span>
             </div>

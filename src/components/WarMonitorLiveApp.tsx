@@ -181,7 +181,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
       idx++;
 
       const detected = classifyText(sim.text);
-      const sha = await generateSHA256(sim.text + Date.now().toString());
+      const sha = await generateSHA256(sim.text);
       const now = new Date();
 
       const newPost: InterceptPost = {
@@ -199,7 +199,8 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
         districtName: sim.districtId.charAt(0).toUpperCase() + sim.districtId.slice(1),
         sha256: sha,
         views: Math.floor(Math.random() * 400) + 120,
-        verified: true,
+        verified: false,
+        sourceType: 'SYNTHETIC_DEMO',
         status: 'FLAGGED',
       };
 
@@ -373,7 +374,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
           {/* Status Pill */}
           <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300 text-[11px] font-sans font-medium">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-            <span>DEFCON 2 · ELEVATED</span>
+            <span>SYNTHETIC DEMO DATA</span>
           </div>
 
           <div className="h-4 w-px bg-white/[0.08] hidden sm:block" />
@@ -520,7 +521,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
                   );
                   if (distPost) setSelectedPost(distPost);
                 }}
-                onOpenDossier={(district) => {
+                onOpenDossier={async (district) => {
                   sound.playPageTurn();
                   setSelectedDistrict(district);
 
@@ -531,26 +532,28 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
                       p.districtName?.toLowerCase() === district.name.toLowerCase()
                   );
 
-                  // 2. If no post exists yet for this district (e.g. Udaipur, Barmer, etc.),
-                  // synthesize an authentic verified forensic case dossier on the fly!
+                  // Keep the visual demo usable for districts without a record, and
+                  // explicitly mark the generated example as synthetic.
                   if (!targetPost) {
                     const category = (district.topCategories[0] || 'DRUGS') as CrimeCategory;
                     const topId = district.topIdentifiers?.[0] || 'raj.pay@oksbi';
+                    const demoText = `Critical illustrative ${category.toLowerCase()} telemetry for ${district.name}. Threat level: ${district.threatLevel}. Synthetic example only; this is not a collected signal. Example identifier: ${topId}.`;
                     targetPost = {
                       id: `case_${district.id}_${Date.now().toString(36).slice(-4)}`,
                       channel: `@${district.id.replace(/-/g, '_')}_syndicate_intel`,
                       channelSubscribers: `${district.flaggedCount || 17}K members`,
                       timestamp: new Date().toISOString(),
                       capturedAt: new Date().toLocaleTimeString('en-IN') + ' IST',
-                      rawText: `Critical illicit ${category.toLowerCase()} telemetry flagged in ${district.name} jurisdiction. Threat level: ${district.threatLevel}. Syndicate nexus identified coordinating illicit logistics. Escrow entity: ${topId}.`,
+                      rawText: demoText,
                       categories: [category],
                       confidence: 0.95,
                       status: 'FLAGGED',
                       districtId: district.id,
                       districtName: district.name,
-                      sha256: '798fbb739040eeb0bada2d6fa28be16ada33f746b4bd941e31eb0e647722d3ad',
+                      sha256: await generateSHA256(demoText),
                       views: (district.flaggedCount || 15) * 48,
-                      verified: true,
+                      verified: false,
+                      sourceType: 'SYNTHETIC_DEMO',
                       entities: {
                         upis: district.topIdentifiers.filter((id) => id.includes('@')),
                         phones: district.topIdentifiers.filter((id) => /^\+?\d{10}/.test(id)),
@@ -610,7 +613,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
                       <span>Active Intercept Dossier</span>
                     </div>
                     <span className="text-[10px] font-mono text-emerald-400 px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
-                      SEC 65B SEALED
+                      PROTOTYPE REPORT
                     </span>
                   </div>
 
@@ -689,7 +692,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
                       <div className="text-cyan-400 font-mono font-bold text-sm mt-0.5">{selectedDistrict.flaggedCount}</div>
                     </div>
                     <div className="bg-[#070A10] p-2 rounded-lg border border-white/[0.05]">
-                      <div className="text-[10px] text-slate-500 font-mono">TOP THREAT</div>
+                      <div className="text-[10px] text-slate-500 font-mono">DEMO CATEGORY</div>
                       <div className="text-amber-400 font-mono font-bold text-sm mt-0.5">
                         {selectedDistrict.topCategories[0] || 'DRUGS'}
                       </div>
@@ -702,7 +705,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
                   </div>
 
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       sound.playPageTurn();
                       // Find or synthesize case for this district and navigate
                       let distPost: InterceptPost | undefined = posts.find(
@@ -712,21 +715,23 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
                       );
                       if (!distPost) {
                         const cat = (selectedDistrict.topCategories[0] || 'DRUGS') as CrimeCategory;
+                        const demoText = `Critical illustrative ${cat.toLowerCase()} telemetry for ${selectedDistrict.name}. Threat level: ${selectedDistrict.threatLevel}. Synthetic example only; this is not a collected signal. Example identifier: ${selectedDistrict.topIdentifiers[0] || 'raj.pay@oksbi'}.`;
                         distPost = {
                           id: `case_${selectedDistrict.id}_${Date.now().toString(36).slice(-4)}`,
                           channel: `@${selectedDistrict.id.replace(/-/g, '_')}_syndicate_intel`,
                           channelSubscribers: `${selectedDistrict.flaggedCount || 17}K members`,
                           timestamp: new Date().toISOString(),
                           capturedAt: new Date().toLocaleTimeString('en-IN') + ' IST',
-                          rawText: `Critical illicit ${cat.toLowerCase()} telemetry flagged in ${selectedDistrict.name} jurisdiction. High threat score (${selectedDistrict.threatLevel}). Syndicate nexus detected coordinating cross-border drops. Primary escrow identifier: ${selectedDistrict.topIdentifiers[0] || 'raj.pay@oksbi'}.`,
+                          rawText: demoText,
                           categories: [cat],
                           confidence: 0.95,
                           status: 'FLAGGED',
                           districtId: selectedDistrict.id,
                           districtName: selectedDistrict.name,
-                          sha256: '798fbb739040eeb0bada2d6fa28be16ada33f746b4bd941e31eb0e647722d3ad',
+                          sha256: await generateSHA256(demoText),
                           views: (selectedDistrict.flaggedCount || 15) * 48,
-                          verified: true,
+                          verified: false,
+                          sourceType: 'SYNTHETIC_DEMO',
                           entities: {
                             upis: selectedDistrict.topIdentifiers.filter((id) => id.includes('@')),
                             phones: selectedDistrict.topIdentifiers.filter((id) => /^\+?\d{10}/.test(id)),

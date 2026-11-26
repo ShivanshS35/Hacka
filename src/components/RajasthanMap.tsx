@@ -605,7 +605,7 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
                 </div>
 
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Top Threats:</span>
+                  <span className="text-slate-400">Top Demo Categories:</span>
                   <span className="text-slate-300 text-[10px]">
                     {hoveredDistrict.topCategories.join(', ')}
                   </span>

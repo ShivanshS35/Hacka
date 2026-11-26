@@ -138,7 +138,7 @@ export const EntityGraph: React.FC<EntityGraphProps> = ({ onSelectEntity }) => {
             Entity Constellation
           </span>
           <span className="text-white/[0.1]">/</span>
-          <span className="text-slate-400 font-mono text-[10px]">Cross-Channel Nexus</span>
+          <span className="text-slate-400 font-mono text-[10px]">Cross-Channel Links</span>
         </div>
 
         <div className="flex items-center gap-1.5">
@@ -351,19 +351,9 @@ export const EntityGraph: React.FC<EntityGraphProps> = ({ onSelectEntity }) => {
             <span className="text-sm font-semibold text-white font-mono truncate">
               {selectedNode.label}
             </span>
-            <span className="font-mono text-xs font-semibold text-rose-400 ml-2">
-              {(selectedNode.riskScore * 100).toFixed(0)}% Risk
+            <span className="font-mono text-xs font-semibold text-cyan-300 ml-2">
+              {selectedNode.channels?.length || 0} linked channels
             </span>
-          </div>
-
-          {/* Clean Structured Risk Score Bar */}
-          <div className="space-y-1">
-            <div className="h-1.5 w-full bg-white/[0.06] rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-amber-400 to-rose-500 rounded-full transition-all duration-300"
-                style={{ width: `${selectedNode.riskScore * 100}%` }}
-              />
-            </div>
           </div>
 
           {selectedNode.channels && (
@@ -379,8 +369,9 @@ export const EntityGraph: React.FC<EntityGraphProps> = ({ onSelectEntity }) => {
             <div className="p-2.5 bg-rose-500/[0.08] border border-rose-500/20 rounded-lg text-[11px] text-slate-300 flex items-start gap-2">
               <span className="text-rose-400 font-bold">●</span>
               <span className="leading-snug">
-                <strong className="text-rose-300">Central Nexus:</strong> Simultaneously linked
-                across narcotics operations (@delhi_highs) and mule account rings (@mule_bazaar).
+                <strong className="text-rose-300">Demo graph link:</strong> This identifier is
+                associated with multiple sample channels. The link is exploratory and does not
+                establish identity, coordination, or criminal activity.
               </span>
             </div>
           )}

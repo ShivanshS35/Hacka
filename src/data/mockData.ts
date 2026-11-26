@@ -545,9 +545,10 @@ export const INITIAL_INTERCEPTS: InterceptPost[] = [
     },
     districtId: 'jaipur',
     districtName: 'Jaipur',
-    sha256: '7c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d',
+    sha256: 'a869e2cce7f99f1e8550a94e7e0b744b28894c9708b0a848bb1b48a00054124f',
     views: 1842,
-    verified: true,
+    verified: false,
+    sourceType: 'SYNTHETIC_DEMO',
     status: 'FLAGGED'
   },
   {
@@ -569,9 +570,10 @@ export const INITIAL_INTERCEPTS: InterceptPost[] = [
     },
     districtId: 'jodhpur',
     districtName: 'Jodhpur',
-    sha256: 'a1b2c3d4e5f6789012345678abcdef0123456789abcdef0123456789abcdef01',
+    sha256: '58d3e3d84a9c82c532c663359f3d54bd1acb5746b04a1302b46655d59b6226c8',
     views: 3105,
-    verified: true,
+    verified: false,
+    sourceType: 'SYNTHETIC_DEMO',
     status: 'SEALED'
   },
   {
@@ -593,9 +595,10 @@ export const INITIAL_INTERCEPTS: InterceptPost[] = [
     },
     districtId: 'alwar',
     districtName: 'Alwar',
-    sha256: '4f8e2a1b9c3d7e5f0a6b4c8d2e1f3a5b7c9d0e2f4a6b8c0d1e3f5a7b9c1d3e5f',
+    sha256: 'e1d9b140c69b0246b3135731166d3f2804654fed3a93bf5e26e3a3e571850655',
     views: 2410,
-    verified: true,
+    verified: false,
+    sourceType: 'SYNTHETIC_DEMO',
     status: 'FLAGGED'
   },
   {
@@ -617,9 +620,10 @@ export const INITIAL_INTERCEPTS: InterceptPost[] = [
     },
     districtId: 'kota',
     districtName: 'Kota',
-    sha256: '3d5e7f9a1b3c5d7e9f1a3b5c7d9e1f3a5b7c9d1e3f5a7b9c1d3e5f7a9b1c3d5e',
+    sha256: '1ccf70c73eb215494e600cf0d463d5a2d20aa275a43d1a8531ae3902affbebdc',
     views: 1290,
-    verified: true,
+    verified: false,
+    sourceType: 'SYNTHETIC_DEMO',
     status: 'INVESTIGATING'
   },
   {
@@ -641,9 +645,10 @@ export const INITIAL_INTERCEPTS: InterceptPost[] = [
     },
     districtId: 'sri-ganganagar',
     districtName: 'Sri Ganganagar',
-    sha256: '9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b',
+    sha256: '3d27e796f00882a7f99c35128ac39df6a5aa0e8e85999186262088b54a12551c',
     views: 4520,
-    verified: true,
+    verified: false,
+    sourceType: 'SYNTHETIC_DEMO',
     status: 'FLAGGED'
   },
   {
@@ -665,9 +670,10 @@ export const INITIAL_INTERCEPTS: InterceptPost[] = [
     },
     districtId: 'jaipur',
     districtName: 'Jaipur',
-    sha256: '2c4e6a8b0d2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6c8d0e2f4a',
+    sha256: 'f928254bd98a50ff4a86a40340feeed1999a72878b713942e78f27492b0e614a',
     views: 1980,
-    verified: true,
+    verified: false,
+    sourceType: 'SYNTHETIC_DEMO',
     status: 'FLAGGED'
   },
   {
@@ -689,9 +695,10 @@ export const INITIAL_INTERCEPTS: InterceptPost[] = [
     },
     districtId: 'sikar',
     districtName: 'Sikar',
-    sha256: '8b0d2e4f6a8c0d2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6c8d0e',
+    sha256: 'a819b9830b839922be5c187749c0864c941f416f491dca8a5e992a5c76661c5e',
     views: 1420,
-    verified: true,
+    verified: false,
+    sourceType: 'SYNTHETIC_DEMO',
     status: 'INVESTIGATING'
   },
   {
@@ -713,9 +720,10 @@ export const INITIAL_INTERCEPTS: InterceptPost[] = [
     },
     districtId: 'bikaner',
     districtName: 'Bikaner',
-    sha256: '5d7e9f1a3b5c7d9e1f3a5b7c9d1e3f5a7b9c1d3e5f7a9b1c3d5e7f9a1b3c5d7e',
+    sha256: '6dcb798feb03d7bee903c00e281c41aada60b47e3775d64db3ab788e3b94fefa',
     views: 2204,
-    verified: true,
+    verified: false,
+    sourceType: 'SYNTHETIC_DEMO',
     status: 'SEALED'
   }
 ];
@@ -723,16 +731,15 @@ export const INITIAL_INTERCEPTS: InterceptPost[] = [
 // Graph Nodes & Edges modeling cross-channel nexus
 export const ENTITY_GRAPH_DATA: { nodes: EntityNode[]; edges: EntityEdge[] } = {
   nodes: [
-    { id: 'post_001', label: 'post_001', type: 'post', category: 'DRUGS', channels: ['@delhi_highs'], riskScore: 0.94 },
-    { id: 'post_002', label: 'post_002', type: 'post', category: 'FINANCIAL', channels: ['@mule_bazaar'], riskScore: 0.91 },
-    { id: 'post_003', label: 'post_003', type: 'post', category: 'ARMS', channels: ['@rajasthan_arms_hub'], riskScore: 0.97 },
-    { id: 'post_004', label: 'post_004', type: 'post', category: 'DOCUMENTS', channels: ['@doc_forge_raj'], riskScore: 0.95 },
-    { id: 'post_005', label: 'post_005', type: 'post', category: 'DRUGS', channels: ['@border_drop_01'], riskScore: 0.96 },
+    { id: 'post_001', label: 'post_001', type: 'post', category: 'DRUGS', channels: ['@delhi_highs'] },
+    { id: 'post_002', label: 'post_002', type: 'post', category: 'FINANCIAL', channels: ['@mule_bazaar'] },
+    { id: 'post_003', label: 'post_003', type: 'post', category: 'ARMS', channels: ['@rajasthan_arms_hub'] },
+    { id: 'post_004', label: 'post_004', type: 'post', category: 'DOCUMENTS', channels: ['@doc_forge_raj'] },
+    { id: 'post_005', label: 'post_005', type: 'post', category: 'DRUGS', channels: ['@border_drop_01'] },
     {
       id: 'raj.pay@oksbi',
       label: 'raj.pay@oksbi',
       type: 'upi',
-      riskScore: 0.99,
       isHero: true,
       channels: ['@delhi_highs', '@mule_bazaar', '@jaipur_dark_exchange']
     },
@@ -740,21 +747,18 @@ export const ENTITY_GRAPH_DATA: { nodes: EntityNode[]; edges: EntityEdge[] } = {
       id: '9876543210',
       label: '9876543210',
       type: 'phone',
-      riskScore: 0.96,
       channels: ['@rajasthan_arms_hub', '@doc_forge_raj', '@bikaner_havala']
     },
     {
       id: '@seller_raj',
       label: '@seller_raj',
       type: 'telegram',
-      riskScore: 0.98,
       channels: ['@delhi_highs', '@doc_forge_raj', '@border_drop_01', '@shekhawati_weapons']
     },
     {
       id: 'bc1qar...mdq',
       label: 'bc1qar...mdq',
       type: 'crypto',
-      riskScore: 0.97,
       channels: ['@rajasthan_arms_hub', '@border_drop_01']
     }
   ],

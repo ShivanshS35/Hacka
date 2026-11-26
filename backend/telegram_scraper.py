@@ -2,7 +2,6 @@ import httpx
 from bs4 import BeautifulSoup
 from typing import List, Dict, Any
 import datetime
-import random
 
 async def scrape_public_telegram_channel(channel_handle: str, limit: int = 15) -> List[Dict[str, Any]]:
     """
@@ -38,7 +37,7 @@ async def scrape_public_telegram_channel(channel_handle: str, limit: int = 15) -
 
                     # Extract view count
                     views_span = msg.find("span", class_="tgme_widget_message_views")
-                    views_str = views_span.get_text(strip=True) if views_span else "450"
+                    views_str = views_span.get_text(strip=True) if views_span else "0"
 
                     # Extract timestamp
                     time_elem = msg.find("time")
@@ -53,24 +52,5 @@ async def scrape_public_telegram_channel(channel_handle: str, limit: int = 15) -
                     })
     except Exception as e:
         print(f"[!] Live scraper notice for @{clean_handle}: {e}")
-
-    # If the channel is private, blocked, or has no web preview, provide realistic synthetic sample intercepts
-    if not scraped_posts:
-        fallback_templates = [
-            f"Pure white chitta consignment ready. 10g score available for Jaipur / Bikaner drop. Escrow via UPI raj.pay@oksbi or contact @seller_{clean_handle[:5]}",
-            f"New verified current account kit with ATM card + netbanking SIM card available for rent. Jodhpur delivery. WhatsApp 9876543210. 100% fullz kit.",
-            f"Desi .315 bore katta with 10 raund available. Alwar / Sikar pickup. Direct DM @{clean_handle} or call arms broker.",
-            f"Aadhaar card biometric bypass + Driving license original PVC card dispatched to client. 3 din me delivery.",
-            f"Cross-border synthetic score arrived in Sri Ganganagar. USDT escrow address bc1qar0srr7x9z4xpmdq48995874251."
-        ]
-        
-        for i, text in enumerate(fallback_templates):
-            scraped_posts.append({
-                "channel": f"@{clean_handle}",
-                "raw_text": text,
-                "timestamp": datetime.datetime.now().isoformat(),
-                "views": str(random.randint(300, 1500)),
-                "source": "SIMULATED_TEST_STREAM"
-            })
 
     return scraped_posts

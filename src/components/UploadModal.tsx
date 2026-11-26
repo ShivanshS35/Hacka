@@ -62,40 +62,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         throw new Error('No public messages found');
       }
     } catch (err) {
-      console.warn('Backend scrape failed, generating simulated live channel feed:', err);
-      // Fallback
-      const fallbackPost: InterceptPost = {
-        id: `chan_${Date.now()}`,
-        channel: channelInput.startsWith('@') ? channelInput : `@${channelInput}`,
-        channelSubscribers: '12.8K members',
-        timestamp: 'Just now',
-        capturedAt: new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' IST',
-        rawText: `Pure white chitta consignment ready for Jaipur delivery. Escrow via UPI raj.pay@oksbi or DM @seller_${channelInput.slice(0, 5)}.`,
-        categories: ['DRUGS'],
-        confidence: 0.98,
-        matchedSlang: ['chitta', 'pure white', 'consignment ready'],
-        entities: {
-          phones: [],
-          upis: ['raj.pay@oksbi'],
-          handles: [`@seller_${channelInput.slice(0, 5)}`],
-          wallets: [],
-          bankAccounts: [],
-        },
-        districtId: 'jaipur',
-        districtName: 'Jaipur',
-        sha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
-        views: 620,
-        verified: true,
-        status: 'FLAGGED',
-      };
-      onIngestPosts([fallbackPost]);
-      sound.playSuccessChime();
-      setSuccessCount(1);
-      setTimeout(() => {
-        setSuccessCount(null);
-        setStatusMessage(null);
-        onClose();
-      }, 1500);
+      setStatusMessage(err instanceof Error ? err.message : 'Telegram preview request failed. No live posts were collected.');
     } finally {
       setIsProcessing(false);
     }
@@ -128,7 +95,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     } catch {
       // Fallback to local client classifier
       const detected = classifyText(rawTextInput);
-      const sha = await generateSHA256(rawTextInput + Date.now().toString());
+      const sha = await generateSHA256(rawTextInput);
       const fallbackPost: InterceptPost = {
         id: `txt_${Date.now()}`,
         channel: '@live_analyst_input',
@@ -140,12 +107,13 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         confidence: detected.confidence,
         matchedSlang: detected.matchedTerms,
         entities: detected.extracted,
-        districtId: 'jaipur',
-        districtName: 'Jaipur',
+        districtId: 'unknown',
+        districtName: 'Unknown',
         sha256: sha,
-        views: 1,
-        verified: true,
-        status: 'FLAGGED',
+        views: 0,
+        verified: false,
+        sourceType: 'LOCAL_ANALYSIS',
+        status: detected.categories.length > 0 ? 'FLAGGED' : 'UNCLASSIFIED',
       };
       sound.playSuccessChime();
       onIngestPosts([fallbackPost]);
@@ -191,47 +159,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       } else {
         throw new Error('No valid records parsed');
       }
-    } catch {
-      // Fallback to local parsing
-      const reader = new FileReader();
-      reader.onload = async (ev) => {
-        const text = ev.target?.result as string;
-        if (!text) return;
-        const lines = text.split('\n').filter((l) => l.trim().length > 10);
-        const posts: InterceptPost[] = [];
-        for (let i = 0; i < Math.min(lines.length, 10); i++) {
-          const l = lines[i];
-          const detected = classifyText(l);
-          const hash = await generateSHA256(l);
-          posts.push({
-            id: `file_${Date.now()}_${i}`,
-            channel: '@file_dump',
-            channelSubscribers: '10K',
-            timestamp: 'Just now',
-            capturedAt: new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' IST',
-            rawText: l,
-            categories: detected.categories,
-            confidence: detected.confidence,
-            matchedSlang: detected.matchedTerms,
-            entities: detected.extracted,
-            districtId: i % 2 === 0 ? 'jaipur' : 'jodhpur',
-            districtName: i % 2 === 0 ? 'Jaipur' : 'Jodhpur',
-            sha256: hash,
-            views: 400,
-            verified: true,
-            status: 'FLAGGED',
-          });
-        }
-        sound.playSuccessChime();
-        onIngestPosts(posts);
-        setSuccessCount(posts.length);
-        setTimeout(() => {
-          setSuccessCount(null);
-          setStatusMessage(null);
-          onClose();
-        }, 1500);
-      };
-      reader.readAsText(file);
+    } catch (err) {
+      setStatusMessage(err instanceof Error ? err.message : 'Dataset upload failed. Check the backend connection and file format, then retry.');
     } finally {
       setIsProcessing(false);
     }
@@ -289,7 +218,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         newPosts.push(res);
       } catch {
         const detected = classifyText(s.text);
-        const hash = await generateSHA256(s.text + i.toString());
+        const hash = await generateSHA256(s.text);
         newPosts.push({
           id: `bm_${Date.now()}_${i}`,
           channel: s.channel,
@@ -305,7 +234,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
           districtName: s.districtId.charAt(0).toUpperCase() + s.districtId.slice(1),
           sha256: hash,
           views: 650,
-          verified: true,
+          verified: false,
+          sourceType: 'SYNTHETIC_DEMO',
           status: 'FLAGGED',
         });
       }
@@ -333,7 +263,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             </div>
             <div>
               <div className="font-semibold text-white text-sm">
-                PRAHARI // Real Data Ingestion & OSINT Scraper
+                PRAHARI // Dataset Import & Analysis Prototype
               </div>
               <div className="text-[10px] text-slate-400 font-mono">
                 Connect live Telegram channels, paste raw chat text, or upload exports

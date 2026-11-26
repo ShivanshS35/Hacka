@@ -20,7 +20,7 @@ RAJASTHAN_DISTRICT_SYNONYMS = {
     "alwar": ["alwar", "अलवर", "bhiwadi", "neemrana", "mewat"],
     "kota": ["kota", "कोटा", "chambal"],
     "bikaner": ["bikaner", "बीकानेर", "nokha"],
-    "ganganagar": ["sri ganganagar", "ganganagar", "गंगानगर", "hindumalkot"],
+    "sri-ganganagar": ["sri ganganagar", "ganganagar", "गंगानगर", "hindumalkot"],
     "sikar": ["sikar", "सीकर", "shekhawati", "khetri"],
     "ajmer": ["ajmer", "अजमेर", "kishangarh", "pushkar"],
     "udaipur": ["udaipur", "उदयपुर", "mewar"],
@@ -84,7 +84,7 @@ def extract_entities(text: str) -> Dict[str, Any]:
 
     # 6. Rajasthan District Nexus
     lower = text.lower()
-    detected_district = "jaipur"  # Default police jurisdiction center
+    detected_district = "unknown"
     for dist_id, synonyms in RAJASTHAN_DISTRICT_SYNONYMS.items():
         if any(syn in lower for syn in synonyms):
             detected_district = dist_id

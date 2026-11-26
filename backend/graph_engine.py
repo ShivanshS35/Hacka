@@ -15,15 +15,13 @@ class DynamicEntityGraph:
                 "category": category,
                 "isHero": is_hero,
                 "channels": [channel] if channel else [],
-                "riskScore": 0.95 if is_hero else 0.88,
                 "flaggedCount": 1
             }
         else:
             if channel and channel not in self.nodes[node_id]["channels"]:
                 self.nodes[node_id]["channels"].append(channel)
-                # Escalate risk score when entity appears in multiple channels!
+                # Track distinct source channels; this is correlation context, not risk.
                 self.nodes[node_id]["flaggedCount"] += 1
-                self.nodes[node_id]["riskScore"] = min(0.99, self.nodes[node_id]["riskScore"] + 0.02)
                 if len(self.nodes[node_id]["channels"]) >= 2:
                     self.nodes[node_id]["isHero"] = True
 
@@ -42,7 +40,8 @@ class DynamicEntityGraph:
     def ingest_intercept(self, post_data: Dict[str, Any]):
         post_id = post_data["id"]
         channel = post_data.get("channel", "")
-        primary_cat = post_data.get("categories", ["FINANCIAL"])[0]
+        categories = post_data.get("categories") or []
+        primary_cat = categories[0] if categories else "UNCLASSIFIED"
         entities = post_data.get("entities", {})
 
         # Add Post Node
@@ -104,6 +103,15 @@ class DynamicEntityGraph:
                 channel=channel
             )
             self.add_edge(source=post_id, target=short_wallet, label="CRYPTO ESCROW", category=primary_cat)
+
+        # Preserve the remaining extracted identifier types in the graph too.
+        for bank_account in entities.get("bankAccounts", []):
+            self.add_node(bank_account, bank_account, "bank_account", primary_cat, channel=channel)
+            self.add_edge(post_id, bank_account, "BANK ACCOUNT MENTION", primary_cat)
+
+        for ifsc_code in entities.get("ifscCodes", []):
+            self.add_node(ifsc_code, ifsc_code, "ifsc", primary_cat, channel=channel)
+            self.add_edge(post_id, ifsc_code, "IFSC CODE MENTION", primary_cat)
 
     def to_dict(self) -> Dict[str, Any]:
         return {

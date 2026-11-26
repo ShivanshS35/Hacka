@@ -112,7 +112,8 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
         districtName: randomItem.districtName,
         sha256: hash,
         views: Math.floor(Math.random() * 1200) + 100,
-        verified: true,
+        verified: false,
+        sourceType: 'SYNTHETIC_DEMO',
         status: 'FLAGGED'
       };
 
@@ -181,7 +182,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
             <div className="flex items-baseline gap-2">
               <span className="font-semibold text-white tracking-wide text-[13px]">PRAHARI</span>
               <span className="text-[10px] text-[#94A3B8] font-mono uppercase tracking-widest hidden md:inline">
-                Rajasthan Police Cyber Cell
+                PRAHARI Concept Demonstration
               </span>
             </div>
           </div>

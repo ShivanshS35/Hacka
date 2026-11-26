@@ -21,8 +21,8 @@ export const WarMonitorBootLoader: React.FC<WarMonitorBootLoaderProps> = ({ onCo
     "[VIS] Configuring Palantir Gotham tactical telemetry overlays...",
     "[CAM] Indexing CCTV and transport checkpoints in Jaipur/Jodhpur...",
     "[AIS] Connecting to border surveillance relays (Barmer/Jaisalmer)...",
-    "[BNK] Verifying Section 65B tamper-evident forensic hash vault...",
-    "[OK] All tactical telemetry layers active & verified.",
+    "[DEMO] Loading synthetic telemetry and source labels...",
+    "[OK] Prototype interface ready; no live collection implied.",
     "[OK] PRAHARI OSINT Command Center ready. Welcome, Operator."
   ];
 
@@ -84,7 +84,7 @@ export const WarMonitorBootLoader: React.FC<WarMonitorBootLoaderProps> = ({ onCo
           PRAHARI // COMMAND
         </h1>
         <div className="text-[11px] tracking-[0.3em] text-cyan-400 uppercase text-center mb-4">
-          Rajasthan Police Cross-Channel OSINT Platform
+          PRAHARI Cross-Channel OSINT Hackathon Prototype
         </div>
 
         <div className="border border-white/[0.08] bg-white/[0.03] text-slate-300 text-[10px] tracking-widest px-3 py-0.5 rounded font-mono uppercase">

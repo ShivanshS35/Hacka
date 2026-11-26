@@ -63,13 +63,13 @@ export const prahariApi = {
   /**
    * Scrape and scan real Telegram public broadcast channel via web preview
    */
-  async scanChannel(payload: ChannelScanPayload): Promise<{ channel: string; intercepts: InterceptPost[] }> {
+  async scanChannel(payload: ChannelScanPayload): Promise<{ channel: string; scraped_count: number; intercepts: InterceptPost[] }> {
     const res = await fetch(`${API_BASE_URL}/scan/channel`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error('Channel scraping failed');
+    if (!res.ok) throw new Error(`Channel scan failed (${res.status})`);
     return await res.json();
   },
 
@@ -83,8 +83,19 @@ export const prahariApi = {
       method: 'POST',
       body: formData,
     });
-    if (!res.ok) throw new Error('File ingestion failed');
-    return await res.json();
+    if (!res.ok) {
+      let message = `File ingestion failed (${res.status})`;
+      try {
+        const error = await res.json();
+        if (error.detail) message = String(error.detail);
+      } catch {
+        // Keep the HTTP status message when the response has no JSON body.
+      }
+      throw new Error(message);
+    }
+    const result = await res.json();
+    if (result.error) throw new Error(result.error);
+    return result;
   },
 
   /**

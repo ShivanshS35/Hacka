@@ -115,7 +115,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             {/* Quick Stats */}
             <div className="grid grid-cols-2 gap-2.5 text-[11px]">
               <div className="bg-white/[0.02] p-3 rounded-xl border border-white/[0.06]">
-                <div className="text-[#94A3B8] text-[10px] font-mono uppercase tracking-wider">THREAT LEVEL</div>
+                <div className="text-[#94A3B8] text-[10px] font-mono uppercase tracking-wider">DEMO SIGNAL VOLUME</div>
                 <div className="text-rose-400 font-bold text-base mt-0.5">{selectedDistrict.threatLevel}</div>
               </div>
               <div className="bg-white/[0.02] p-3 rounded-xl border border-white/[0.06]">
@@ -155,7 +155,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   >
                     <div className="flex justify-between items-center text-[10px]">
                       <span className="text-cyan-400 font-mono font-medium">{p.channel}</span>
-                      <span className="text-rose-400 font-mono font-semibold">{(p.confidence * 100).toFixed(0)}% Risk</span>
+                      <span className="text-cyan-400 font-mono font-semibold">{(p.confidence * 100).toFixed(0)}% rule match</span>
                     </div>
                     <p className="text-[#F1F5F9] text-xs line-clamp-2 leading-relaxed">"{p.rawText}"</p>
                   </div>

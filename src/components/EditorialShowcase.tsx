@@ -46,7 +46,7 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
     });
   }, []);
 
-  const sampleHash = "7c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d";
+  const sampleHash = INITIAL_INTERCEPTS[0].sha256;
 
   const handleCopyHash = () => {
     sound.playSuccessChime();
@@ -103,7 +103,7 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
               PRAHARI<span className="text-cyan-400 font-mono text-sm">// OSINT</span>
             </div>
             <div className="text-[9px] font-mono text-slate-500 tracking-wider">
-              RAJASTHAN POLICE INTELLIGENCE PLATFORM
+              RAJASTHAN OSINT HACKATHON CONCEPT DEMO
             </div>
           </div>
         </div>
@@ -160,7 +160,7 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
             className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-cyan-500/30 bg-cyan-950/30 text-cyan-400 text-xs font-mono mb-6"
           >
             <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-            <span>BUILT FOR RAJASTHAN POLICE // R4C HACKATHON 2026</span>
+            <span>HACKATHON PROTOTYPE // NOT AN OFFICIAL POLICE SYSTEM</span>
           </motion.div>
 
           {/* Razor-sharp Editorial Typography */}
@@ -250,7 +250,7 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
             <div className="bg-[#0d121a] p-4 rounded-xl border border-slate-800">
               <div className="text-2xl sm:text-3xl font-black text-red-400">100%</div>
               <div className="text-[11px] text-slate-400 uppercase tracking-wider mt-1">
-                SEC 65B EVIDENCE SEALED
+                SYNTHETIC DEMO RECORD
               </div>
             </div>
           </div>
@@ -394,7 +394,7 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
               </div>
               <div className="text-sm font-bold font-mono text-white mb-1">ALERT</div>
               <div className="text-xs text-slate-400 leading-relaxed">
-                High-density GIS district map, cryptographic SHA-256 seal, and court-admissible PDF dossier export.
+                Demonstration district map, raw text SHA-256 digest, and prototype report export.
               </div>
             </div>
           </div>
@@ -521,17 +521,17 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
         </div>
       </section>
 
-      {/* SECTION 05 // FORENSIC CHAIN OF CUSTODY */}
+      {/* SECTION 05 // PROTOTYPE REPORT */}
       <section className="py-20 px-4 sm:px-8 border-b border-slate-800 bg-[#090C10]">
         <div className="max-w-6xl mx-auto">
           <div className="text-xs font-mono text-cyan-400 uppercase tracking-widest mb-2">
-            05 // FORENSIC CHAIN OF CUSTODY
+            05 // PROTOTYPE REPORT
           </div>
           <h2 className="text-3xl sm:text-5xl font-black font-display tracking-tight text-white mb-4">
-            COURT-READY INTELLIGENCE. NOT A SCREENSHOT.
+            SOURCE LABELS AND CONTENT DIGESTS.
           </h2>
           <p className="text-slate-400 text-sm max-w-2xl mb-10">
-            Social media screenshots are easily disputed in court. Every post flagged by PRAHARI is cryptographically stamped with SHA-256 and structured for Section 65B Indian Evidence Act admissibility.
+            This demonstration report includes the sample source label and SHA-256 digest of the displayed raw text. It does not establish authenticity, collection time, chain of custody, or legal admissibility.
           </p>
 
           {/* Dossier Card Preview */}
@@ -541,7 +541,7 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
                 <Lock className="w-4 h-4 text-emerald-400" />
                 <span className="text-slate-300 font-bold">CASE #INV-2026-1121</span>
                 <span className="bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded text-[10px]">
-                  TAMPER-EVIDENT VERIFIED
+                  SYNTHETIC DEMO
                 </span>
               </div>
               <div className="text-slate-500">
@@ -572,7 +572,7 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
               </div>
 
               <div className="space-y-3">
-                <div className="text-slate-500">CRYPTOGRAPHIC SHA-256 CHECKSUM:</div>
+                <div className="text-slate-500">SHA-256 OF RAW TEXT:</div>
                 <div className="bg-slate-950 p-3 rounded border border-cyan-500/30 text-cyan-300 break-all text-[11px]">
                   {sampleHash}
                 </div>
@@ -591,7 +591,7 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
                     className="flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-[0_0_15px_rgba(255,59,48,0.3)]"
                   >
                     <FileText className="w-3.5 h-3.5" />
-                    <span>DOWNLOAD SECTION 65B PDF REPORT</span>
+                    <span>DOWNLOAD DEMO REPORT</span>
                   </button>
                 </div>
               </div>
@@ -715,9 +715,9 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
                   <td className="p-4 text-cyan-300 font-bold">Instant graph topology (&lt; 3s)</td>
                 </tr>
                 <tr>
-                  <td className="p-4 text-slate-400 font-medium">Court Admissibility / Evidence</td>
+                  <td className="p-4 text-slate-400 font-medium">Source / Evidence provenance</td>
                   <td className="p-4 text-slate-400">Loose screenshots (Contestable)</td>
-                  <td className="p-4 text-cyan-300 font-bold">Cryptographic SHA-256 + Sec 65B PDF</td>
+                  <td className="p-4 text-cyan-300 font-bold">Text digest + prototype report; no certification</td>
                 </tr>
                 <tr>
                   <td className="p-4 text-slate-400 font-medium">Geospatial Intelligence</td>
@@ -763,7 +763,7 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
             <span>·</span>
             <span>R4C HACKATHON 2026</span>
             <span>·</span>
-            <span className="text-cyan-400">RAJASTHAN POLICE CYBER CELL</span>
+            <span className="text-cyan-400">PRAHARI CONCEPT PROTOTYPE</span>
           </div>
         </div>
       </footer>

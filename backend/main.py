@@ -3,11 +3,17 @@ import json
 import uuid
 import asyncio
 import sqlite3
+import csv
+import io
+import os
+from pathlib import Path
+from contextlib import closing
+from zoneinfo import ZoneInfo
 from typing import List, Dict, Any, Optional
-from fastapi import FastAPI, UploadFile, File, Form, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from classifier import classify_text
 from extractor import extract_entities, generate_sha256
@@ -16,14 +22,16 @@ from telegram_scraper import scrape_public_telegram_channel
 
 app = FastAPI(
     title="PRAHARI OSINT Backend Engine",
-    description="Cross-Channel OSINT & Illicit Trade Intelligence Platform for Rajasthan Police",
+    description="Hackathon prototype for cross-channel OSINT data analysis; not an operational agency system",
     version="1.0.0"
 )
 
-# Enable CORS for Vite frontend
+_allowed_origins = [origin.strip() for origin in os.environ.get(
+    "PRAHARI_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
+).split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -35,12 +43,12 @@ ENTITY_GRAPH = DynamicEntityGraph()
 ACTIVE_WEBSOCKETS: List[WebSocket] = []
 
 # Persistent SQLite Database initialization
-DB_PATH = "prahari.db"
+DB_PATH = Path(os.environ.get("PRAHARI_DB_PATH", Path(__file__).with_name("prahari.db")))
 
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("""
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with closing(sqlite3.connect(DB_PATH)) as conn:
+        conn.execute("""
         CREATE TABLE IF NOT EXISTS intercepts (
             id TEXT PRIMARY KEY,
             channel TEXT,
@@ -54,61 +62,67 @@ def init_db():
             data_json TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-    """)
-    conn.commit()
-    conn.close()
+        """)
+        conn.commit()
 
 def save_to_db(post: Dict[str, Any]):
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("""
+        with closing(sqlite3.connect(DB_PATH)) as conn:
+            conn.execute("""
             INSERT OR REPLACE INTO intercepts 
             (id, channel, raw_text, categories, confidence, district_id, district_name, sha256, views, data_json)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            post["id"],
-            post["channel"],
-            post["rawText"],
-            json.dumps(post["categories"]),
-            post["confidence"],
-            post["districtId"],
-            post["districtName"],
-            post["sha256"],
-            post.get("views", 500),
-            json.dumps(post)
-        ))
-        conn.commit()
-        conn.close()
+            """, (
+                post["id"],
+                post["channel"],
+                post["rawText"],
+                json.dumps(post["categories"]),
+                post["confidence"],
+                post["districtId"],
+                post["districtName"],
+                post["sha256"],
+                post.get("views", 0),
+                json.dumps(post)
+            ))
+            conn.commit()
     except Exception as e:
-        print(f"[!] DB Save Notice: {e}")
+        raise RuntimeError(f"Could not persist intercept to {DB_PATH}") from e
 
 def load_from_db() -> List[Dict[str, Any]]:
-    try:
-        conn = sqlite3.connect(DB_PATH)
+    with closing(sqlite3.connect(DB_PATH)) as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT data_json FROM intercepts ORDER BY created_at DESC LIMIT 100")
+        cursor.execute("SELECT id, data_json FROM intercepts ORDER BY created_at DESC LIMIT 100")
         rows = cursor.fetchall()
-        conn.close()
-        return [json.loads(r[0]) for r in rows]
-    except Exception:
-        return []
+        posts = []
+        for post_id, raw_json in rows:
+            post = json.loads(raw_json)
+            previous_evidence = post.get("section65B") or {}
+            if "sourceType" not in post or post.get("verified") or previous_evidence.get("certified"):
+                post["sourceType"] = "LEGACY_UNKNOWN"
+                post["verified"] = False
+                if isinstance(post.get("rawText"), str):
+                    post["sha256"] = generate_sha256(post["rawText"])
+                    post["sha256Scope"] = "UTF-8 rawText bytes"
+                post["section65B"] = {
+                    "certified": False,
+                    "status": "NOT_CERTIFIED",
+                    "hashAlgorithm": "SHA-256",
+                    "hashScope": post.get("sha256Scope", "unknown"),
+                    "packetHash": post.get("sha256", ""),
+                    "timestampUtc": post.get("capturedAtUtc", "")
+                }
+                cursor.execute("UPDATE intercepts SET data_json = ?, sha256 = ? WHERE id = ?", (json.dumps(post), post.get("sha256", ""), post_id))
+            posts.append(post)
+        conn.commit()
+        return posts
 
-# District initial counts
-DISTRICT_COUNTS: Dict[str, int] = {
-    "jaipur": 43,
-    "jodhpur": 28,
-    "alwar": 31,
-    "kota": 22,
-    "bikaner": 26,
-    "ganganagar": 35,
-    "sikar": 19,
-    "ajmer": 14,
-    "udaipur": 12,
-    "bharatpur": 18,
-    "barmer": 15,
-    "jaisalmer": 11,
-}
+# Counts are derived from persisted records and include synthetic demo seeds.
+DISTRICT_COUNTS: Dict[str, int] = {}
+
+def load_district_counts() -> Dict[str, int]:
+    with closing(sqlite3.connect(DB_PATH)) as conn:
+        rows = conn.execute("SELECT district_id, COUNT(*) FROM intercepts GROUP BY district_id").fetchall()
+    return {district_id: count for district_id, count in rows}
 
 # Seed default realistic initial intercepts into the working backend
 SEED_INTERCEPTS = [
@@ -135,30 +149,38 @@ SEED_INTERCEPTS = [
     {
         "channel": "@border_drop_01",
         "text": "Border synthetic consignment arrived at Sri Ganganagar drop point. Direct escrow to bc1qar0srr7x9z4xpmdq or contact @seller_raj.",
-        "district": "ganganagar"
+        "district": "sri-ganganagar"
     }
 ]
 
-def process_and_store_post(channel: str, raw_text: str, district_hint: str = "", views: str = "540") -> Dict[str, Any]:
+def process_and_store_post(channel: str, raw_text: str, district_hint: str = "", views: str = "0", source_type: str = "ANALYST_SUBMISSION", source_timestamp: Optional[str] = None, source_reference: Optional[str] = None) -> Dict[str, Any]:
     classification = classify_text(raw_text)
     entities = extract_entities(raw_text)
 
     district_id = district_hint or entities["district_id"]
     post_id = f"post_{str(uuid.uuid4())[:6]}"
-    now = datetime.datetime.now()
+    now = datetime.datetime.now(datetime.timezone.utc)
 
-    # Tamper-evident cryptographic signature: SHA256(timestamp + channel + rawText)
-    raw_packet = f"{now.isoformat()}||{channel}||{raw_text}"
-    sha256_hash = generate_sha256(raw_packet)
+    view_count = 0
+    if isinstance(views, str):
+        normalized_views = views.strip().lower().replace(",", "")
+        try:
+            multiplier = 1_000_000 if normalized_views.endswith("m") else 1_000 if normalized_views.endswith("k") else 1
+            view_count = int(float(normalized_views.rstrip("km")) * multiplier)
+        except ValueError:
+            pass
 
-    district_name = district_id.capitalize()
+    # Content digest only: deterministic SHA-256 over the exact captured text.
+    sha256_hash = generate_sha256(raw_text)
+
+    district_name = district_id.replace("-", " ").title()
 
     post_record = {
         "id": post_id,
         "channel": channel if channel.startswith("@") else f"@{channel}",
-        "channelSubscribers": "14.2K members",
-        "timestamp": "Just now",
-        "capturedAt": now.strftime("%I:%M:%S %p IST"),
+        "channelSubscribers": "Unknown",
+        "timestamp": now.astimezone(datetime.timezone.utc).isoformat(),
+        "capturedAt": now.astimezone(ZoneInfo("Asia/Kolkata")).strftime("%I:%M:%S %p IST"),
         "rawText": raw_text,
         "categories": classification["categories"],
         "confidence": classification["confidence"],
@@ -168,63 +190,71 @@ def process_and_store_post(channel: str, raw_text: str, district_hint: str = "",
             "upis": entities["upis"],
             "handles": entities["handles"],
             "wallets": entities["wallets"],
-            "bankAccounts": entities["bank_accounts"]
+            "bankAccounts": entities["bank_accounts"],
+            "ifscCodes": entities["ifsc_codes"]
         },
         "districtId": district_id,
         "districtName": district_name,
         "sha256": sha256_hash,
-        "views": int(views) if views.isdigit() else 420,
-        "verified": True,
-        "status": "FLAGGED",
+        "views": view_count,
+        # A digest detects changes to the captured text; it does not authenticate
+        # the source, establish chain of custody, or certify legal admissibility.
+        "sha256Scope": "UTF-8 rawText bytes",
+        "sourceType": source_type,
+        "sourceTimestamp": source_timestamp,
+        "sourceReference": source_reference,
+        "capturedAtUtc": now.astimezone(datetime.timezone.utc).isoformat(),
+        "verified": False,
+        "status": "FLAGGED" if classification["categories"] else "UNCLASSIFIED",
         "section65B": {
-            "certified": True,
+            "certified": False,
+            "status": "NOT_CERTIFIED",
             "hashAlgorithm": "SHA-256 (FIPS PUB 180-4)",
+            "hashScope": "UTF-8 rawText bytes",
             "packetHash": sha256_hash,
-            "legalStatute": "Section 65B(4) Indian Evidence Act / Section 63 BSA 2023",
-            "jurisdiction": "Rajasthan Police State Cyber Cell",
             "timestampUtc": now.astimezone(datetime.timezone.utc).isoformat()
         }
     }
+
+    # Persist first; a failed write must not leave an API-visible record.
+    save_to_db(post_record)
 
     # Prepend to store
     INTERCEPTS_STORE.insert(0, post_record)
     if len(INTERCEPTS_STORE) > 100:
         INTERCEPTS_STORE.pop()
 
-    # Persist to SQLite Database
-    save_to_db(post_record)
-
     # Update Dynamic Entity Graph
     ENTITY_GRAPH.ingest_intercept(post_record)
 
     # Update District Threat Counts
-    DISTRICT_COUNTS[district_id] = DISTRICT_COUNTS.get(district_id, 10) + 1
+    DISTRICT_COUNTS[district_id] = DISTRICT_COUNTS.get(district_id, 0) + 1
 
     return post_record
 
 # Initialize SQLite database & Seed Data
 init_db()
 existing_db_posts = load_from_db()
+DISTRICT_COUNTS.update(load_district_counts())
 if existing_db_posts:
     for p in reversed(existing_db_posts):
         INTERCEPTS_STORE.insert(0, p)
         ENTITY_GRAPH.ingest_intercept(p)
-        DISTRICT_COUNTS[p["districtId"]] = DISTRICT_COUNTS.get(p["districtId"], 10) + 1
 else:
     for seed in SEED_INTERCEPTS:
-        process_and_store_post(seed["channel"], seed["text"], seed["district"])
+        process_and_store_post(seed["channel"], seed["text"], seed["district"], source_type="SYNTHETIC_DEMO")
 
 # -----------------
 # API Models
 # -----------------
 class TextScanRequest(BaseModel):
-    text: str
-    channel: Optional[str] = "@manual_ingest"
-    districtId: Optional[str] = ""
+    text: str = Field(min_length=1, max_length=50_000)
+    channel: Optional[str] = Field(default="@manual_ingest", max_length=256)
+    districtId: Optional[str] = Field(default="", max_length=64)
 
 class ChannelScanRequest(BaseModel):
-    channel: str
-    limit: Optional[int] = 10
+    channel: str = Field(min_length=1, max_length=256)
+    limit: int = Field(default=10, ge=1, le=50)
 
 # -----------------
 # REST Endpoints
@@ -364,7 +394,7 @@ def root_dashboard():
       <div class="container">
         <div class="badge"><span class="dot"></span> SYSTEM ONLINE · PORT 8000</div>
         <h1>PRAHARI // OSINT Engine</h1>
-        <p>Cross-Channel OSINT & Illicit Trade Ingestion Engine for Rajasthan Police State Cyber Cell.</p>
+        <p>Hackathon prototype for cross-channel OSINT analysis. Synthetic examples are labeled in each record.</p>
 
         <div class="metrics">
           <div class="metric-box">
@@ -433,6 +463,7 @@ def health_check():
 
 @app.get("/api/feed")
 def get_intercept_feed(limit: int = 50, category: Optional[str] = None):
+    limit = max(1, min(limit, 500))
     results = INTERCEPTS_STORE
     if category and category != "ALL":
         results = [p for p in results if category in p["categories"]]
@@ -451,14 +482,16 @@ async def scan_raw_text(req: TextScanRequest):
 
 @app.post("/api/scan/channel")
 async def scan_telegram_channel(req: ChannelScanRequest):
-    scraped_posts = await scrape_public_telegram_channel(req.channel, limit=req.limit or 8)
+    scraped_posts = await scrape_public_telegram_channel(req.channel, limit=max(1, min(req.limit or 8, 50)))
     processed_records = []
 
     for item in scraped_posts:
         rec = process_and_store_post(
             channel=item["channel"],
             raw_text=item["raw_text"],
-            views=item.get("views", "500")
+            views=item.get("views", "500"),
+            source_type=item.get("source", "LIVE_TELEGRAM_PREVIEW"),
+            source_timestamp=item.get("timestamp")
         )
         processed_records.append(rec)
         await broadcast_new_intercept(rec)
@@ -472,30 +505,54 @@ async def scan_telegram_channel(req: ChannelScanRequest):
 @app.post("/api/ingest/file")
 async def ingest_dataset_file(file: UploadFile = File(...)):
     content = await file.read()
-    raw_str = content.decode("utf-8", errors="ignore")
-    new_records = []
-
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File exceeds 10 MB limit")
     try:
-        # Try JSON parsing
-        data = json.loads(raw_str)
-        if isinstance(data, list):
-            for item in data[:30]:
-                text = item.get("text") or item.get("message") or item.get("rawText")
-                chan = item.get("channel") or item.get("source") or "@uploaded_dataset"
-                if text:
-                    rec = process_and_store_post(channel=chan, raw_text=text)
-                    new_records.append(rec)
-                    await broadcast_new_intercept(rec)
-    except Exception:
-        # Fallback to CSV / plain line parsing
-        lines = [l.strip() for l in raw_str.split("\n") if len(l.strip()) > 10]
-        for line in lines[:30]:
-            parts = line.split(",", 1)
-            chan = parts[0] if len(parts) > 1 and parts[0].startswith("@") else "@uploaded_csv"
-            text = parts[1] if len(parts) > 1 and parts[0].startswith("@") else line
-            rec = process_and_store_post(channel=chan, raw_text=text)
-            new_records.append(rec)
-            await broadcast_new_intercept(rec)
+        raw_str = content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="File must be UTF-8 encoded")
+    new_records = []
+    filename = (file.filename or "").lower()
+    if filename.endswith(".json") or raw_str.lstrip().startswith(("[", "{")):
+        try:
+            data = json.loads(raw_str)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON: {exc.msg}") from exc
+        if isinstance(data, dict):
+            data = data.get("records", [data])
+        if not isinstance(data, list):
+            raise HTTPException(status_code=400, detail="JSON must be an object or array of records")
+        rows = data
+    else:
+        try:
+            dialect = csv.Sniffer().sniff(raw_str[:8192], delimiters=",\t;")
+        except csv.Error:
+            dialect = csv.excel
+        reader = csv.DictReader(io.StringIO(raw_str), dialect=dialect)
+        if not reader.fieldnames:
+            raise HTTPException(status_code=400, detail="CSV header row is required")
+        text_columns = {name.strip().lower() for name in reader.fieldnames if name}
+        if not text_columns.intersection({"text", "message", "rawtext", "raw_text"}):
+            raise HTTPException(status_code=400, detail="CSV header must include a text, message, rawText, or raw_text column")
+        rows = list(reader)
+
+    if len(rows) > 500:
+        raise HTTPException(status_code=413, detail="Import exceeds the 500 record limit")
+
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+        normalized = {str(k).strip().lower(): v for k, v in item.items() if k is not None}
+        text = normalized.get("text") or normalized.get("message") or normalized.get("rawtext") or normalized.get("raw_text")
+        if not isinstance(text, str) or not text.strip():
+            continue
+        channel = normalized.get("channel") or "uploaded_dataset"
+        rec = process_and_store_post(channel=str(channel), raw_text=text.strip(), views=str(normalized.get("views", "0")), source_type="UPLOADED_DATASET", source_timestamp=normalized.get("timestamp") or normalized.get("date"), source_reference=str(normalized.get("source") or file.filename or "uploaded file"))
+        new_records.append(rec)
+        await broadcast_new_intercept(rec)
+
+    if not new_records:
+        raise HTTPException(status_code=422, detail="No rows with a non-empty text, message, or rawText field were found")
 
     return {
         "filename": file.filename,
@@ -513,7 +570,8 @@ def get_district_telemetry():
         {
             "id": dist_id,
             "flaggedCount": count,
-            "threatLevel": "CRITICAL" if count > 30 else "HIGH" if count > 20 else "ELEVATED"
+            "threatLevel": "CRITICAL" if count > 30 else "HIGH" if count > 20 else "ELEVATED" if count >= 10 else "MODERATE",
+            "countScope": "stored records; includes synthetic demo seeds"
         }
         for dist_id, count in DISTRICT_COUNTS.items()
     ]

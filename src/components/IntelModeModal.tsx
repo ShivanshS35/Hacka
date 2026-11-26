@@ -129,7 +129,7 @@ export const IntelModeModal: React.FC<IntelModeModalProps> = ({
             <div className="p-3 bg-gradient-to-r from-emerald-950/40 to-cyan-950/40 border border-emerald-500/40 rounded-lg flex items-center justify-between">
               <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold">
                 <Shield className="w-4 h-4" />
-                <span>RAJASTHAN POLICE CYBER CELL LEVEL-1</span>
+                <span>HACKATHON PROTOTYPE MODE</span>
               </div>
               <span className="text-[10px] text-slate-400 font-mono">AUTHORIZED</span>
             </div>

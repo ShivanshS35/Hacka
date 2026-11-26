@@ -1,10 +1,11 @@
-# PRAHARI // प्रहारी
+# PRAHARI // प्रहारी — Hackathon Prototype
 ### Cross-Channel OSINT & Illicit Trade Intelligence Platform
-**Built for Rajasthan Police State Cyber Crime Cell | R4C Hackathon 2026**
+**Concept demonstration for hackathon review | R4C Hackathon 2026**
+
+> **Prototype notice:** The built-in intercepts and background activity are synthetic demonstrations. A Telegram scan includes only content actually returned by a public preview. SHA-256 is calculated over raw text and does not authenticate a source, prove collection time or custody, or certify legal admissibility. Exported reports are demonstrations, not Section 65B / Section 63 certificates. The project is not an operational law-enforcement system.
 
 [![React](https://img.shields.io/badge/Frontend-React_18_%2B_Vite_%2B_TypeScript-00E5FF?style=for-the-badge&logo=react)](https://react.dev/)
 [![FastAPI](https://img.shields.io/badge/Backend-Python_FastAPI_%2B_SQLite-10B981?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
-[![Legal Compliance](https://img.shields.io/badge/Evidence_Act-Sec_65B(4)_IEA_%2B_Sec_63_BSA-F43F5E?style=for-the-badge)](https://indiankanoon.org/doc/1712542/)
 [![Audio Synthesizer](https://img.shields.io/badge/Sound_Engine-Web_Audio_API-F59E0B?style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 
@@ -14,9 +15,9 @@
 
 > *"The advertisements are public. The networks are not."*
 
-**PRAHARI** (प्रहारी) is an advanced, cross-channel Open Source Intelligence (OSINT) and illicit trade detection platform engineered specifically for the **Rajasthan Police State Cyber Crime Cell**. 
+**PRAHARI** (प्रहारी) is a hackathon prototype exploring cross-channel OSINT analysis and illicit trade detection workflows. It is not an operational system for the **Rajasthan Police State Cyber Crime Cell**.
 
-It autonomously monitors public Telegram channels, social media broadcasts, and forum exports across Rajasthan to detect **narcotics trafficking**, **illegal arms trade**, **forged government documents (Aadhaar/PAN)**, and **mule bank accounts** — correlating disparate digital footprints into an actionable 3D criminal syndicate topology within seconds.
+It provides a rules based classifier, entity extraction, graph visualization, CSV/JSON import, and an optional request to a public Telegram preview. It does not autonomously monitor channels or independently verify allegations.
 
 ---
 
@@ -52,8 +53,8 @@ It autonomously monitors public Telegram channels, social media broadcasts, and 
 
 ---
 
-### 6. Court-Admissible Section 65B Evidence PDF Export
-*Two-tier statutory evidence dossier with FIPS-180-4 SHA-256 payload integrity, dual system witness, and Investigating Officer (I.O.) endorsement block.*
+### 6. Prototype Report Export
+*Demonstration report with the source label and raw text SHA-256 digest. It is not a legal certificate.*
 ![Section 65B PDF](docs/screenshots/06-sec65b-court-pdf.png)
 
 ---
@@ -64,8 +65,8 @@ It autonomously monitors public Telegram channels, social media broadcasts, and 
 
 ---
 
-### 8. Inter-District Syndicate Matrix & Geospatial Mesh
-*Cross-jurisdictional intelligence card showing multi-district footprint pills (Jaipur, Jodhpur, Sri Ganganagar), 99% critical syndicate risk score, and one-click GIS plotting with top-banner alert.*
+### 8. Inter-District Demo Record Matches & Geospatial Mesh
+*Synthetic example showing how matching records can be grouped by district. Counts are not a risk score or a verified syndicate finding.*
 ![Inter-District Syndicate Matrix](docs/screenshots/08-inter-district-syndicate-matrix.png)
 
 ---
@@ -97,14 +98,12 @@ It autonomously monitors public Telegram channels, social media broadcasts, and 
 ### 4. Investigative Scrapbook Forensic Dossier
 - **Physical Evidence Collage**: Organizes digital seizures into tangible exhibits with brass paperclips, authenticated Telegram screenshots, and threat tags.
 - **Cryptographic Barcode**: Displays full SHA-256 integrity hash with one-click verification and clipboard copy.
-- **Interactive 3D Red Wax Seal Stamp**: Clicking the wax seal triggers an authentic mechanical stamping audio effect and generates the court-admissible PDF report.
+- **Interactive 3D Red Wax Seal Stamp**: Clicking the wax seal triggers a mechanical audio effect and generates a clearly labeled prototype report.
 - **Archive Volumes Shelf**: 3D embossed leather book interface allowing investigators to browse cases categorized by criminal volume.
 
-### 5. Court-Admissible Section 65B Evidence Compliance
-- Compliant with **Section 65B(4) of the Indian Evidence Act, 1872** and **Section 63 of the Bharatiya Sakshya Adhiniyam, 2023**.
-- Adheres to Supreme Court precedent in ***Arjun Panditrao Khotkar v. Kailash Kushanrao Gorantyal (2020) 7 SCC 1***:
-  - **Tier 1 (Automated Machine Witness)**: Platform version, UTC/IST timestamp, and FIPS-180-4 SHA-256 payload integrity digest.
-  - **Tier 2 (Human Legal Endorsement)**: Designated Investigating Officer (I.O.) endorsement block with Name, Rank, PPO Number, Police Station, and official seal/stamp area.
+### 5. Content Digest
+- SHA-256 is computed over the UTF-8 bytes of the displayed raw text.
+- The digest can help detect later text changes. It does not authenticate source data, establish chain of custody, or create a legal certificate.
 - Precision tabular grid with dynamic height adjustment preventing any text overflow.
 
 ### 6. Tactical Web Audio Sound Engine
@@ -115,7 +114,7 @@ It autonomously monitors public Telegram channels, social media broadcasts, and 
 ### 7. Global Cross-Case OSINT Search & Inter-District Syndicate Matrix (Cmd + K / Ctrl + K)
 - **Instant Cross-Referencing**: Persistent search bar trigger and global hotkey `Cmd + K` / `Ctrl + K` allowing investigators to query any token across all Rajasthan districts, Telegram channels, and forensic evidence records in milliseconds.
 - **Entity Type Auto-Detection**: Live pill detection for `UPI ID`, `PHONE / WHATSAPP`, `TELEGRAM HANDLE`, `CRYPTO WALLET`, `DISTRICT`, and `KEYWORD`.
-- **Inter-District Syndicate Matrix**: Evaluates multi-jurisdiction nexus across districts (e.g. Jaipur [2 FLAGS], Jodhpur [1 FLAG], Sri Ganganagar [1 FLAG]) with aggregate syndicate risk scoring (99% CRITICAL).
+- **Inter-District Record Matches**: Summarizes matching records and channels by district. It does not score threat or establish a real-world syndicate.
 - **Actionable 1-Click Pivots**: Directly plot the multi-district mesh on the GIS map with glowing animated pulse rings and a floating jurisdiction banner, inspect in 3D topology, or open the Section 65B forensic dossier.
 
 ---
@@ -133,8 +132,8 @@ It autonomously monitors public Telegram channels, social media broadcasts, and 
 │                                 FASTAPI PYTHON BACKEND                                 │
 │                                                                                        │
 │   ┌────────────────────┐     ┌───────────────────────┐     ┌───────────────────────┐   │
-│   │   Telethon OSINT   │ ──► │  Weighted Hybrid NLP  │ ──► │ SQLite Master Archive │   │
-│   │   Channel Scraper  │     │   (Slang / Dialect)   │     │    (prahari.db)       │   │
+│   │ Telegram Preview  │ ──► │ Rules Based Classifier│ ──► │ SQLite Prototype DB  │   │
+│   │  (on request)     │     │  (keyword matching)   │     │   (configurable)     │   │
 │   └────────────────────┘     └───────────────────────┘     └───────────┬───────────┘   │
 │                                                                        │               │
 │                                REST API & Live WebSockets              ▼               │
@@ -151,8 +150,8 @@ It autonomously monitors public Telegram channels, social media broadcasts, and 
 │                                                                        │               │
 │                                                                        ▼               │
 │                                                            ┌───────────────────────┐   │
-│                                                            │ Court-Admissible PDF  │   │
-│                                                            │ (Sec 65B IEA / 63 BSA)│   │
+│                                                            │ Prototype Report      │   │
+│                                                            │ (text digest only)    │   │
 │                                                            └───────────────────────┘   │
 └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -199,6 +198,10 @@ python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 The FastAPI documentation will be accessible at **`http://localhost:8000/docs`**.
 
+### Hosted frontend/backend connection
+
+For a hosted frontend, set Vercel's `VITE_API_URL` to the deployed FastAPI HTTPS origin and `VITE_WS_URL` to its secure WebSocket endpoint (`wss://…/ws/stream`). Set the backend's `PRAHARI_CORS_ORIGINS` to the exact deployed frontend origin. The Vite API defaults point to `localhost`, so these variables are required for a hosted frontend to reach a hosted backend. See [backend deployment and SQLite persistence notes](backend/README.md#persistence-and-deployment).
+
 > **Note on Standalone Mode**: When running without the Python backend, PRAHARI automatically operates in autonomous simulation mode using authentic cryptographic digests and mock telemetry so all features (GIS map, 3D topology, and PDF export) remain fully functional for evaluators.
 
 ---
@@ -228,7 +231,7 @@ prahari-osint/
 │   │   └── mockData.ts              # Rajasthan telemetry, channels, and slang lexicons
 │   ├── utils/
 │   │   ├── audio.ts                 # Web Audio API real-time sound synthesizer
-│   │   └── pdfGenerator.ts          # Section 65B(4) IEA court-admissible PDF engine
+│   │   └── pdfGenerator.ts          # Prototype report export
 │   ├── App.tsx                      # Root application component with transitions
 │   └── main.tsx                     # React application entry point
 ├── package.json                     # Frontend dependencies & npm scripts
@@ -239,16 +242,9 @@ prahari-osint/
 
 ---
 
-## Legal & Evidentiary Framework
+## Evidence and data limitations
 
-In Indian jurisprudence, electronic records admitted under **Section 65B of the Indian Evidence Act, 1872** (now **Section 63 of the Bharatiya Sakshya Adhiniyam, 2023**) require strict proof of non-tampering from capture to presentation:
-
-| Statutory Requirement | PRAHARI Implementation |
-| :--- | :--- |
-| **System Provenance** | Detailed log of the capturing computer system, OSINT collector node ID, and environment parameters. |
-| **Hash Verification** | FIPS-180-4 SHA-256 computed immediately upon packet ingestion and stored in an immutable ledger. |
-| **Tamper Prevention** | Read-only cryptographic custody prevents alteration of raw broadcast text, views, or timestamps. |
-| **Officer Endorsement** | Dedicated signature and designation block ensuring physical or Class-3 DSC sign-off per *Arjun Panditrao Khotkar (2020)*. |
+PRAHARI's SHA-256 value is computed over raw text only. SQLite is mutable, the graph is reconstructed in memory from recent rows, and the app does not provide a verified acquisition process or chain-of-custody log. Reports do not certify compliance with Section 65B or Section 63. Built-in records, district telemetry, and the animated feed are synthetic demonstrations.
 
 ---
 
@@ -256,11 +252,11 @@ In Indian jurisprudence, electronic records admitted under **Section 65B of the 
 
 | Dimension | Manual Cyber Cell Analyst | PRAHARI Platform |
 | :--- | :--- | :--- |
-| **Monitoring Volume** | 5 – 10 channels / investigator / day | 1,000s of public channels monitored concurrently |
+| **Monitoring Volume** | Manual review | One public preview request at a time; not continuous monitoring |
 | **Slang Detection** | Subjective, misses local dialects & emojis | Automated multi-dialect weighted NLP scoring |
 | **Entity Correlation** | Manual Excel lookup (Hours to Days) | Instant 3D graph topology resolution (< 3s) |
 | **Geospatial Mapping** | Static pins or disconnected spreadsheets | Interactive 33-district GIS mesh with criminal arcs |
-| **Court Admissibility** | Unverified, contestable screenshots | Cryptographic SHA-256 + Court-ready Section 65B PDF |
+| **Evidence integrity** | Manual handling | Raw text digest shown in a prototype report; no legal certification |
 
 ---
 
@@ -270,8 +266,8 @@ In Indian jurisprudence, electronic records admitted under **Section 65B of the 
   - LinkedIn: [sanskaar-tiwari](https://www.linkedin.com/in/sanskaar-tiwari/)
   - Email: [sanskaar0tiwari@gmail.com](mailto:sanskaar0tiwari@gmail.com)
   - GitHub: [@sanskaar-tiwari](https://github.com/sanskaar-tiwari)
-- **Built for**: Rajasthan Police R4C Hackathon 2026 (State Cyber Crime Cell).
+- **Context**: R4C Hackathon 2026 concept demonstration; no official agency endorsement is implied.
 - Dedicated to modernizing cyber defense, dark web surveillance, and illicit trade prevention for law enforcement agencies across India.
 
 ---
-*License: [MIT](LICENSE) · Built for Rajasthan Police State Cyber Crime Cell*
+*License: [MIT](LICENSE) · Hackathon concept prototype*

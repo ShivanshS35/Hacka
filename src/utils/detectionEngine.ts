@@ -51,31 +51,16 @@ export const REGEX_PATTERNS = {
   bankAccount: /\b\d{9,18}\b/g,
 };
 
-// Cryptographic SHA-256 for browser environments
+// Cryptographic SHA-256 for browser environments. Never substitute a non-cryptographic
+// digest when Web Crypto is unavailable, because that would mislabel the value.
 export async function generateSHA256(text: string): Promise<string> {
-  if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
-    try {
-      const msgUint8 = new TextEncoder().encode(text);
-      const hashBuffer = await window.crypto.subtle.digest('SHA-256', msgUint8);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    } catch {
-      // Fallback
-    }
+  if (!globalThis.crypto?.subtle) {
+    throw new Error('SHA-256 is unavailable in this browser context');
   }
-  // Deterministic fallback hash for non-async or SSR
-  let hash1 = 0xdeadbeef ^ 0;
-  let hash2 = 0x41c6ce57 ^ 0;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text.charCodeAt(i);
-    hash1 = Math.imul(hash1 ^ ch, 2654435761);
-    hash2 = Math.imul(hash2 ^ ch, 1597334677);
-  }
-  hash1 = Math.imul(hash1 ^ (hash1 >>> 16), 2246822507) ^ Math.imul(hash2 ^ (hash2 >>> 13), 3266489909);
-  hash2 = Math.imul(hash2 ^ (hash2 >>> 16), 2246822507) ^ Math.imul(hash1 ^ (hash1 >>> 13), 3266489909);
-  const p1 = (hash1 >>> 0).toString(16).padStart(8, '0');
-  const p2 = (hash2 >>> 0).toString(16).padStart(8, '0');
-  return (p1 + p2 + p1 + p2 + p1 + p2 + p1 + p2).slice(0, 64);
+  const msgUint8 = new TextEncoder().encode(text);
+  const hashBuffer = await globalThis.crypto.subtle.digest('SHA-256', msgUint8);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 export function extractEntities(text: string): ExtractedEntities {
@@ -157,12 +142,12 @@ export function classifyText(text: string): ClassificationResult {
   matchedCategories.sort((a, b) => b.score - a.score);
 
   const categories = matchedCategories.map(c => c.category);
-  const confidence = matchedCategories.length > 0 ? matchedCategories[0].score : 0.12;
+  const confidence = matchedCategories.length > 0 ? matchedCategories[0].score : 0;
   const matchedTerms = Array.from(new Set(matchedCategories.flatMap(c => c.terms)));
   const extracted = extractEntities(text);
 
   return {
-    categories: categories.length > 0 ? categories : ['FINANCIAL'],
+    categories,
     confidence: Number(confidence.toFixed(2)),
     matchedTerms,
     extracted

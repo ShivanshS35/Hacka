@@ -65,7 +65,7 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
     }
   }, [selectedPost]);
 
-  // Mode: Focused Case Investigation vs Master Global Syndicate
+  // Mode: Focused case graph or synthetic demo graph
   const [viewScope, setViewScope] = useState<ViewScopeMode>('CASE');
 
   // Global graph data from backend / mock
@@ -183,7 +183,7 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
   const activeCaseGraph = useMemo<{ nodes: EntityNode[]; edges: EntityEdge[]; centerId: string }>(() => {
     if (!activeCase) return { ...globalGraphData, centerId: '' };
 
-    const primaryCat = activeCase.categories[0] || 'DRUGS';
+    const primaryCat = activeCase.categories[0] || 'UNCLASSIFIED';
     const nodes: EntityNode[] = [];
     const edges: EntityEdge[] = [];
     const nodeIds = new Set<string>();
@@ -209,7 +209,6 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
         type: 'upi',
         category: primaryCat,
         channels: [activeCase.channel],
-        riskScore: 0.99,
         isHero: true,
       });
     } else if (activeCase.entities.wallets.length > 0) {
@@ -221,7 +220,6 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
         type: 'crypto',
         category: primaryCat,
         channels: [activeCase.channel],
-        riskScore: 0.97,
         isHero: true,
       });
     } else if (activeCase.entities.phones.length > 0) {
@@ -232,7 +230,6 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
         type: 'phone',
         category: primaryCat,
         channels: [activeCase.channel],
-        riskScore: 0.96,
         isHero: true,
       });
     } else {
@@ -244,7 +241,6 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
         type: 'post',
         category: primaryCat,
         channels: [activeCase.channel],
-        riskScore: activeCase.confidence,
         isHero: true,
       });
     }
@@ -258,7 +254,6 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
         type: 'post',
         category: primaryCat,
         channels: [activeCase.channel],
-        riskScore: activeCase.confidence,
       });
       addEdge({
         id: `e_${activeCase.id}_${centerId}`,
@@ -280,13 +275,12 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
       type: 'telegram',
       category: primaryCat,
       channels: [activeCase.channel],
-      riskScore: 0.92,
     });
     addEdge({
       id: `e_${activeCase.channel}_${centerId}`,
       source: activeCase.channel,
       target: centerId,
-      label: 'SYNDICATE CHANNEL',
+      label: 'SOURCE CHANNEL',
       category: primaryCat,
     });
 
@@ -294,11 +288,10 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
     const distNodeId = `nexus_${activeCase.districtId}`;
     addNode({
       id: distNodeId,
-      label: `${activeCase.districtName} Nexus`,
+      label: `${activeCase.districtName} District`,
       type: 'district',
       category: primaryCat,
       channels: [activeCase.channel],
-      riskScore: 0.88,
     });
     addEdge({
       id: `e_${distNodeId}_${centerId}`,
@@ -317,7 +310,6 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
           type: 'phone',
           category: primaryCat,
           channels: [activeCase.channel],
-          riskScore: 0.94,
         });
         addEdge({
           id: `e_${phone}_${centerId}`,
@@ -338,7 +330,6 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
           type: 'telegram',
           category: primaryCat,
           channels: [activeCase.channel],
-          riskScore: 0.95,
         });
         addEdge({
           id: `e_${handle}_${centerId}`,
@@ -360,7 +351,6 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
           type: 'crypto',
           category: primaryCat,
           channels: [activeCase.channel],
-          riskScore: 0.96,
         });
         addEdge({
           id: `e_${wallet}_${centerId}`,
@@ -372,7 +362,22 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
       }
     });
 
-    // 3. Add Outer Ring: Cross-Channel Syndicates that share ANY entity with this case!
+    // Preserve bank-account and IFSC entities extracted by the backend.
+    activeCase.entities.bankAccounts.forEach((account) => {
+      if (account !== centerId) {
+        addNode({ id: account, label: account, type: 'bank_account', category: primaryCat, channels: [activeCase.channel] });
+        addEdge({ id: `e_${account}_${centerId}`, source: account, target: centerId, label: 'BANK ACCOUNT MENTION', category: primaryCat });
+      }
+    });
+
+    (activeCase.entities.ifscCodes || []).forEach((ifsc) => {
+      if (ifsc !== centerId) {
+        addNode({ id: ifsc, label: ifsc, type: 'ifsc', category: primaryCat, channels: [activeCase.channel] });
+        addEdge({ id: `e_${ifsc}_${centerId}`, source: ifsc, target: centerId, label: 'IFSC CODE MENTION', category: primaryCat });
+      }
+    });
+
+    // 3. Add an outer ring for records that share an extracted identifier.
     caseList.forEach((otherPost) => {
       if (otherPost.id === activeCase.id) return;
 
@@ -419,7 +424,7 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
         }
       }
 
-      // If a cross-channel criminal nexus exists, wire it into the outer ring!
+      // A shared identifier creates a graph link only; it does not establish identity.
       if (sharedReason && sharedEntityId) {
         addNode({
           id: otherPost.id,
@@ -427,7 +432,6 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
           type: 'post',
           category: otherPost.categories[0],
           channels: [otherPost.channel],
-          riskScore: otherPost.confidence,
         });
         addEdge({
           id: `e_cross_${otherPost.id}_${sharedEntityId}`,
@@ -491,7 +495,7 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
   // STRICT CONCENTRIC RADIAL LAYOUT ENGINE
   // Center Core (r = 0): Case Hero Nexus at (700, 450)
   // Inner Ring (r = 175px): Direct Case Identifiers
-  // Outer Ring (r = 330px): Cross-Channel Syndicate Infiltration
+  // Outer ring: records sharing an extracted identifier
   // ========================================================
   const nodePositionMap = useMemo(() => {
     const map: Record<
@@ -663,7 +667,7 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
               }`}
             >
               <Network className="w-3 h-3 text-cyan-400" />
-              <span>GLOBAL SYNDICATE</span>
+              <span>GLOBAL DEMO GRAPH</span>
             </button>
           </div>
         </div>
@@ -1010,12 +1014,12 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
                   <span className="text-[10px] text-cyan-400 font-normal">({activeCase.districtName})</span>
                 </div>
                 <div className="text-[10px] text-slate-400 font-sans">
-                  {activeCase.categories.join(' · ')} · {((activeCase.confidence) * 100).toFixed(0)}% MATCH
+                  {activeCase.categories.length ? activeCase.categories.join(' · ') : 'UNCLASSIFIED'} · {((activeCase.confidence) * 100).toFixed(0)}% MATCH
                 </div>
               </div>
             </div>
             <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              SEC 65B
+              DEMO GRAPH
             </span>
           </div>
         )}
@@ -1048,7 +1052,7 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
               { key: 'HERO', label: 'Hero / Escrow' },
               { key: 'SELLER', label: 'Handles' },
               { key: 'CRYPTO', label: 'Crypto' },
-              { key: 'POSTS', label: 'Syndicates' },
+              { key: 'POSTS', label: 'Posts' },
             ] as const
           ).map((item) => (
             <button
@@ -1102,7 +1106,7 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
                 </span>
               </div>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/[0.04] text-slate-400 border border-white/[0.06]">
-                {selectedNodeInfo.node.category || activeCase?.categories[0] || 'CRIME'}
+                {selectedNodeInfo.node.category || activeCase?.categories[0] || 'UNCLASSIFIED'}
               </span>
             </div>
 
@@ -1139,19 +1143,13 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
                 </div>
               </div>
 
-              {/* Risk Score Meter */}
+              {/* Observed graph context, not a threat score */}
               <div className="p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl space-y-2">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-400 font-mono">THREAT RISK CONVICTION</span>
-                  <span className="font-mono font-bold text-rose-400">
-                    {(selectedNodeInfo.node.riskScore * 100).toFixed(0)}%
+                  <span className="text-slate-400 font-mono">CHANNELS LINKED IN GRAPH</span>
+                  <span className="font-mono font-bold text-cyan-300">
+                    {selectedNodeInfo.node.channels?.length || 0}
                   </span>
-                </div>
-                <div className="h-1.5 w-full bg-white/[0.06] rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-amber-500 via-rose-500 to-red-500 rounded-full"
-                    style={{ width: `${selectedNodeInfo.node.riskScore * 100}%` }}
-                  />
                 </div>
               </div>
 
@@ -1161,14 +1159,14 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
                   ASSOCIATED BROADCAST CHANNELS
                 </div>
                 <div className="space-y-1">
-                  {(selectedNodeInfo.node.channels || [activeCase?.channel || '@delhi_highs']).map(
+                  {(selectedNodeInfo.node.channels || []).map(
                     (chan) => (
                       <div
                         key={chan}
                         className="p-2 bg-white/[0.02] border border-white/[0.05] rounded-lg text-xs font-mono text-cyan-300 flex items-center justify-between"
                       >
                         <span>{chan}</span>
-                        <span className="text-[10px] text-emerald-400">MONITORED</span>
+                        <span className="text-[10px] text-cyan-400">GRAPH LINK</span>
                       </div>
                     )
                   )}

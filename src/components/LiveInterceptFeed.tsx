@@ -77,6 +77,16 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
     }
   };
 
+  const sourceLabel = (source?: InterceptPost['sourceType']) => ({
+    LIVE_TELEGRAM_PREVIEW: 'Telegram preview',
+    ANALYST_SUBMISSION: 'Analyst submission',
+    UPLOADED_DATASET: 'Uploaded dataset',
+    SYNTHETIC_DEMO: 'Synthetic demo',
+    LOCAL_ANALYSIS: 'Local analysis',
+    LEGACY_UNKNOWN: 'Legacy source unknown',
+    DEMO: 'Synthetic demo',
+  }[source || 'DEMO']);
+
   // Sleek subtle keyword highlighter without harsh background boxes
   const highlightSlang = (text: string, matchedTerms: string[]) => {
     if (!matchedTerms || matchedTerms.length === 0) return text;
@@ -245,6 +255,7 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {post.categories.length === 0 && <span className="text-[10px] text-slate-500">Unclassified</span>}
                     {post.categories.map((c) => (
                       <span key={c} className="flex items-center gap-1 text-[10px] font-sans text-slate-400">
                         <span className={`w-1.5 h-1.5 rounded-full ${getCategoryDot(c)}`} />
@@ -316,8 +327,8 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
                     </button>
                   )}
 
-                  <span className="text-emerald-400 font-sans text-[10px]">
-                    Sec 65B ✓
+                  <span className="text-slate-400 font-sans text-[10px]">
+                    {sourceLabel(post.sourceType)}{post.sourceReference ? ` · ${post.sourceReference.slice(0, 32)}` : ''} · SHA-256 text digest
                   </span>
                 </div>
               </div>

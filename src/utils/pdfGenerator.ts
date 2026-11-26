@@ -59,14 +59,14 @@ export function generateDossierPDF(post: InterceptPost) {
   drawCornerReticle(pageWidth - 10, pageHeight - 10, -1, -1);
 
   // =========================================================================
-  // HEADER: Rajasthan Police State Cyber Crime Cell
+  // Header: PRAHARI prototype demonstration report
   // =========================================================================
   let y = 17;
 
   doc.setTextColor(0, 229, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
-  doc.text('RAJASTHAN POLICE // STATE CYBER CRIME CELL, JAIPUR', pageWidth / 2, y, { align: 'center' });
+  doc.text('PRAHARI HACKATHON PROTOTYPE // DEMONSTRATION REPORT', pageWidth / 2, y, { align: 'center' });
 
   y += 6;
   doc.setTextColor(255, 255, 255);
@@ -86,7 +86,7 @@ export function generateDossierPDF(post: InterceptPost) {
   doc.line(margin, y, margin + contentWidth, y);
 
   // =========================================================================
-  // SECTION 65B LEGAL CERTIFICATION COMPLIANCE BOX
+  // Prototype source and digest limitations
   // =========================================================================
   y += 4;
   const certBoxY = y;
@@ -105,13 +105,13 @@ export function generateDossierPDF(post: InterceptPost) {
   doc.setTextColor(0, 229, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7.8);
-  doc.text('SECTION 65B(4) INDIAN EVIDENCE ACT & SECTION 63 BSA COMPLIANCE NOTICE', margin + 5, certBoxY + 5.5);
+  doc.text('EVIDENCE RECORD // SHA-256 CONTENT DIGEST // NOT A LEGAL CERTIFICATE', margin + 5, certBoxY + 5.5);
 
   doc.setTextColor(203, 213, 225); // Slate 300
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(6.8);
   const certStatement =
-    'Certified that this digital intelligence record was captured and cryptographically hashed in real time via PRAHARI Autonomous OSINT Collector directly from public Telegram/social media broadcast servers without manual alteration. Hash integrity and electronic chain of custody are verified on ingestion. In accordance with Supreme Court precedent (Arjun Panditrao Khotkar, 2020), this document serves as a certified forensic extraction for official Investigating Officer (I.O.) endorsement.';
+    `Source label: ${post.sourceType || 'DEMO / UNKNOWN'}. The SHA-256 value below is computed over the UTF-8 bytes of the displayed raw text. This digest can help detect later text changes; it does not authenticate the source, prove collection time, establish chain of custody, or certify admissibility. This prototype report is not a Section 65B / Section 63 certificate.`;
   const wrappedCert = doc.splitTextToSize(certStatement, contentWidth - 10);
   doc.text(wrappedCert, margin + 5, certBoxY + 10);
 
@@ -197,11 +197,11 @@ export function generateDossierPDF(post: InterceptPost) {
   doc.text('CRIME VERTICAL:', col1LabelX, rY);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(244, 63, 94);
-  doc.text(`[${post.categories.join(' / ')}]`, col1ValX, rY);
+  doc.text(`[${post.categories.length ? post.categories.join(' / ') : 'UNCLASSIFIED'}]`, col1ValX, rY);
 
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(148, 163, 184);
-  doc.text('CONVICTION SCORE:', col2LabelX, rY);
+  doc.text('RULE MATCH SCORE:', col2LabelX, rY);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(16, 185, 129); // Emerald
   doc.text(`${(post.confidence * 100).toFixed(0)}% ALGORITHM MATCH`, col2ValX, rY);
@@ -245,7 +245,7 @@ export function generateDossierPDF(post: InterceptPost) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7);
   doc.setTextColor(16, 185, 129);
-  doc.text('TAMPER-EVIDENT CRYPTOGRAPHIC CHECKSUM (RAW PAYLOAD DIGEST):', margin + 4, hashBoxY + 5.5);
+  doc.text('SHA-256 CONTENT DIGEST (UTF-8 BYTES OF RAW TEXT):', margin + 4, hashBoxY + 5.5);
 
   // Monospace SHA-256 box inside
   doc.setFillColor(8, 12, 19);
@@ -390,15 +390,15 @@ export function generateDossierPDF(post: InterceptPost) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7.5);
   doc.setTextColor(0, 229, 255);
-  doc.text('SYSTEM WITNESS // CRYPTOGRAPHIC CUSTODY', margin + 4, footerBoxY + 5.5);
+  doc.text('PROTOTYPE RECORD // CONTENT DIGEST ONLY', margin + 4, footerBoxY + 5.5);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(6.5);
   doc.setTextColor(148, 163, 184);
-  doc.text('PLATFORM: PRAHARI Autonomous OSINT Engine (v2.4)', margin + 4, footerBoxY + 10.5);
-  doc.text('HASH STANDARD: FIPS-180-4 SHA-256 Digest (Payload Locked)', margin + 4, footerBoxY + 15);
-  doc.text(`INGESTION TIMESTAMP: ${sanitizePdfText(post.capturedAt || '2026-11-22 18:20:00 IST')}`, margin + 4, footerBoxY + 19.5);
-  doc.text('RECORD CUSTODY: SQLite Master Forensic DB (Tamper-Sealed)', margin + 4, footerBoxY + 24);
+  doc.text(`SOURCE: ${sanitizePdfText(post.sourceType || 'DEMO / UNKNOWN')}`, margin + 4, footerBoxY + 10.5);
+  doc.text('HASH: SHA-256 OF UTF-8 RAW TEXT ONLY', margin + 4, footerBoxY + 15);
+  doc.text(`CAPTURED BY THIS DEMO: ${sanitizePdfText(post.capturedAt || 'unknown')}`, margin + 4, footerBoxY + 19.5);
+  doc.text('NO AUTHENTICITY OR CUSTODY ATTESTATION', margin + 4, footerBoxY + 24);
 
   // Status Badge
   doc.setFillColor(16, 185, 129, 0.15);
@@ -409,7 +409,7 @@ export function generateDossierPDF(post: InterceptPost) {
   doc.setTextColor(16, 185, 129);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6);
-  doc.text('HASH INTEGRITY VERIFIED // UNMODIFIED ORIGINAL RECORD', margin + 7, footerBoxY + 31.2);
+  doc.text('CONTENT DIGEST PRESENT // SOURCE NOT VERIFIED', margin + 7, footerBoxY + 31.2);
 
   // Vertical divider between Attestation and Officer Endorsement
   const stampDividerX = margin + footerLeftW;
@@ -433,7 +433,7 @@ export function generateDossierPDF(post: InterceptPost) {
   doc.text('RANK / PPO NO.: ________________________________', ioBoxX, footerBoxY + 15);
   doc.text('POLICE STATION: State Cyber Crime Cell, Jaipur', ioBoxX, footerBoxY + 19.5);
 
-  // Designated I.O. Physical Signature & Official Stamp Area
+  // Optional reviewer signature area
   const sigBoxY = footerBoxY + 22.5;
   const sigBoxH = 10.5;
   doc.setFillColor(8, 13, 20);
@@ -447,18 +447,18 @@ export function generateDossierPDF(post: InterceptPost) {
   doc.setTextColor(244, 63, 94);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(5.5);
-  doc.text('[ AFFIX OFFICIAL SEAL & SIGNATURE / CLASS-3 DSC ]', ioBoxX + ioRightW / 2, sigBoxY + 4.5, { align: 'center' });
+  doc.text('[ OPTIONAL REVIEWER SIGNATURE ]', ioBoxX + ioRightW / 2, sigBoxY + 4.5, { align: 'center' });
 
   doc.setTextColor(100, 116, 139); // Slate 500
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(5);
-  doc.text('Authorized Signatory under Sec 65B(4) IEA / Sec 63 BSA', ioBoxX + ioRightW / 2, sigBoxY + 8, { align: 'center' });
+  doc.text('Optional reviewer signature (not a statutory certificate)', ioBoxX + ioRightW / 2, sigBoxY + 8, { align: 'center' });
 
   // Bottom Security Watermark Strip
   doc.setFont('courier', 'normal');
   doc.setFontSize(5.8);
   doc.setTextColor(71, 85, 105);
-  const bottomMeta = `PRAHARI // CASE: ${post.id.toUpperCase()} // DISTRICT: ${post.districtName.toUpperCase()} // HASH: ${post.sha256.slice(0, 16)}... // SEC 65B FORENSIC DOSSIER DRAFT // R4C 2026`;
+  const bottomMeta = `PRAHARI PROTOTYPE // CASE: ${post.id.toUpperCase()} // DISTRICT: ${post.districtName.toUpperCase()} // TEXT HASH: ${post.sha256.slice(0, 16)}... // NOT A LEGAL CERTIFICATE`;
   doc.text(bottomMeta, pageWidth / 2, pageHeight - 11, { align: 'center' });
 
   // Save the cleanly generated PDF

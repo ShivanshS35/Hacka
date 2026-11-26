@@ -78,12 +78,12 @@ def classify_text(text: str) -> Dict[str, Any]:
         categories = [c["category"] for c in matched_categories]
         confidence = matched_categories[0]["score"]
     else:
-        categories = ["FINANCIAL"]
-        confidence = 0.15
+        categories = []
+        confidence = 0.0
 
     return {
         "categories": categories,
         "confidence": round(confidence, 2),
         "matched_slang": list(set(all_matched_terms)),
-        "primary_category": categories[0]
+        "primary_category": categories[0] if categories else None
     }

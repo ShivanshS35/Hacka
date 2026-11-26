@@ -211,7 +211,7 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
             className="text-xs tracking-[0.25em] text-amber-300 uppercase font-bold"
             style={{ fontFamily: "'Cinzel', serif" }}
           >
-            RAJASTHAN POLICE // SPECIAL CYBER ARCHIVE
+            PRAHARI // SYNTHETIC DEMO ARCHIVE
           </span>
           <span className="text-[10px] font-mono text-amber-200/50">
             CONFIDENTIAL DIGITAL EVIDENCE JOURNAL
@@ -232,7 +232,7 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
             className="flex items-center gap-1.5 bg-gradient-to-r from-red-700 via-rose-700 to-red-800 hover:brightness-110 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-[0_0_15px_rgba(220,38,38,0.4)] border border-red-500/40 active:translate-y-0.5 transition-all"
           >
             <Download className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">EXPORT OFFICIAL PDF</span>
+            <span className="hidden sm:inline">EXPORT DEMO REPORT</span>
             <span className="sm:hidden">PDF</span>
           </button>
         </div>
@@ -352,7 +352,7 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                       {/* Polaroid Caption */}
                       <div className="mt-2 text-center">
                         <div className="text-[10px] font-mono font-bold text-stone-800 tracking-wide uppercase">
-                          EXHIBIT #01 · {activePost.categories[0]}
+                          EXHIBIT #01 · {activePost.categories[0] || 'UNCLASSIFIED'}
                         </div>
                         <div className="text-[9px] text-stone-500 font-serif italic">
                           Click to inspect high-res seizure
@@ -388,7 +388,7 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                           "{activePost.rawText}"
                         </p>
                         <div className="flex items-center justify-between text-[8px] text-emerald-400 pt-1 border-t border-cyan-950/60">
-                          <span>SEC 65B LOGGED</span>
+                          <span>DEMO RECORD</span>
                           <span>{activePost.capturedAt}</span>
                         </div>
                       </div>
@@ -425,12 +425,12 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                       </div>
                       <div className="h-16 rounded bg-[#1B231D] flex items-center justify-center p-2 text-center border border-emerald-950">
                         <span className="font-mono text-emerald-400 text-[10px] leading-tight">
-                          RAJASTHAN POLICE DISPATCH<br />
+                          SYNTHETIC DEMO RECORD<br />
                           <span className="text-white font-bold">{activePost.districtName} CYBER CELL</span>
                         </span>
                       </div>
                       <div className="mt-1.5 text-[9px] text-stone-600 font-mono flex items-center justify-between">
-                        <span>Threat: CRITICAL</span>
+                        <span>Synthetic sample</span>
                         <span className="text-red-700 font-semibold">FLAGGED</span>
                       </div>
                     </motion.div>
@@ -507,7 +507,7 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                 </div>
 
                 {/* ======================================================== */}
-                {/* RIGHT SPREAD: OFFICIAL LEGAL DOSSIER PARCHMENT          */}
+                {/* RIGHT SPREAD: DEMONSTRATION REPORT */}
                 {/* ======================================================== */}
                 <div
                   className="flex-1 p-5 sm:p-7 relative overflow-y-auto flex flex-col justify-between"
@@ -523,26 +523,26 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                   </div>
 
                   <div>
-                    {/* Official Archival Letterhead */}
+                    {/* Prototype report heading */}
                     <div className="text-center pb-3 border-b-2 border-[#8C6B4B]/30 mb-4">
                       <div
                         className="text-sm sm:text-base font-bold tracking-[0.2em] text-[#3E2512] uppercase"
                         style={{ fontFamily: "'Cinzel', serif" }}
                       >
-                        RAJASTHAN POLICE STATE CYBER CRIME CELL
+                        PRAHARI HACKATHON PROTOTYPE
                       </div>
                       <div className="text-[10px] font-mono text-[#6E4F32] tracking-wider mt-0.5">
                         SPECIAL OSINT INVESTIGATION DIVISION · JAIPUR HEADQUARTERS
                       </div>
                       <div className="text-[11px] font-mono font-bold text-red-900 tracking-widest mt-1">
-                        CONFIDENTIAL EVIDENCE DOSSIER // SEC 65B(4) IEA
+                        DEMONSTRATION DOSSIER // SOURCE LABELS SHOWN PER RECORD
                       </div>
                     </div>
 
-                    {/* Official Legal Transcript Statement */}
+                    {/* Source and digest limitations */}
                     <div className="space-y-3 font-serif text-[#332014] text-xs sm:text-sm leading-relaxed">
                       <p className="italic text-justify">
-                        "I, Cyber Inspector on duty at the Rajasthan Police State Cyber Cell, hereby certify that the digital intelligence transcript recorded herein has been captured in real time via automated OSINT intercept mechanisms in accordance with Section 65B(4) of the Indian Evidence Act, 1872 and Section 63 of the Bharatiya Sakshya Adhiniyam, 2023."
+                        Prototype analysis record. Source: {activePost.sourceType || 'DEMO / UNKNOWN'}. The displayed SHA-256 is a digest of the raw text only. It does not establish authenticity, collection time, chain of custody, or legal certification.
                       </p>
 
                       <div className="p-3 rounded bg-[#EADECA] border border-[#BFAC8E] font-mono text-xs space-y-1.5 text-stone-900">
@@ -554,6 +554,12 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                           <span className="text-stone-600">BROADCAST CHANNEL:</span>
                           <span className="font-bold text-cyan-900">{activePost.channel}</span>
                         </div>
+                        {activePost.sourceTimestamp && (
+                          <div className="flex justify-between items-center text-[11px]">
+                            <span className="text-stone-600">SOURCE TIMESTAMP:</span>
+                            <span>{activePost.sourceTimestamp}</span>
+                          </div>
+                        )}
                         <div className="flex justify-between items-center text-[11px]">
                           <span className="text-stone-600">CRIME VERTICAL:</span>
                           <span className="font-bold" style={{ color: catStyle.text }}>
@@ -565,7 +571,7 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                           <span>{activePost.channelSubscribers || 'Public Telegram Channel'}</span>
                         </div>
                         <div className="flex justify-between items-center text-[11px]">
-                          <span className="text-stone-600">MATCH CONVICTION:</span>
+                          <span className="text-stone-600">RULE MATCH SCORE:</span>
                           <span className="font-bold text-emerald-800">
                             {(activePost.confidence * 100).toFixed(0)}% ALGORITHM MATCH
                           </span>
@@ -575,7 +581,7 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                       {/* Raw Post Message Transcript Box */}
                       <div className="p-3 rounded bg-[#FFFDF8] border border-[#C5B396] shadow-sm">
                         <div className="text-[10px] font-mono font-bold text-stone-500 uppercase tracking-wider mb-1">
-                          AUTHENTICATED MESSAGE RECORD:
+                          RAW TEXT (SOURCE AS LABELED ABOVE):
                         </div>
                         <p className="font-sans text-xs sm:text-sm text-stone-900 italic leading-relaxed">
                           "{activePost.rawText}"
@@ -585,7 +591,7 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                   </div>
 
                   {/* ======================================================== */}
-                  {/* AUTHENTIC 3D RED WAX SEAL STAMP & OFFICIAL SIGN-OFF      */}
+                  {/* Decorative export interaction */}
                   {/* (Directly modeled on the Wax Seal in the reference image) */}
                   {/* ======================================================== */}
                   <div className="mt-4 pt-3 border-t-2 border-[#8C6B4B]/30 flex items-center justify-between">
@@ -597,10 +603,10 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                         className="text-xs font-bold text-[#3B2210] mt-0.5"
                         style={{ fontFamily: "'Cinzel', serif" }}
                       >
-                        CYBER CELL INSP. // RAJ-049
+                        REVIEWER SIGNATURE (OPTIONAL)
                       </div>
                       <div className="text-[9px] font-mono text-emerald-800 font-semibold mt-0.5">
-                        STATUS: HASH VERIFIED · AWAITING I.O. ENDORSEMENT
+                        STATUS: PROTOTYPE DIGEST · NOT CERTIFIED
                       </div>
                     </div>
 
@@ -610,7 +616,7 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                       whileTap={{ scale: 0.94 }}
                       onClick={handleWaxSealClick}
                       className="cursor-pointer relative flex flex-col items-center group"
-                      title="Click to stamp & download official court-admissible Sec 65B dossier"
+                      title="Download prototype dossier with source and hash limitations"
                     >
                       {/* Ribbon tails below wax seal */}
                       <div className="absolute top-8 w-6 h-9 flex justify-center pointer-events-none">
@@ -636,7 +642,7 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                       </div>
 
                       <span className="text-[8px] font-mono text-red-900 font-bold uppercase mt-1 tracking-tighter group-hover:underline">
-                        SEAL · EXPORT SEC 65B PDF
+                        EXPORT PROTOTYPE REPORT
                       </span>
                     </motion.div>
                   </div>
@@ -693,7 +699,7 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                   className="text-lg sm:text-2xl font-bold tracking-[0.25em] text-amber-300 uppercase"
                   style={{ fontFamily: "'Cinzel', serif" }}
                 >
-                  RAJASTHAN POLICE // CASE DOSSIER ARCHIVE
+                  PRAHARI // SYNTHETIC DEMO ARCHIVE
                 </div>
                 <p className="text-xs font-serif text-stone-400 italic">
                   Select an embossed investigative case volume from the shelf to open its forensic evidence scrapbook.
@@ -742,7 +748,7 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                   <div className="space-y-1 text-center font-mono text-xs text-amber-100/70 pt-4 border-t border-amber-500/30">
                     <div>CHANNEL: @delhi_highs</div>
                     <div>NEXUS: JAIPUR / BIKANER</div>
-                    <div className="text-emerald-400 font-bold text-[10px]">SEC 65B CERTIFIED</div>
+                    <div className="text-amber-400 font-bold text-[10px]">SYNTHETIC DEMO CASE</div>
                   </div>
 
                   <div className="text-center">
@@ -799,7 +805,7 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                   <div className="space-y-1 text-center font-mono text-xs text-red-100/70 pt-4 border-t border-red-500/30 relative z-10">
                     <div>CHANNEL: @rajasthan_arms_hub</div>
                     <div>NEXUS: ALWAR / SIKAR</div>
-                    <div className="text-red-400 font-bold text-[10px]">THREAT: CRITICAL</div>
+                    <div className="text-red-400 font-bold text-[10px]">SYNTHETIC DEMO TAG</div>
                   </div>
 
                   <div className="text-center relative z-10">
