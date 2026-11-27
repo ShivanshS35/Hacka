@@ -55,14 +55,21 @@ def classify_text(text: str) -> Dict[str, Any]:
 
         for group in term_groups:
             for term in group["terms"]:
-                if term.lower() in lower:
+                # Match whole words so terms such as "ice", "round", and
+                # "white" do not match inside ordinary words like "price".
+                escaped = re.escape(term.lower())
+                if re.fullmatch(r"\w+", term, flags=re.UNICODE):
+                    pattern = rf"(?<!\w){escaped}(?!\w)"
+                else:
+                    pattern = rf"(?<!\w){escaped}(?!\w)"
+                if re.search(pattern, lower, flags=re.UNICODE):
                     found_terms.append(term)
                     if group["weight"] > category_max_weight:
                         category_max_weight = group["weight"]
 
         if found_terms:
-            # Multi-term boost: multiple slang tokens increase conviction
-            boost = min(0.03 * (len(found_terms) - 1), 0.08)
+            # A display score based on rule matches, not a calibrated probability.
+            boost = min(0.01 * (len(found_terms) - 1), 0.03)
             final_score = min(category_max_weight + boost, 0.99)
             matched_categories.append({
                 "category": category,

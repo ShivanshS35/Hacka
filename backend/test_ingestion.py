@@ -14,7 +14,7 @@ from fastapi import HTTPException, UploadFile
 from main import ChannelScanRequest, DISTRICT_COUNTS, INTERCEPTS_STORE, TextScanRequest, ingest_dataset_file, process_and_store_post
 from extractor import extract_entities
 from classifier import classify_text
-from telegram_scraper import scrape_public_telegram_channel
+from telegram_scraper import TelegramPreviewError, scrape_public_telegram_channel
 from graph_engine import DynamicEntityGraph
 
 
@@ -79,6 +79,23 @@ class IngestionTests(unittest.TestCase):
         self.assertIsNone(result["primary_category"])
         self.assertEqual(result["confidence"], 0.0)
 
+    def test_classifier_ignores_terms_inside_other_words(self):
+        result = classify_text("The price is around a whitebuilding with a degreeprogram.")
+        self.assertEqual(result["categories"], [])
+
+    def test_classifier_still_matches_a_word_as_a_word(self):
+        self.assertIn("DRUGS", classify_text("A small bag of ice is available")["categories"])
+
+    def test_extractor_does_not_call_email_a_handle_or_upi(self):
+        entities = extract_entities("Contact a@gmail.com for details")
+        self.assertEqual(entities["upis"], [])
+        self.assertEqual(entities["handles"], [])
+
+    def test_phone_with_country_prefix_is_not_also_a_bank_account(self):
+        entities = extract_entities("Call 919876543210")
+        self.assertIn("9876543210", entities["phones"])
+        self.assertNotIn("919876543210", entities["bank_accounts"])
+
     def test_graph_links_bank_account_and_ifsc_entities(self):
         graph = DynamicEntityGraph()
         graph.ingest_intercept({
@@ -91,6 +108,13 @@ class IngestionTests(unittest.TestCase):
         self.assertEqual(graph.nodes["123456789012"]["type"], "bank_account")
         self.assertEqual(graph.nodes["ABCD0123456"]["type"], "ifsc")
         self.assertEqual(len(graph.edges), 2)
+
+    def test_different_wallets_with_same_visible_ends_stay_separate(self):
+        graph = DynamicEntityGraph()
+        graph.ingest_intercept({"id":"p1","channel":"@one","categories":[],"entities":{"wallets":["bc1qaaaa1111111111111111111111111111111zxyz"]}})
+        graph.ingest_intercept({"id":"p2","channel":"@two","categories":[],"entities":{"wallets":["bc1qbbbb2222222222222222222222222222222zxyz"]}})
+        wallets = [node for node in graph.nodes.values() if node["type"] == "crypto"]
+        self.assertEqual(len(wallets), 2)
 
     def test_unavailable_telegram_preview_returns_no_synthetic_rows(self):
         class Response:
@@ -108,8 +132,8 @@ class IngestionTests(unittest.TestCase):
                 return Response()
 
         with patch("telegram_scraper.httpx.AsyncClient", return_value=Client()):
-            records = asyncio.run(scrape_public_telegram_channel("missing_channel"))
-        self.assertEqual(records, [])
+            with self.assertRaises(TelegramPreviewError):
+                asyncio.run(scrape_public_telegram_channel("missing_channel"))
 
 
 if __name__ == "__main__":

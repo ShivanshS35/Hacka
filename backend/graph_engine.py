@@ -56,13 +56,12 @@ class DynamicEntityGraph:
 
         # 1. Add UPI Nodes & Edges
         for upi in entities.get("upis", []):
-            is_central = "raj.pay" in upi.lower()
             self.add_node(
                 node_id=upi,
                 label=upi,
                 node_type="upi",
                 category=primary_cat,
-                is_hero=is_central,
+                is_hero=False,
                 channel=channel
             )
             self.add_edge(source=post_id, target=upi, label="UPI ESCROW", category=primary_cat)
@@ -95,14 +94,15 @@ class DynamicEntityGraph:
         for wallet in entities.get("wallets", []):
             short_wallet = wallet[:8] + "..." + wallet[-4:] if len(wallet) > 16 else wallet
             self.add_node(
-                node_id=short_wallet,
+                # Keep the full address as the key so distinct wallets never merge.
+                node_id=wallet,
                 label=short_wallet,
                 node_type="crypto",
                 category=primary_cat,
                 is_hero=False,
                 channel=channel
             )
-            self.add_edge(source=post_id, target=short_wallet, label="CRYPTO ESCROW", category=primary_cat)
+            self.add_edge(source=post_id, target=wallet, label="CRYPTO ESCROW", category=primary_cat)
 
         # Preserve the remaining extracted identifier types in the graph too.
         for bank_account in entities.get("bankAccounts", []):

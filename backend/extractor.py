@@ -36,9 +36,9 @@ RAJASTHAN_DISTRICT_SYNONYMS = {
     "hanumangarh": ["hanumangarh", "हनुमानगढ़", "nohar"],
     "dholpur": ["dholpur", "धौलपुर"],
     "dausa": ["dausa", "दौसा", "bandikui"],
-    "sawaimadhopur": ["sawai madhopur", "सवाई माधोपुर", "ranthambore"],
+    "sawai-madhopur": ["sawai madhopur", "sawai-madhopur", "सवाई माधोपुर", "ranthambore"],
     "tonk": ["tonk", "टोंक"],
-    "bundli": ["bundi", "बूंदी"],
+    "bundi": ["bundi", "बूंदी"],
     "baran": ["baran", "बारां"],
     "jhalawar": ["jhalawar", "झालावाड़"],
     "sirohi": ["sirohi", "सिरोही", "abu road"],
@@ -52,11 +52,18 @@ RAJASTHAN_DISTRICT_SYNONYMS = {
 
 def extract_entities(text: str) -> Dict[str, Any]:
     # 1. UPI addresses
-    upis = list(set(re.findall(REGEX_PATTERNS["upi"], text, re.IGNORECASE)))
+    email_spans = [m.span() for m in re.finditer(r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b", text)]
+    upi_matches = []
+    for match in re.finditer(REGEX_PATTERNS["upi"], text, re.IGNORECASE):
+        if not any(start <= match.start() and match.end() <= end for start, end in email_spans):
+            upi_matches.append(match.group(0))
+    upis = list(set(upi_matches))
 
     # 2. Telegram Handles
     raw_handles = list(set(re.findall(REGEX_PATTERNS["telegram"], text)))
-    handles = [h for h in raw_handles if not any(h.lower() in u.lower() for u in upis)]
+    handles = [h for h in raw_handles if not any(h.lower() in u.lower() for u in upis)
+               and not any(start <= m.start() < end for start, end in email_spans
+                           for m in re.finditer(re.escape(h), text, re.IGNORECASE))]
 
     # 3. Cryptocurrency Wallets (BTC, ETH, TRON USDT)
     btc_wallets = list(set(re.findall(REGEX_PATTERNS["crypto_btc"], text)))
@@ -77,10 +84,9 @@ def extract_entities(text: str) -> Dict[str, Any]:
     ifsc_codes = list(set(re.findall(REGEX_PATTERNS["ifsc"], text)))
     raw_bank_matches = re.findall(REGEX_PATTERNS["bank_account"], text)
     # Filter out numbers that were already parsed as phone numbers
-    bank_accounts = [
-        b for b in set(raw_bank_matches)
-        if b not in phones and len(b) >= 9 and len(b) <= 18
-    ]
+    phone_digits = {re.sub(r"\D", "", match)[-10:] for match in phone_matches}
+    bank_accounts = [b for b in set(raw_bank_matches)
+                     if re.sub(r"\D", "", b)[-10:] not in phone_digits]
 
     # 6. Rajasthan District Nexus
     lower = text.lower()

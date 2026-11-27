@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Menu,
@@ -51,6 +51,7 @@ interface WarMonitorLiveAppProps {
 export type WarMonitorNavTab = 'COMMAND' | 'TOPOLOGY' | 'DOSSIER';
 
 export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEditorial }) => {
+  const seenStreamIds = useRef<Set<string>>(new Set());
   // Navigation Tab: COMMAND CENTER | 3D ENTITY TOPOLOGY | FORENSIC DOSSIER
   const [activeNavTab, setActiveNavTab] = useState<WarMonitorNavTab>('COMMAND');
 
@@ -117,14 +118,16 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
 
     // Real-time WebSocket connection to Python engine
     const unsubscribe = prahariApi.subscribeToStream((newPost) => {
+      if (seenStreamIds.current.has(newPost.id)) return;
+      seenStreamIds.current.add(newPost.id);
       sound.playRadarPing();
-      setPosts((prev) => [newPost, ...prev.slice(0, 49)]);
+      setPosts((prev) => prev.some((post) => post.id === newPost.id)
+        ? prev
+        : [newPost, ...prev.slice(0, 49)]);
       setSelectedPost(newPost);
-      setDistricts((prev) =>
-        prev.map((d) =>
-          d.id === newPost.districtId ? { ...d, flaggedCount: d.flaggedCount + 1 } : d
-        )
-      );
+      setDistricts((prev) => prev.map((d) =>
+        d.id === newPost.districtId ? { ...d, flaggedCount: d.flaggedCount + 1 } : d
+      ));
     });
 
     return () => {

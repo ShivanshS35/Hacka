@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from classifier import classify_text
 from extractor import extract_entities, generate_sha256
 from graph_engine import DynamicEntityGraph
-from telegram_scraper import scrape_public_telegram_channel
+from telegram_scraper import TelegramPreviewError, scrape_public_telegram_channel
 
 app = FastAPI(
     title="PRAHARI OSINT Backend Engine",
@@ -157,7 +157,11 @@ def process_and_store_post(channel: str, raw_text: str, district_hint: str = "",
     classification = classify_text(raw_text)
     entities = extract_entities(raw_text)
 
-    district_id = district_hint or entities["district_id"]
+    aliases = {"bundli": "bundi", "sawaimadhopur": "sawai-madhopur", "sawai madhopur": "sawai-madhopur"}
+    normalized_hint = district_hint.strip().lower().replace("_", "-")
+    normalized_hint = aliases.get(normalized_hint, normalized_hint)
+    district_ids = {"jaipur", "jodhpur", "alwar", "kota", "bikaner", "sri-ganganagar", "sikar", "ajmer", "udaipur", "bharatpur", "barmer", "jaisalmer", "nagaur", "pali", "bhilwara", "chittorgarh", "jhunjhunu", "churu", "hanumangarh", "dholpur", "dausa", "sawai-madhopur", "tonk", "bundi", "baran", "jhalawar", "sirohi", "jalore", "rajsamand", "dungarpur", "banswara", "pratapgarh", "karauli", "unknown"}
+    district_id = normalized_hint if normalized_hint in district_ids else entities["district_id"]
     post_id = f"post_{str(uuid.uuid4())[:6]}"
     now = datetime.datetime.now(datetime.timezone.utc)
 
@@ -482,7 +486,10 @@ async def scan_raw_text(req: TextScanRequest):
 
 @app.post("/api/scan/channel")
 async def scan_telegram_channel(req: ChannelScanRequest):
-    scraped_posts = await scrape_public_telegram_channel(req.channel, limit=max(1, min(req.limit or 8, 50)))
+    try:
+        scraped_posts = await scrape_public_telegram_channel(req.channel, limit=max(1, min(req.limit or 8, 50)))
+    except TelegramPreviewError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     processed_records = []
 
     for item in scraped_posts:

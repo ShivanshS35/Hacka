@@ -3,6 +3,9 @@ from bs4 import BeautifulSoup
 from typing import List, Dict, Any
 import datetime
 
+class TelegramPreviewError(Exception):
+    """The public preview could not be read; this is not an empty channel."""
+
 async def scrape_public_telegram_channel(channel_handle: str, limit: int = 15) -> List[Dict[str, Any]]:
     """
     Scrapes recent public posts from a Telegram broadcast channel using its open web preview:
@@ -21,7 +24,6 @@ async def scrape_public_telegram_channel(channel_handle: str, limit: int = 15) -
     try:
         async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
             response = await client.get(url, headers=headers)
-            
             if response.status_code == 200:
                 soup = BeautifulSoup(response.text, "html.parser")
                 messages = soup.find_all("div", class_="tgme_widget_message_wrap")
@@ -41,7 +43,9 @@ async def scrape_public_telegram_channel(channel_handle: str, limit: int = 15) -
 
                     # Extract timestamp
                     time_elem = msg.find("time")
-                    timestamp = time_elem.get("datetime") if time_elem else datetime.datetime.now().isoformat()
+                    # Keep source time unknown when Telegram does not provide it;
+                    # capture time is recorded separately by the API.
+                    timestamp = time_elem.get("datetime") if time_elem else None
 
                     scraped_posts.append({
                         "channel": f"@{clean_handle}",
@@ -50,7 +54,15 @@ async def scrape_public_telegram_channel(channel_handle: str, limit: int = 15) -
                         "views": views_str,
                         "source": "LIVE_TELEGRAM_PREVIEW"
                     })
-    except Exception as e:
-        print(f"[!] Live scraper notice for @{clean_handle}: {e}")
+            else:
+                raise TelegramPreviewError(
+                    f"Telegram preview returned HTTP {response.status_code}; no collection result is available."
+                )
+    except TelegramPreviewError:
+        raise
+    except httpx.HTTPError as exc:
+        raise TelegramPreviewError(
+            "Could not reach Telegram's public preview. Check the connection and try again."
+        ) from exc
 
     return scraped_posts
