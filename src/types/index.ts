@@ -76,3 +76,34 @@ export interface EntityEdge {
 }
 
 export type ActiveMode = 'ALL' | 'DRUGS' | 'ARMS' | 'DOCUMENTS' | 'FINANCIAL';
+
+export interface AlertEvidence {
+  text: string;
+  capturedAtUtc?: string;
+  sourceType?: string;
+  sha256: string;
+  sha256Scope: string;
+}
+
+export interface ThreatAlert {
+  alertId: string;
+  postId: string;
+  channel: string;
+  categories: CrimeCategory[];
+  confidence: number;
+  matchedSlang: string[];
+  entities: ExtractedEntities;
+  districtId: string;
+  evidence: AlertEvidence;
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+  riskScore: number;
+  riskReasons: string[];
+}
+
+export interface CoordinatedGroup {
+  size: number;
+  channels: string[];
+  crossChannel: boolean;
+  maxSimilarity: number;
+  postIds: string[];
+}

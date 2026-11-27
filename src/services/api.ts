@@ -1,4 +1,4 @@
-import { InterceptPost, DistrictIntel, CrimeCategory, EntityNode, EntityEdge } from '../types';
+import { InterceptPost, DistrictIntel, CrimeCategory, EntityNode, EntityEdge, ThreatAlert, CoordinatedGroup } from '../types';
 
 const RAW_API_URL = (import.meta.env.VITE_API_URL as string) || 'http://localhost:8000';
 const API_BASE_URL = `${RAW_API_URL.replace(/\/+$/, '')}/api`;
@@ -106,6 +106,26 @@ export const prahariApi = {
       const res = await fetch(`${API_BASE_URL}/graph`);
       if (!res.ok) return null;
       return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  /** Risk-scored alerts with evidence seal. Returns null when the backend is unreachable. */
+  async getAlerts(): Promise<ThreatAlert[] | null> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/alerts?limit=100`);
+      return res.ok ? await res.json() : null;
+    } catch {
+      return null;
+    }
+  },
+
+  /** Near-duplicate / coordinated ad groups. Returns null when the backend is unreachable. */
+  async getCoordinated(): Promise<CoordinatedGroup[] | null> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/coordinated`);
+      return res.ok ? await res.json() : null;
     } catch {
       return null;
     }
