@@ -23,7 +23,7 @@ export const prahariApi = {
    */
   async checkHealth(): Promise<boolean> {
     try {
-      const res = await fetch(`${API_BASE_URL}/health`, { signal: AbortSignal.timeout(2500) });
+      const res = await fetch(`${API_BASE_URL}/health`, { signal: AbortSignal.timeout(10000) });
       return res.ok;
     } catch {
       return false;

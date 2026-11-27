@@ -10,8 +10,10 @@ SLANG_DICTIONARY: Dict[str, List[Dict[str, Any]]] = {
         {"terms": ["charas", "चिलम", "malana", "hashish", "bhang", "ganja", "गांजा"], "weight": 0.92},
         {"terms": ["mdma", "mephedrone", "meow meow", "ecstasy", "molly"], "weight": 0.97},
         {"terms": ["smack", "heroin", "brown sugar", "पुड़िया", "pudiya"], "weight": 0.96},
-        {"terms": ["maal", "maal available", "stuff available", "score", "consignment"], "weight": 0.88},
-        {"terms": ["5g", "10g", "pouch", "leaf", "weed", "ice", "meth"], "weight": 0.84},
+        {"terms": ["maal", "maal available", "stuff available"], "weight": 0.88},
+        {"terms": ["score", "consignment"], "weight": 0.60},
+        {"terms": ["weed", "meth", "ice"], "weight": 0.84},
+        {"terms": ["5g", "10g", "pouch", "leaf"], "weight": 0.60},
         {"terms": ["border delivery", "drop point", "packet drop", "consignment ready"], "weight": 0.89},
         {"terms": ["🔥", "❄️", "🌿", "💊", "💉", "🍁"], "weight": 0.75},
     ],
@@ -20,7 +22,8 @@ SLANG_DICTIONARY: Dict[str, List[Dict[str, Any]]] = {
         {"terms": [".32 bore", "32 bore", ".315 bore", "315 bore", "315 बोर", ".12 bore"], "weight": 0.97},
         {"terms": ["tamancha", "तमंचा", "sixer", "revolver"], "weight": 0.96},
         {"terms": ["pistol", "पिस्तौल", "glock", "beretta", "star pistol"], "weight": 0.95},
-        {"terms": ["cartridge", "cartridges", "round", "rounds", "raund", "kartus", "कारतूस"], "weight": 0.93},
+        {"terms": ["cartridge", "cartridges", "raund", "kartus", "कारतूस"], "weight": 0.93},
+        {"terms": ["round", "rounds"], "weight": 0.50},
         {"terms": ["bandook", "weapon", "magazine", "ammo", "firearm", "hathiyar", "हथियार"], "weight": 0.90},
         {"terms": ["delivery by hand", "bypass delivery", "border pickup", "shekhawati weapon"], "weight": 0.88},
         {"terms": ["🔫", "💥", "🎯", "💣"], "weight": 0.74},
@@ -28,7 +31,8 @@ SLANG_DICTIONARY: Dict[str, List[Dict[str, Any]]] = {
     "DOCUMENTS": [
         {"terms": ["fake aadhaar", "fake aadhar", "फ़र्ज़ी आधार", "duplicate aadhaar"], "weight": 0.98},
         {"terms": ["fake pan", "pan card set", "pan bypass", "फ़र्ज़ी पैन"], "weight": 0.96},
-        {"terms": ["marksheet", "degree", "diploma", "10th marksheet", "12th marksheet"], "weight": 0.94},
+        {"terms": ["10th marksheet", "12th marksheet", "fake marksheet", "fake degree"], "weight": 0.94},
+        {"terms": ["marksheet", "degree", "diploma"], "weight": 0.55},
         {"terms": ["driving license", "dl original", "rc original", "registration certificate"], "weight": 0.92},
         {"terms": ["hologram verified", "hologram", "sarkari job pass", "biometric bypass"], "weight": 0.95},
         {"terms": ["3 din me delivery", "home delivery original pvc", "pvc card set"], "weight": 0.88},
@@ -36,7 +40,8 @@ SLANG_DICTIONARY: Dict[str, List[Dict[str, Any]]] = {
     ],
     "FINANCIAL": [
         {"terms": ["kyc verified account", "fully kyc", "full kyc", "kyc account"], "weight": 0.97},
-        {"terms": ["mule account", "mule", "current account", "saving account", "खाता rent"], "weight": 0.96},
+        {"terms": ["mule account", "mule", "खाता rent"], "weight": 0.96},
+        {"terms": ["current account", "saving account"], "weight": 0.60},
         {"terms": ["atm card", "atm kit", "net-banking kit", "cheque book", "debit card kit"], "weight": 0.95},
         {"terms": ["kiraya pe", "account kiraya", "rent account", "account for rent"], "weight": 0.96},
         {"terms": ["usdt arbitrage", "crypto arbitrage", "usdt buy sell", "hawala cash"], "weight": 0.90},
@@ -44,6 +49,9 @@ SLANG_DICTIONARY: Dict[str, List[Dict[str, Any]]] = {
         {"terms": ["💳", "🏧", "💰", "🏦", "💸"], "weight": 0.73},
     ]
 }
+
+FLAG_THRESHOLD = 0.70
+
 
 def classify_text(text: str) -> Dict[str, Any]:
     lower = text.lower()
@@ -81,6 +89,10 @@ def classify_text(text: str) -> Dict[str, Any]:
 
     # Sort categories by confidence descending
     matched_categories.sort(key=lambda x: x["score"], reverse=True)
+
+    # Weak, generic words alone (e.g. "round", "degree") are not enough to flag a post.
+    matched_categories = [c for c in matched_categories if c["score"] >= FLAG_THRESHOLD]
+    all_matched_terms = [t for c in matched_categories for t in c["terms"]]
 
     if matched_categories:
         categories = [c["category"] for c in matched_categories]

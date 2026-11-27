@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 from classifier import classify_text
 from extractor import extract_entities, generate_sha256
 from graph_engine import DynamicEntityGraph
+from analytics import build_alerts, find_coordinated
 from telegram_scraper import TelegramPreviewError, scrape_public_telegram_channel
 
 app = FastAPI(
@@ -27,11 +28,14 @@ app = FastAPI(
 )
 
 _allowed_origins = [origin.strip() for origin in os.environ.get(
-    "PRAHARI_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
+    "PRAHARI_CORS_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173,https://prahari-osint.vercel.app"
 ).split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
+    # Vercel preview deployments get random subdomains; set PRAHARI_CORS_REGEX="" to disable.
+    allow_origin_regex=os.environ.get("PRAHARI_CORS_REGEX", r"https://.*\.vercel\.app") or None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -462,7 +466,7 @@ def health_check():
         "system": "PRAHARI OSINT Engine",
         "intercepts_count": len(INTERCEPTS_STORE),
         "entities_count": len(ENTITY_GRAPH.nodes),
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
 
 @app.get("/api/feed")
@@ -571,6 +575,19 @@ async def ingest_dataset_file(file: UploadFile = File(...)):
 def get_entity_graph():
     return ENTITY_GRAPH.to_dict()
 
+@app.get("/api/alerts")
+def get_alerts(limit: int = 50, risk: Optional[str] = None):
+    alerts = build_alerts(INTERCEPTS_STORE)
+    if risk:
+        alerts = [a for a in alerts if a["riskLevel"] == risk.upper()]
+    return alerts[: max(1, min(limit, 200))]
+
+
+@app.get("/api/coordinated")
+def get_coordinated_ads(threshold: float = 0.65):
+    return find_coordinated(INTERCEPTS_STORE, max(0.3, min(threshold, 0.95)))
+
+
 @app.get("/api/districts")
 def get_district_telemetry():
     return [
@@ -588,7 +605,7 @@ def get_dossier(post_id: str):
     for post in INTERCEPTS_STORE:
         if post["id"] == post_id:
             return post
-    return {"error": "Dossier not found", "postId": post_id}
+    raise HTTPException(status_code=404, detail=f"Dossier not found: {post_id}")
 
 # -----------------
 # WebSocket Real-time Stream
