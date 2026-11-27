@@ -543,8 +543,10 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
           </ComposableMap>
         </div>
 
+        {/* Bottom row: legend + focused-district card. They wrap onto two lines instead of overlapping. */}
+        <div className="absolute bottom-3.5 left-4 right-4 z-20 flex flex-wrap items-end justify-between gap-2 pointer-events-none">
         {/* Compact, Translucent Floating Pill Legend (Bottom Left) */}
-        <div className="absolute bottom-3.5 left-4 z-20 bg-[#0C101A]/85 backdrop-blur-md border border-white/[0.08] px-3.5 py-1.5 rounded-full flex items-center gap-3.5 text-[10px] font-sans text-slate-400 shadow-xl">
+        <div className="pointer-events-auto bg-[#0C101A]/85 backdrop-blur-md border border-white/[0.08] px-3.5 py-1.5 rounded-full flex items-center gap-3.5 text-[10px] font-sans text-slate-400 shadow-xl">
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.5)]" />
             <span className="text-slate-300 font-medium">Critical</span>
@@ -563,6 +565,43 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
             <span className="text-amber-300">● Phone</span>
             <span className="text-rose-300">● Crypto</span>
           </div>
+        </div>
+        {/* Selected District Callout (Sleek Mapbox Glass Bar) */}
+        {selectedDistrict && (
+          <div className="pointer-events-auto bg-[#0C101A]/90 backdrop-blur-md border border-white/[0.08] px-3 py-2 rounded-xl flex items-center gap-3.5 shadow-xl text-xs font-sans">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
+                <MapPin className="w-3.5 h-3.5 text-cyan-400" />
+              </div>
+              <div>
+                <div className="text-white font-medium text-xs flex items-center gap-1.5">
+                  <span>{selectedDistrict.name} Focused</span>
+                  <span className="font-mono text-[10px] text-cyan-400 font-semibold bg-cyan-950/40 px-1.5 py-0.2 rounded border border-cyan-500/20">
+                    {selectedDistrict.flaggedCount} cases
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                  Top Entity: {selectedDistrict.topIdentifiers[0]}
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                sound.playClick();
+                if (onOpenDossier) {
+                  onOpenDossier(selectedDistrict);
+                } else {
+                  onSelectDistrict(selectedDistrict);
+                }
+              }}
+              className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-500/40 px-3 py-1 rounded-lg text-xs font-medium transition-all shadow-sm active:translate-y-0.5 flex items-center gap-1.5"
+            >
+              <span>View Dossier</span>
+              <span className="text-[10px]">&rarr;</span>
+            </button>
+          </div>
+        )}
         </div>
 
         {/* Floating Minimal HUD Tooltip for Hovered District */}
@@ -622,42 +661,7 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
           )}
         </AnimatePresence>
 
-        {/* Selected District Callout (Sleek Mapbox Glass Bar) */}
-        {selectedDistrict && (
-          <div className="absolute bottom-3.5 right-4 z-20 bg-[#0C101A]/90 backdrop-blur-md border border-white/[0.08] px-3 py-2 rounded-xl flex items-center gap-3.5 shadow-xl text-xs font-sans">
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
-                <MapPin className="w-3.5 h-3.5 text-cyan-400" />
-              </div>
-              <div>
-                <div className="text-white font-medium text-xs flex items-center gap-1.5">
-                  <span>{selectedDistrict.name} Focused</span>
-                  <span className="font-mono text-[10px] text-cyan-400 font-semibold bg-cyan-950/40 px-1.5 py-0.2 rounded border border-cyan-500/20">
-                    {selectedDistrict.flaggedCount} cases
-                  </span>
-                </div>
-                <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                  Top Entity: {selectedDistrict.topIdentifiers[0]}
-                </div>
-              </div>
-            </div>
 
-            <button
-              onClick={() => {
-                sound.playClick();
-                if (onOpenDossier) {
-                  onOpenDossier(selectedDistrict);
-                } else {
-                  onSelectDistrict(selectedDistrict);
-                }
-              }}
-              className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-500/40 px-3 py-1 rounded-lg text-xs font-medium transition-all shadow-sm active:translate-y-0.5 flex items-center gap-1.5"
-            >
-              <span>View Dossier</span>
-              <span className="text-[10px]">&rarr;</span>
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
