@@ -83,6 +83,10 @@ class IngestionTests(unittest.TestCase):
         result = classify_text("The price is around a whitebuilding with a degreeprogram.")
         self.assertEqual(result["categories"], [])
 
+    def test_classifier_does_not_flag_generic_white_description(self):
+        result = classify_text("The price is around a white building.")
+        self.assertEqual(result["categories"], [])
+
     def test_classifier_still_matches_a_word_as_a_word(self):
         self.assertIn("DRUGS", classify_text("A small bag of ice is available")["categories"])
 

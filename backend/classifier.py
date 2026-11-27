@@ -4,7 +4,8 @@ from typing import Dict, List, Any, Optional
 # Multi-dialect slang database for Indian Law Enforcement & OSINT
 SLANG_DICTIONARY: Dict[str, List[Dict[str, Any]]] = {
     "DRUGS": [
-        {"terms": ["pure white", "white", "chitta", "chita", "चिट्टा"], "weight": 0.96},
+        # Keep the phrase, but not the generic word "white" on its own.
+        {"terms": ["pure white", "chitta", "chita", "चिट्टा"], "weight": 0.96},
         {"terms": ["afeem", "opium", "अफ़ीम", "doda post", "dodapost", "doda"], "weight": 0.94},
         {"terms": ["charas", "चिलम", "malana", "hashish", "bhang", "ganja", "गांजा"], "weight": 0.92},
         {"terms": ["mdma", "mephedrone", "meow meow", "ecstasy", "molly"], "weight": 0.97},
