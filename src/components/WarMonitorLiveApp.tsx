@@ -25,10 +25,12 @@ import {
   Check,
   FileText,
   Activity,
+  BellRing,
 } from 'lucide-react';
 import { RajasthanMap } from './RajasthanMap';
 import { LiveInterceptFeed } from './LiveInterceptFeed';
 import { ForensicDossier } from './ForensicDossier';
+import { AlertsPanel } from './AlertsPanel';
 import { EntityTopologyPage } from './EntityTopologyPage';
 import { IntelModeModal } from './IntelModeModal';
 import { UploadModal } from './UploadModal';
@@ -48,7 +50,22 @@ interface WarMonitorLiveAppProps {
   onOpenEditorial: () => void;
 }
 
-export type WarMonitorNavTab = 'COMMAND' | 'TOPOLOGY' | 'DOSSIER';
+const THREAT_RANK: Record<DistrictIntel['threatLevel'], number> = { MODERATE: 0, ELEVATED: 1, HIGH: 2, CRITICAL: 3 };
+
+// Same thresholds as the backend /api/districts. Levels only ever go UP when new posts arrive,
+// so the seeded demo map never gets recoloured downwards.
+function levelForCount(count: number): DistrictIntel['threatLevel'] {
+  return count >= 30 ? 'CRITICAL' : count >= 20 ? 'HIGH' : count >= 10 ? 'ELEVATED' : 'MODERATE';
+}
+
+function bumpDistrict(d: DistrictIntel): DistrictIntel {
+  const flaggedCount = d.flaggedCount + 1;
+  const derived = levelForCount(flaggedCount);
+  const threatLevel = THREAT_RANK[derived] > THREAT_RANK[d.threatLevel] ? derived : d.threatLevel;
+  return { ...d, flaggedCount, threatLevel };
+}
+
+export type WarMonitorNavTab = 'COMMAND' | 'TOPOLOGY' | 'DOSSIER' | 'ALERTS';
 
 export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEditorial }) => {
   const seenStreamIds = useRef<Set<string>>(new Set());
@@ -69,6 +86,24 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
   const [highlightedDistricts, setHighlightedDistricts] = useState<string[]>([]);
   const [isSimulating, setIsSimulating] = useState(true);
   const [isBackendLive, setIsBackendLive] = useState(false);
+  const [unlocatedCount, setUnlocatedCount] = useState(0);
+
+  // Every post is counted against its district exactly once, whichever path delivers it first
+  // (HTTP response, WebSocket broadcast or simulator). Posts without a known district are
+  // counted separately so the map never changes silently.
+  const countedIds = useRef<Set<string>>(new Set());
+  const districtIdsRef = useRef<Set<string>>(new Set(RAJASTHAN_DISTRICTS.map((d) => d.id)));
+  const registerPost = (post: InterceptPost, focus = false) => {
+    if (countedIds.current.has(post.id)) return;
+    countedIds.current.add(post.id);
+    if (!districtIdsRef.current.has(post.districtId)) {
+      setUnlocatedCount((c) => c + 1);
+      return;
+    }
+    setDistricts((prev) => prev.map((d) => (d.id === post.districtId ? bumpDistrict(d) : d)));
+    if (focus) setFocusDistrictId(post.districtId);
+  };
+  const [focusDistrictId, setFocusDistrictId] = useState<string | null>(null);
 
   // Active state filters
   const [activeCategory, setActiveCategory] = useState<CrimeCategory | 'ALL'>('ALL');
@@ -125,9 +160,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
         ? prev
         : [newPost, ...prev.slice(0, 49)]);
       setSelectedPost(newPost);
-      setDistricts((prev) => prev.map((d) =>
-        d.id === newPost.districtId ? { ...d, flaggedCount: d.flaggedCount + 1 } : d
-      ));
+      registerPost(newPost);
     });
 
     return () => {
@@ -135,6 +168,17 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
       unsubscribe();
     };
   }, []);
+
+  // Keep the selected district's numbers in step with live updates, and focus a district
+  // when the analyst's own scan lands in it.
+  useEffect(() => {
+    setSelectedDistrict((sd) => {
+      const targetId = focusDistrictId ?? sd?.id;
+      const fresh = districts.find((d) => d.id === targetId);
+      return fresh ?? sd;
+    });
+    if (focusDistrictId) setFocusDistrictId(null);
+  }, [districts, focusDistrictId]);
 
   // Clock formatted in UTC / IST
   useEffect(() => {
@@ -210,13 +254,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
       setPosts((prev) => [newPost, ...prev.slice(0, 49)]);
       sound.playRadarPing();
 
-      setDistricts((prev) =>
-        prev.map((d) =>
-          d.id === sim.districtId
-            ? { ...d, flaggedCount: d.flaggedCount + 1 }
-            : d
-        )
-      );
+      registerPost(newPost);
     }, 12000);
 
     return () => clearInterval(interval);
@@ -258,7 +296,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
       {/* ======================================================== */}
       <header className="h-[52px] bg-[#070A10]/85 backdrop-blur-md border-b border-white/[0.07] px-4 flex items-center justify-between z-30 shrink-0">
         {/* Left Section: Branding & Return to Editorial */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <button
             onClick={() => {
               sound.playClick();
@@ -278,14 +316,14 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
             <span className="font-sans font-bold text-sm tracking-tight text-white">
               PRAHARI
             </span>
-            <span className="text-[10px] text-slate-400 font-mono hidden md:inline uppercase">
+            <span className="text-[10px] text-slate-400 font-mono hidden 2xl:inline uppercase whitespace-nowrap">
               // Rajasthan Police OSINT
             </span>
           </div>
         </div>
 
         {/* Center Section: Sleek Linear/Vercel-inspired Glass Segmented Tab Switcher */}
-        <div className="flex items-center p-1 bg-white/[0.03] border border-white/[0.08] rounded-xl text-xs font-sans">
+        <div className="flex items-center shrink-0 whitespace-nowrap p-1 bg-white/[0.03] border border-white/[0.08] rounded-xl text-xs font-sans">
           <button
             onClick={() => {
               sound.playClick();
@@ -329,10 +367,25 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
             <Lock className="w-3.5 h-3.5 text-rose-400" />
             <span>FORENSIC DOSSIER</span>
           </button>
+
+          <button
+            onClick={() => {
+              sound.playClick();
+              setActiveNavTab('ALERTS');
+            }}
+            className={`px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
+              activeNavTab === 'ALERTS'
+                ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+            }`}
+          >
+            <BellRing className="w-3.5 h-3.5 text-amber-400" />
+            <span>ALERTS</span>
+          </button>
         </div>
 
         {/* Persistent Monospace Tactical Search Bar Trigger (Cmd + K / Ctrl + K) */}
-        <div className="flex-1 max-w-sm lg:max-w-md mx-3 hidden md:block">
+        <div className="flex-1 min-w-0 max-w-sm lg:max-w-md mx-3 hidden xl:block">
           <button
             onClick={() => {
               sound.playClick();
@@ -354,28 +407,28 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
         </div>
 
         {/* Right Section: Telemetry pill, Clock, Audio & Ingest Button */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           {/* Mobile Search Button */}
           <button
             onClick={() => {
               sound.playClick();
               setIsSearchOpen(true);
             }}
-            className="md:hidden p-1.5 text-cyan-400 hover:text-cyan-300 hover:bg-white/[0.05] rounded-lg transition-colors border border-cyan-500/30"
+            className="xl:hidden p-1.5 text-cyan-400 hover:text-cyan-300 hover:bg-white/[0.05] rounded-lg transition-colors border border-cyan-500/30"
             title="Global Search (⌘K)"
           >
             <Search className="w-3.5 h-3.5" />
           </button>
           {/* Real Backend Status Pill */}
           {isBackendLive && (
-            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-[10px] font-mono">
+            <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-[10px] font-mono whitespace-nowrap">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span>PYTHON OSINT: ONLINE</span>
             </div>
           )}
 
           {/* Status Pill */}
-          <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300 text-[11px] font-sans font-medium">
+          <div className="hidden 2xl:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300 text-[11px] font-sans font-medium whitespace-nowrap">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
             <span>SYNTHETIC DEMO DATA</span>
           </div>
@@ -383,7 +436,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
           <div className="h-4 w-px bg-white/[0.08] hidden sm:block" />
 
           {/* Clock */}
-          <span className="text-slate-400 font-mono text-[11px] hidden sm:inline">
+          <span className="text-slate-400 font-mono text-[11px] hidden xl:inline whitespace-nowrap">
             {clockUtc}
           </span>
 
@@ -406,7 +459,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
               sound.playClick();
               setIsUploadModalOpen(true);
             }}
-            className="bg-cyan-400 hover:bg-cyan-300 text-slate-950 px-3 py-1 rounded-md text-xs font-sans font-semibold transition-all shadow-[0_0_12px_rgba(34,211,238,0.25)]"
+            className="bg-cyan-400 hover:bg-cyan-300 text-slate-950 px-3 py-1 rounded-md text-xs font-sans font-semibold transition-all shadow-[0_0_12px_rgba(34,211,238,0.25)] whitespace-nowrap"
           >
             IMPORT INTEL
           </button>
@@ -438,6 +491,27 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
                 setActiveNavTab('DOSSIER');
               }}
               onReturnToCommand={() => setActiveNavTab('COMMAND')}
+            />
+          </motion.div>
+        )}
+
+        {/* VIEW C: ALERTS + COORDINATED ADS (from the backend) */}
+        {activeNavTab === 'ALERTS' && (
+          <motion.div
+            key="view-alerts"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.25 }}
+            className="w-full h-full overflow-hidden"
+          >
+            <AlertsPanel
+              posts={posts}
+              refreshKey={posts.length}
+              onOpenPost={(postId) => {
+                const p = posts.find((post) => post.id === postId);
+                if (p) setSelectedPost(p);
+                setActiveNavTab('DOSSIER');
+              }}
             />
           </motion.div>
         )}
@@ -491,6 +565,14 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
 
             {/* CENTERPIECE: Wide-Breathing Rajasthan Tactical Map (5.8 cols on lg) */}
             <div className="md:col-span-8 lg:col-span-6 h-full p-2 bg-[#070A10] overflow-hidden flex flex-col relative">
+              {unlocatedCount > 0 && (
+                <div
+                  className="absolute top-3 left-3 z-20 px-2.5 py-1 rounded-full bg-[#090C10]/90 border border-amber-400/40 text-[10px] font-mono text-amber-300"
+                  title="These posts did not name a Rajasthan district, so no district was changed on the map."
+                >
+                  {unlocatedCount} NEW POST{unlocatedCount === 1 ? '' : 'S'} WITH NO DISTRICT
+                </div>
+              )}
               {/* Highlighted Syndicate Floating Banner */}
               {highlightedDistricts.length > 0 && (
                 <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#090C10]/90 backdrop-blur-md border border-cyan-400/60 shadow-[0_0_20px_rgba(0,229,255,0.25)] text-xs font-mono">
@@ -771,6 +853,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
             const have = new Set(prev.map((p) => p.id));
             return [...newPosts.filter((p) => !have.has(p.id)), ...prev];
           });
+          newPosts.forEach((p, i) => registerPost(p, i === 0));
           if (newPosts.length > 0) setSelectedPost(newPosts[0]);
         }}
       />

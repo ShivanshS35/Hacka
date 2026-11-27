@@ -305,11 +305,13 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
                 <div className="flex items-center justify-between text-[10px] text-slate-500 pt-2 border-t border-white/[0.04] font-mono">
                   <span className="flex items-center gap-1">
                     <Clock className="w-3 h-3 text-slate-600" />
-                    {new Date(post.timestamp).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}{' '}
-                    UTC
+                    {Number.isNaN(new Date(post.timestamp).getTime())
+                      ? post.timestamp || 'just now'
+                      : `${new Date(post.timestamp).toLocaleTimeString('en-GB', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          timeZone: 'UTC',
+                        })} UTC`}
                   </span>
                   
                   {onExploreTopology && (
