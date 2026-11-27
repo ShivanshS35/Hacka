@@ -316,20 +316,20 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
             <span className="font-sans font-bold text-sm tracking-tight text-white">
               PRAHARI
             </span>
-            <span className="text-[10px] text-slate-400 font-mono hidden 2xl:inline uppercase whitespace-nowrap">
+            <span className="text-[10px] text-slate-400 font-mono hidden min-[1700px]:inline uppercase whitespace-nowrap">
               // Rajasthan Police OSINT
             </span>
           </div>
         </div>
 
         {/* Center Section: Sleek Linear/Vercel-inspired Glass Segmented Tab Switcher */}
-        <div className="flex items-center shrink-0 whitespace-nowrap p-1 bg-white/[0.03] border border-white/[0.08] rounded-xl text-xs font-sans">
+        <div className="flex items-center shrink-0 whitespace-nowrap mx-2 p-1 bg-white/[0.03] border border-white/[0.08] rounded-xl text-xs font-sans">
           <button
             onClick={() => {
               sound.playClick();
               setActiveNavTab('COMMAND');
             }}
-            className={`px-3 py-1 rounded-lg font-medium transition-all ${
+            className={`px-2.5 min-[1700px]:px-3 py-1 rounded-lg font-medium transition-all ${
               activeNavTab === 'COMMAND'
                 ? 'bg-white/[0.08] text-white shadow-sm'
                 : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
@@ -343,7 +343,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
               sound.playClick();
               setActiveNavTab('TOPOLOGY');
             }}
-            className={`px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
+            className={`px-2.5 min-[1700px]:px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
               activeNavTab === 'TOPOLOGY'
                 ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shadow-sm'
                 : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
@@ -358,7 +358,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
               sound.playClick();
               setActiveNavTab('DOSSIER');
             }}
-            className={`px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
+            className={`px-2.5 min-[1700px]:px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
               activeNavTab === 'DOSSIER'
                 ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30 shadow-sm'
                 : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
@@ -373,7 +373,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
               sound.playClick();
               setActiveNavTab('ALERTS');
             }}
-            className={`px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
+            className={`px-2.5 min-[1700px]:px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
               activeNavTab === 'ALERTS'
                 ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-sm'
                 : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
@@ -385,7 +385,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
         </div>
 
         {/* Persistent Monospace Tactical Search Bar Trigger (Cmd + K / Ctrl + K) */}
-        <div className="flex-1 min-w-0 max-w-sm lg:max-w-md mx-3 hidden xl:block">
+        <div className="flex-1 min-w-0 max-w-sm lg:max-w-md mx-3 hidden min-[1700px]:block">
           <button
             onClick={() => {
               sound.playClick();
@@ -414,7 +414,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
               sound.playClick();
               setIsSearchOpen(true);
             }}
-            className="xl:hidden p-1.5 text-cyan-400 hover:text-cyan-300 hover:bg-white/[0.05] rounded-lg transition-colors border border-cyan-500/30"
+            className="min-[1700px]:hidden p-1.5 text-cyan-400 hover:text-cyan-300 hover:bg-white/[0.05] rounded-lg transition-colors border border-cyan-500/30"
             title="Global Search (⌘K)"
           >
             <Search className="w-3.5 h-3.5" />
@@ -428,7 +428,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
           )}
 
           {/* Status Pill */}
-          <div className="hidden 2xl:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300 text-[11px] font-sans font-medium whitespace-nowrap">
+          <div className="hidden min-[1700px]:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300 text-[11px] font-sans font-medium whitespace-nowrap">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
             <span>SYNTHETIC DEMO DATA</span>
           </div>
