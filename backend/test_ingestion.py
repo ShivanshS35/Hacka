@@ -139,6 +139,33 @@ class IngestionTests(unittest.TestCase):
             with self.assertRaises(TelegramPreviewError):
                 asyncio.run(scrape_public_telegram_channel("missing_channel"))
 
+    def test_generic_words_do_not_flag_harmless_text(self):
+        text = "Price of tea, a round of drinks, white shirt, 5g network, degree from college"
+        self.assertEqual(classify_text(text)["categories"], [])
+
+    def test_current_account_is_not_rent_account(self):
+        self.assertNotIn("rent account", classify_text("I need a current account for my shop")["matched_slang"])
+
+    def test_alerts_have_stable_id_risk_and_evidence(self):
+        from analytics import build_alerts
+        post = process_and_store_post("@x", "Pure white chitta, pay UPI test.id@oksbi", source_type="ANALYST_SUBMISSION")
+        alert = next(a for a in build_alerts([post]) if a["postId"] == post["id"])
+        self.assertTrue(alert["alertId"].startswith("ALRT-"))
+        self.assertEqual(alert["evidence"]["sha256"], post["sha256"])
+        self.assertIn(alert["riskLevel"], {"LOW", "MEDIUM", "HIGH"})
+
+    def test_near_duplicate_ads_across_channels_are_grouped(self):
+        from analytics import find_coordinated
+        posts = [
+            {"id": "1", "channel": "@a", "rawText": "Fully KYC verified current account with ATM card available for rent, Jaipur"},
+            {"id": "2", "channel": "@b", "rawText": "Full KYC verifed current account with ATM card available for rent Jaipur!!"},
+            {"id": "3", "channel": "@c", "rawText": "Desi katta with 10 raund, Alwar pickup only"},
+        ]
+        groups = find_coordinated(posts)
+        self.assertEqual(len(groups), 1)
+        self.assertTrue(groups[0]["crossChannel"])
+        self.assertEqual(sorted(groups[0]["postIds"]), ["1", "2"])
+
 
 if __name__ == "__main__":
     unittest.main()

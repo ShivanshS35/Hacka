@@ -155,7 +155,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
       {
         channel: '@border_drop_01',
         text: 'Chitta delivery ready at Sri Ganganagar border point. 10g pure white score, payment via UPI raj.pay@oksbi',
-        districtId: 'ganganagar',
+        districtId: 'sri-ganganagar',
         category: 'DRUGS' as CrimeCategory,
       },
       {
@@ -766,7 +766,11 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
         onIngestPosts={(newPosts) => {
-          setPosts((prev) => [...newPosts, ...prev]);
+          // The backend also broadcasts these over the WebSocket: skip ids already present.
+          setPosts((prev) => {
+            const have = new Set(prev.map((p) => p.id));
+            return [...newPosts.filter((p) => !have.has(p.id)), ...prev];
+          });
           if (newPosts.length > 0) setSelectedPost(newPosts[0]);
         }}
       />

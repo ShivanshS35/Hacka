@@ -18,10 +18,10 @@ class DynamicEntityGraph:
                 "flaggedCount": 1
             }
         else:
+            self.nodes[node_id]["flaggedCount"] += 1  # mentions across all posts
             if channel and channel not in self.nodes[node_id]["channels"]:
                 self.nodes[node_id]["channels"].append(channel)
-                # Track distinct source channels; this is correlation context, not risk.
-                self.nodes[node_id]["flaggedCount"] += 1
+                # Same identifier in 2+ channels is the cross-channel link we surface.
                 if len(self.nodes[node_id]["channels"]) >= 2:
                     self.nodes[node_id]["isHero"] = True
 

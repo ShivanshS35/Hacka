@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { prahariApi } from './services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Preloader } from './components/Preloader';
 import { EditorialShowcase } from './components/EditorialShowcase';
@@ -7,6 +8,11 @@ import { TacticalCursor } from './components/TacticalCursor';
 
 export function App() {
   const [hasLoaded, setHasLoaded] = useState(false);
+
+  // Wake a sleeping free-tier backend during the preloader so the first real request is fast.
+  useEffect(() => {
+    prahariApi.checkHealth();
+  }, []);
   // Default to EDITORIAL so the user lands on the product showcase first!
   const [currentView, setCurrentView] = useState<'EDITORIAL' | 'COMMAND'>('EDITORIAL');
 
