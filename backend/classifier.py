@@ -27,6 +27,15 @@ SLANG_DICTIONARY: Dict[str, List[Dict[str, Any]]] = {
         {"terms": ["5g", "10g", "pouch", "leaf"], "weight": 0.60},
         {"terms": ["border delivery", "drop point", "packet drop", "consignment ready"], "weight": 0.89},
         {"terms": ["🔥", "❄️", "🌿", "💊", "💉", "🍁"], "weight": 0.75, "ambiguous": True},
+        # Emoji codes (Pune Police advisory, DEA emoji code): a combination is far more specific than one emoji.
+        {"terms": ["🍀😮‍💨", "😮‍💨🍀", "💊🍬", "❄️👃", "👃❄️", "👃😛❄️", "🍁🍁", "🌿🌿"], "weight": 0.90},
+        {"terms": ["🔌", "🛵💨", "😮‍💨", "🍃", "🍀"], "weight": 0.80, "ambiguous": True},
+        {"terms": ["mdma pills", "lsd", "lsd tabs", "og kush", "kush", "ganja", "charas", "md"], "weight": 0.93,
+         "ambiguous": True},
+        {"terms": ["party ka saman", "party saman", "party ka maal", "party stuff", "pahadi stuff", "pahadi maal",
+                   "special tablets", "neend ki dawai", "bina parchi"], "weight": 0.90, "ambiguous": True},
+        {"terms": ["drops daily", "trusted plug", "your plug"], "weight": 0.85, "ambiguous": True},
+        {"terms": ["माल", "स्मैक", "चरस", "अफीम", "डोडा पोस्त", "डोडा"], "weight": 0.90, "ambiguous": True},
     ],
     "ARMS": [
         {"terms": ["desi katta", "desi kata", "katta", "kaata", "kattaa", "कट्टा", "देशी कट्टा"], "weight": 0.98},
@@ -42,6 +51,8 @@ SLANG_DICTIONARY: Dict[str, List[Dict[str, Any]]] = {
         {"terms": ["bandook", "weapon", "magazine", "ammo", "firearm", "hathiyar", "हथियार"], "weight": 0.90, "ambiguous": True},
         {"terms": ["delivery by hand", "bypass delivery", "border pickup", "shekhawati weapon"], "weight": 0.88},
         {"terms": ["🔫", "💥", "🎯", "💣"], "weight": 0.74, "ambiguous": True},
+        {"terms": ["ghoda", "goli", "fully fitted", "trial ke saath", "asli wale", "asli wala", "7.65", "6.35",
+                   "'tools'", "'khilone'", "khilone"], "weight": 0.88, "ambiguous": True},
     ],
     "DOCUMENTS": [
         {"terms": ["fake aadhaar", "fake aadhar", "फ़र्ज़ी आधार", "duplicate aadhaar", "forged aadhaar", "forged aadhar"], "weight": 0.98},
@@ -58,6 +69,10 @@ SLANG_DICTIONARY: Dict[str, List[Dict[str, Any]]] = {
         {"terms": ["hologram"], "weight": 0.95, "ambiguous": True},
         {"terms": ["3 din me delivery", "home delivery original pvc", "pvc card set"], "weight": 0.88},
         {"terms": ["🪪", "📄", "🖨️", "✍️"], "weight": 0.72, "ambiguous": True},
+        # Real ID / certificate names: ordinary on their own, flagged only next to a forgery cue (FORGERY_RE).
+        {"terms": ["aadhaar", "aadhar", "आधार", "pan", "pan card", "voter id", "dl", "driving licence", "rc",
+                   "marksheet", "marksheets", "degree", "income certificate", "caste certificate", "certificate",
+                   "passport"], "weight": 0.90, "ambiguous": True, "needs": "forgery"},
     ],
     "FINANCIAL": [
         {"terms": ["kyc verified account", "fully kyc", "full kyc"], "weight": 0.97},
@@ -81,6 +96,19 @@ SLANG_DICTIONARY: Dict[str, List[Dict[str, Any]]] = {
         {"terms": ["daily limit 50l", "fullz kit"], "weight": 0.92},
         {"terms": ["withdrawal limit", "corporate account"], "weight": 0.92, "ambiguous": True},
         {"terms": ["💳", "🏧", "💰", "🏦", "💸"], "weight": 0.73, "ambiguous": True},
+        # Mule-account recruitment and account / card / SIM trade seen in the PS02 data.
+        {"terms": ["apna bank account do", "account do aur", "net banking details deni", "net banking details do",
+                   "bank account de do", "khata do"], "weight": 0.95},
+        {"terms": ["vintage account", "vintage accounts", "old vintage", "fresh account", "fresh accounts",
+                   "freeze free", "corporate accounts", "high limit", "ib login", "ib + token", "token + cheque book",
+                   "linked sim", "kits in bulk", "sim bound", "credit card rent", "card rent", "usdt work",
+                   "gaming work"], "weight": 0.92},
+        {"terms": ["virtual numbers for otp", "virtual number for otp", "otp numbers", "otp number", "virtual numbers",
+                   "virtual number"], "weight": 0.93},
+        {"terms": ["ca available", "ca chahiye", "current a/c", "savings / current", "kit"], "weight": 0.85,
+         "ambiguous": True},
+        # SIM cards: ordinary on their own; flagged only with a SIM-fraud cue (bulk, no KYC, someone else's name...).
+        {"terms": ["sim", "sims", "sim card", "sim cards"], "weight": 0.92, "ambiguous": True, "needs": "sim"},
     ]
 }
 
@@ -94,13 +122,28 @@ COMMERCE_RE = re.compile(
     r"(?<!\w)(available|avail|delivery|deliver|dm|whatsapp|contact|call me|call now|rates?|price|cod|"
     r"pick-?up|ready|in stock|stock|supply|for sale|sale|selling|sell|buy|rent|kiraya|kiraye|kirya|escrow|"
     r"payment|advance|upi|paytm|gpay|phonepe|dispatch|shipping|hand to hand|milega|milegi|chahiye|bhejo|"
-    r"bulk|commission|payout|mil jaye(ga|gi|nge)|milenge|mil jayenge|उपलब्ध|डिलीवरी|संपर्क)(?!\w)"
+    r"bulk|commission|payout|mil jaye(ga|gi|nge)|milenge|mil jayenge|inbox|baat karo|aa gaya|aa gayi|aaya hai|"
+    r"aaye hai|aayi hai|order|drops|उपलब्ध|डिलीवरी|संपर्क|चाहिए)(?!\w)|📲"
     r"|(?<!\w)[6-9]\d{9}(?!\d)|(?<![\w])@[A-Za-z0-9_]{4,32}|\bbc1[a-z0-9]{10,}|\b0x[a-fA-F0-9]{20,}",
     re.IGNORECASE,
 )
 # Documents: words that signal forgery. Finance: words that signal an account "kit" for sale.
 FORGERY_RE = re.compile(
-    r"(?<!\w)(fake|nakli|naqli|bogus|forged|duplicate|jugaad|bypass|original-looking|without (test|exam|licen[cs]e))(?!\w)",
+    r"(?<!\w)(fake|nakli|naqli|bogus|forged|duplicate|jugaad|bypass|original-looking|without (test|exam|licen[cs]e)|"
+    r"new or edit|edit hoga|edit|same look|100% same|bina original|without original|original jaisa|verified type|"
+    r"any university|all states|correction service|urgent bhi milega)(?!\w)",
+    re.IGNORECASE,
+)
+# SIM cards sold for fraud: bulk, without KYC, in someone else's name, pre-activated, for OTPs.
+# Mule-account recruitment and account trade: earning offers, limits, crypto settlement.
+MULE_CUE_RE = re.compile(
+    r"(?<!\w)(ghar baithe|kamao|kamaye|earn|per month|mahina|monthly|commission|high limit|limit \d+\s?(l|lakh)\+?|usdt|trc20|"
+    r"gaming|betting|freeze free|net banking|ib)(?!\w)",
+    re.IGNORECASE,
+)
+SIM_FRAUD_RE = re.compile(
+    r"(?<!\w)(bulk|wholesale|pre-?activated|bina kyc|without kyc|no kyc|ekyc done|kyc done|kisi aur ke naam|"
+    r"someone else'?s name|otp|virtual|bound|linked|ready)(?!\w)",
     re.IGNORECASE,
 )
 UNLICENSED_RE = re.compile(r"(?<!\w)((with)?out|no) (licen[cs]e|papers|permit|paperwork)(?!\w)", re.IGNORECASE)
@@ -119,20 +162,23 @@ REPORTING_RE = re.compile(
     r"(?<!\w)(police|seized|seizure|recovered|arrest(ed)?|busted|raid(ed)?|nabbed|jailed|court|verdict|ncb|news|"
     r"headline|reported|warning|beware|scam(s|mers?)?|fraudsters?|awareness|alert|how to|step by step|steps to|"
     r"apply for|renewal|renew|assistance|csc|rto|toy|replica|airsoft|story|novel|movie|film|song|lol|lost my|"
-    r"never share|prepaid|postpaid|recharge|esim|terms apply)(?!\w)",
+    r"never share|prepaid|postpaid|recharge|esim|terms apply|report karo|report|fraud hai|counselling|counseling|"
+    r"nasha chhod\w*|nasha mukt|de-?addiction|rehab|say no|bgmi|pubg|free fire|freefire|redeem code|skin|"
+    r"tournament|नशा मुक्त|सूचना|अपराध|जागरूक\w*|गुप्त)(?!\w)",
     re.IGNORECASE,
 )
 # Ordinary trade words. With these, a lone ambiguous word ("maal" = goods) is not enough to flag.
 LEGIT_TRADE_RE = re.compile(
     r"(?<!\w)(goods|wholesale|retail|showroom|garments?|clothes|clothing|fabric|furniture|groceries|grocery|"
-    r"electronics|sarees?|snacks|restaurant|tea|chai)(?!\w)",
+    r"electronics|sarees?|snacks|restaurant|tea|chai|balloons?|decorations?|cake|protein|whey|supplements?)(?!\w)",
     re.IGNORECASE,
 )
 # Phrases where an otherwise suspicious word is clearly harmless; removed before matching.
 NEGATIVE_PHRASES = re.compile(
     r"(?<!\w)(weed out|weed killer|weedkiller|weed control|weeding|ice cream|ice cubes?|ice packs?|ice age|"
     r"ice hockey|ice skating|dry ice|black ice|ice cold|printer cartridges?|ink cartridges?|pistol shooting|"
-    r"brown sugar (cookies?|cake|syrup)|molly (is|was)|the beatles)(?!\w)",
+    r"brown sugar (cookies?|cake|syrup)|molly (is|was)|the beatles|duplicate sims?( cards?)?|get a duplicate|"
+    r"apply for (a )?duplicate|duplicate copy|duplicate bill)(?!\w)",
     re.IGNORECASE,
 )
 
@@ -159,6 +205,10 @@ HOMOGLYPHS = {
     "Τ": "t", "Υ": "y", "Χ": "x",
 }
 _HOMOGLYPH_TABLE = {ord(k): v for k, v in HOMOGLYPHS.items()}
+# Devanagari (and other Indian-script) digits -> ASCII, so "९७८३१०४४७२" reads as a phone number.
+_NATIVE_DIGITS = {ord(c): str(i) for base in (0x0966, 0x09E6, 0x0A66, 0x0AE6) for i, c in enumerate(map(chr, range(base, base + 10)))}
+_BANG_IN_WORD = re.compile(r"(?<=[a-z])!(?=[a-z0-9])")
+_DOTTED_ABBR = re.compile(r"(?<![A-Za-z.])[A-Z](?:\.[A-Z]+)+(?![A-Za-z])")
 _ASCII_ALPHA = re.compile(r"[A-Za-z]")
 
 
@@ -175,8 +225,11 @@ def _fold(text: str) -> str:
     """NFKC folds fullwidth and math-bold letters to ASCII; format characters (zero-width etc.) are removed;
     look-alike Cyrillic/Greek letters inside Latin words are mapped back to Latin."""
     text = unicodedata.normalize("NFKC", text)
-    text = "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
-    return fold_homoglyphs(text).lower()
+    text = "".join(ch for ch in text if unicodedata.category(ch) != "Cf").translate(_NATIVE_DIGITS)
+    # Dotted abbreviations: "A.T.M" -> "ATM", "M.D" -> "MD", "P.A.N" -> "PAN" (upper-case letters only).
+    text = _DOTTED_ABBR.sub(lambda m: m.group(0).replace(".", ""), text)
+    # "!" between letters is a disguised "i" ("S!M", "p!st0l"), never punctuation.
+    return _BANG_IN_WORD.sub("i", fold_homoglyphs(text).lower())
 
 
 def _squash(text: str) -> str:
@@ -194,7 +247,8 @@ def _collapse_spaced_letters(text: str) -> str:
 def _decode_leet(text: str) -> str:
     def fix(m: "re.Match[str]") -> str:
         tok = m.group(0)
-        if any(c.isalpha() for c in tok) and any(c in "013457@$" for c in tok):
+        if any(c.isalpha() for c in tok) and any(c in "013457@$!" for c in tok):
+            tok = re.sub(r"(?<=[a-z])!(?=[a-z0-9])|^!(?=[a-z])", "i", tok)   # "s!m", "p!st0l"; not "available!"
             return tok.translate(_LEET)
         return tok
     return re.sub(r"\S+", fix, text)
@@ -211,10 +265,13 @@ def _compile(term: str) -> "re.Pattern[str]":
 
 # Pre-compiled once: (category, term, weight, ambiguous, pattern, obfuscation_ok, squeezed_pattern_or_None)
 _TERMS: List[Tuple[str, str, float, bool, "re.Pattern[str]", bool, Optional["re.Pattern[str]"], int]] = []
+_NEEDS: Dict[int, str] = {}   # concept id -> required cue ("forgery" / "sim") for terms that are ordinary words
 _GID = 0
 for _cat, _groups in SLANG_DICTIONARY.items():
     for _g in _groups:
         _GID += 1   # every term in a group is one concept (spelling variants), so "chitta"+"chita" is one signal
+        if _g.get("needs"):
+            _NEEDS[_GID] = _g["needs"]
         for _t in _g["terms"]:
             _norm = _normalize(_t)
             _wordlike = bool(_WORDLIKE_TERM.fullmatch(_norm))
@@ -266,6 +323,9 @@ def classify_text(text: str) -> Dict[str, Any]:
     has_forgery = seen(FORGERY_RE)
     has_account_kit = seen(ACCOUNT_KIT_RE)
     has_unlicensed = seen(UNLICENSED_RE)
+    has_sim_fraud = seen(SIM_FRAUD_RE)
+    has_mule_cue = seen(MULE_CUE_RE)
+    cue = {"forgery": has_forgery, "sim": has_sim_fraud}
     # News/warnings/shop notices need an explicit offer to sell; contact details alone do not count.
     reporting_only = seen(REPORTING_RE) and not seen(EXPLICIT_SALE_RE)
     legit_trade = seen(LEGIT_TRADE_RE)
@@ -278,6 +338,9 @@ def classify_text(text: str) -> Dict[str, Any]:
         if not hit and fuzzy is not None:
             hit = any(fuzzy.search(v) for v in squeezed)
         if not hit:
+            continue
+        # Ordinary words (an ID name, "SIM") only count next to their own cue: forgery, SIM fraud.
+        if gid in _NEEDS and not cue[_NEEDS[gid]]:
             continue
         entry = per_category.setdefault(category, {"strong": [], "ambiguous": [], "gids": set()})
         entry["ambiguous" if ambiguous else "strong"].append((term, weight))
@@ -295,6 +358,7 @@ def classify_text(text: str) -> Dict[str, Any]:
             or (has_unlicensed and category == "ARMS")
             or (has_forgery and category == "DOCUMENTS")
             or (has_account_kit and category == "FINANCIAL")
+            or ((has_sim_fraud or has_mule_cue) and category == "FINANCIAL")
         )
         if reporting_only:
             sale_context = False

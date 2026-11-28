@@ -379,3 +379,49 @@ def test_server_side_ocr_reads_text_from_an_image_when_tesseract_is_installed():
     r = client.post("/api/ingest/image", files={"file": ("ocr.png", buf.getvalue(), "image/png")}, data={"channel": "@ocr_chan"}).json()
     assert r["image"]["ocrSource"] == "server_tesseract"
     assert "chitta" in r["rawText"].lower() and r["categories"] == ["DRUGS"]
+
+
+# ----------------------------------------------------------------------------------- PS02 demo-data patterns
+# Written in the style of the PS02 demo dataset (not copied from it). Positives must flag; hard negatives must not.
+PS02_POSITIVES = [
+    ("g@nja / ch@ras / M.D sab milega 💯 Sikar side. number: 900 000 0101", "DRUGS"),
+    ("🍀😮‍💨 + 💊🍬 dono available hai Kota me 🚀 inbox karo @test_party01", "DRUGS"),
+    ("🍁🍁🍁 🛵💨 Ajmer 📲 ९००००००१०२", "DRUGS"),
+    ("Your trusted 🔌 is back ❄️👃 premium only | Jodhpur drops daily", "DRUGS"),
+    ("Weekend party ka saman ready hai 🎉😮‍💨 quality top. DM @test_party01", "DRUGS"),
+    ("p!st0l / k@tta available 💯 payment sirf USDT", "ARMS"),
+    ("Naya saman aaya hai bhai ⚙️ 'tools' fully fitted, trial ke saath", "ARMS"),
+    ("Aadh@ar / P.A.N 'correction service' 100% same look ✅", "DOCUMENTS"),
+    ("10th, 12th marksheet + degree verified type 🎓 urgent bhi milega", "DOCUMENTS"),
+    ("S!M ready 📶 bulk me 📲 ९००००००१०३", "FINANCIAL"),
+    ("eKYC done SIM kisi aur ke naam pe, seedha use karo", "FINANCIAL"),
+    ("Indian virtual numbers for OTP, instant", "FINANCIAL"),
+    ("Apna bank acc0unt do aur ghar baithe kamao, bas net banking details deni hai", "FINANCIAL"),
+    ("Fresh + old vintage accounts ready 🏦 limit 50L+, freeze free guarantee", "FINANCIAL"),
+    ("A.T.M kit + S!M bound ready hai, wholesale rate", "FINANCIAL"),
+]
+PS02_NEGATIVES = [
+    "Chitta aur smack ka nasha chhodne ke liye free counselling, district hospital",
+    "Agar koi 'current account rent' ka offer de to report karo, ye mule account fraud hai",
+    "BGMI new M416 skin 🔫🔥 kisi ke paas redeem code hai?",
+    "Diwali sale: toy guns and water pistols for kids 🔫💦",
+    "Protein ka 'maal' original hai bhai, duplicate nahi, bill ke saath",
+    "Naya SIM lene ke liye ab eKYC compulsory hai, store pe original Aadhaar le jaana",
+    "Dual SIM wala phone chahiye dadi ke liye",
+    "Apna Aadhaar PAN se link karwa lo, warna PAN inactive ho jayega",
+    "नशा मुक्त राजस्थान: चिट्टा और स्मैक युवाओं की ज़िंदगी बर्बाद कर रहे हैं। सूचना दें।",
+]
+
+
+def test_ps02_style_positives_and_hard_negatives():
+    for text, cat in PS02_POSITIVES:
+        assert classify_text(text)["categories"][:1] == [cat], text
+    for text in PS02_NEGATIVES:
+        assert not flagged(text), text
+
+
+def test_leetspeak_words_are_not_upi_ids_and_native_digits_are_phones():
+    from extractor import extract_entities
+    e = extract_entities("g@nja / ch@ras / sm@ck / Aadh@ar, pay test.pay@oksbi, call ९००००००१०४")
+    assert e["upis"] == ["test.pay@oksbi"]
+    assert e["phones"] == ["9000000104"]

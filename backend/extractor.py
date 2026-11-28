@@ -163,6 +163,18 @@ def _is_word(ch: str) -> bool:
     return ch.isalnum() or ch == "_"
 
 
+_UPI_HOST_SET = set(UPI_HOSTS.split("|")) | {"ptsbi", "ptyes", "pthdfc", "ptaxis", "mbk", "kmbl", "naviaxis", "superyes",
+                                           "okbizaxis", "kbl", "hdfc", "axis", "yes", "ubi", "uco", "idbi", "iob"}
+_UPI_HOST_SHAPE = re.compile(r"^(ok|pt|wa)[a-z]{2,}$|(bank|pay|axis|icici|sbi|hdfc|yes)$")
+
+
+def _plausible_upi_host(host: str) -> bool:
+    """Only real-looking UPI handles count. Leetspeak words such as 'ch@ras', 'Aadh@ar' or 'sm@ck' are not UPI IDs
+    (they made false identifiers and false cross-channel links on the PS02 data)."""
+    h = host.lower()
+    return h in _UPI_HOST_SET or bool(_UPI_HOST_SHAPE.search(h))
+
+
 def _find_at_matches(text: str):
     """Single linear pass over every '@' to find UPI-like handles and email spans.
 
@@ -186,7 +198,7 @@ def _find_at_matches(text: str):
         ceil = min(n, i + 1 + _UPI_MAX_RIGHT)
         while e < ceil and text[e] in _ASCII_LETTERS:
             e += 1
-        if i - s >= 2 and e - (i + 1) >= 2:
+        if i - s >= 2 and e - (i + 1) >= 2 and _plausible_upi_host(text[i + 1:e]):
             upis.append((s, e))
             last_upi_end = e
 
