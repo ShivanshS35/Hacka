@@ -112,14 +112,15 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({ posts, refreshKey, onO
               ))}
             </select>
             {(['csv', 'json'] as const).map((f) => (
-              <a
+              <button
                 key={f}
-                href={prahariApi.exportUrl(f, { risk, status: statusFilter })}
+                type="button"
+                onClick={() => { void prahariApi.downloadExport(f, { risk, status: statusFilter }); }}
                 title={`Download the ${shown.length} alerts matching these filters as ${f.toUpperCase()} (also written to the audit log)`}
                 className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-white/10 text-slate-400 hover:text-white"
               >
                 <Download className="w-3 h-3" />{f.toUpperCase()}
-              </a>
+              </button>
             ))}
             <button
               onClick={load}
