@@ -352,7 +352,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                           value={channelInput}
                           onChange={(e) => setChannelInput(e.target.value)}
                           placeholder="delhi_highs or mule_bazaar"
-                          className="w-full pl-13 pr-3 py-2 bg-[#070A10] border border-white/[0.08] focus:border-cyan-500/50 rounded-xl text-white text-xs font-mono focus:outline-none"
+                          className="w-full pl-14 pr-3 py-2 bg-[#070A10] border border-white/[0.08] focus:border-cyan-500/50 rounded-xl text-white text-xs font-mono focus:outline-none"
                         />
                       </div>
                       <button
