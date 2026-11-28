@@ -15,6 +15,19 @@ interface LiveInterceptFeedProps {
   onToggleSimulate: () => void;
 }
 
+/** Short note on why the AI did not classify a post (only shown when a key is saved). */
+function aiNote(status?: string | null): string {
+  switch (status) {
+    case 'ai_says_none': return ' · AI: not illegal trade';
+    case 'ai_low_confidence': return ' · AI: unsure';
+    case 'http_429': return ' · AI: rate limited';
+    case 'http_401': case 'http_403': return ' · AI: key rejected';
+    case 'http_404': return ' · AI: model unavailable';
+    case 'network': case 'bad_reply': case 'budget': return ' · AI: unavailable';
+    default: return '';
+  }
+}
+
 export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
   posts,
   selectedPost,
@@ -255,7 +268,11 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {post.categories.length === 0 && <span className="text-[10px] text-slate-500">Unclassified</span>}
+                    {post.categories.length === 0 && (
+                      <span className="text-[10px] text-slate-500" title={post.aiReason || undefined}>
+                        Unclassified{aiNote(post.aiStatus)}
+                      </span>
+                    )}
                     {post.categories.map((c) => (
                       <span key={c} className="flex items-center gap-1 text-[10px] font-sans text-slate-400">
                         <span className={`w-1.5 h-1.5 rounded-full ${getCategoryDot(c)}`} />

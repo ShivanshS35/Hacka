@@ -201,7 +201,7 @@ def _fake_gemini(monkeypatch, payload, counter):
     g._cache.clear(); g._recent.clear(); g._total_calls = 0
     def fake_call(text, key):
         counter.append(key)
-        return payload
+        return (payload, None) if payload is not None else (None, "http_429")
     monkeypatch.setattr(g, "_call", fake_call)
     return g
 
@@ -286,3 +286,22 @@ def test_gemini_http_path_with_model_discovery(monkeypatch):
         assert not any("AIza" in p for p in seen["paths"])             # never in the URL
     finally:
         srv.shutdown()
+
+
+def test_gemini_status_explains_outcome(monkeypatch):
+    g = _fake_gemini(monkeypatch, None, [])
+    assert g.hybrid_classify("random words here", None)["ai"]["status"] == "no_key"
+    assert g.hybrid_classify("Pure white available 5g", "AIzaFakeKey1234567890")["ai"]["status"] == "lexicon_confident"
+    assert g.hybrid_classify("kuch naya aa gaya", "AIzaFakeKey1234567890")["ai"]["status"] == "http_429"
+    g2 = _fake_gemini(monkeypatch, {"category": "NONE", "confidence": 0.9, "reason": "benign", "slang": []}, [])
+    assert g2.hybrid_classify("Happy Diwali friends", "AIzaFakeKey1234567890")["ai"]["status"] == "ai_says_none"
+
+
+def test_gemini_check_runs_real_generation(monkeypatch):
+    from fastapi.testclient import TestClient
+    import main, gemini_key
+    g = _fake_gemini(monkeypatch, {"category": "DRUGS", "confidence": 0.9, "reason": "r", "slang": ["snow"]}, [])
+    monkeypatch.setattr(main, "check_key", lambda k: {"valid": True, "reason": "ok"})
+    r = TestClient(main.app).post("/api/gemini/check", headers={"X-Gemini-Key": "AIzaFakeKey1234567890"}).json()
+    assert r["generation"]["ok"] is True and r["generation"]["sample"] == "DRUGS"
+    assert "AIza" not in str(r)

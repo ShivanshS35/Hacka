@@ -101,12 +101,16 @@ export const prahariApi = {
   },
 
   /** Ask the backend to verify the saved Gemini key (lists models; no usage charged). */
-  async checkGeminiKey(): Promise<{ valid: boolean; reason: string }> {
+  async checkGeminiKey(): Promise<{
+    valid: boolean;
+    reason: string;
+    generation?: { ok: boolean; model?: string; sample?: string; confidence?: number; status?: string };
+  }> {
     try {
       const res = await fetch(`${API_BASE_URL}/gemini/check`, {
         method: 'POST',
         headers: geminiHeaders(),
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(30000),
       });
       return await res.json();
     } catch {
