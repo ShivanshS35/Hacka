@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Search, Upload, AlertCircle, Clock, Eye, Radio, Sparkles, Network } from 'lucide-react';
 import { InterceptPost, CrimeCategory } from '../types';
 import { sound } from '../utils/audio';
+import { renderHighlightedText, formatIST } from '../utils/highlightIdentifiers';
 
 interface LiveInterceptFeedProps {
   posts: InterceptPost[];
@@ -101,27 +102,17 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
     DEMO: 'Synthetic demo',
   }[source || 'DEMO']);
 
-  // Sleek subtle keyword highlighter without harsh background boxes
-  const highlightSlang = (text: string, matchedTerms: string[]) => {
-    if (!matchedTerms || matchedTerms.length === 0) return text;
-
-    const escaped = matchedTerms
-      .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-      .join('|');
-    if (!escaped) return text;
-    const regex = new RegExp(`(${escaped})`, 'gi');
-
-    const parts = text.split(regex);
-    return parts.map((part, index) => {
-      if (regex.test(part)) {
-        return (
-          <span key={index} className="text-rose-400 font-medium tracking-tight">
-            {part}
-          </span>
-        );
-      }
-      return part;
-    });
+  const [copiedChip, setCopiedChip] = useState<string | null>(null);
+  const copyIdentifier = (e: React.MouseEvent, chipKey: string, value: string) => {
+    e.stopPropagation();
+    sound.playClick();
+    try {
+      void navigator.clipboard?.writeText(value);
+    } catch {
+      /* clipboard unavailable (insecure context) — chip still shows state */
+    }
+    setCopiedChip(chipKey);
+    setTimeout(() => setCopiedChip((prev) => (prev === chipKey ? null : prev)), 1500);
   };
 
   return (
@@ -295,49 +286,48 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
                 </div>
 
                 {/* Raw Text with Subtle Highlight */}
-                <p className="text-slate-300 font-sans text-xs leading-relaxed mb-2.5">
-                  "{highlightSlang(post.rawText, post.matchedSlang)}"
+                <p className="text-slate-300 font-sans text-xs leading-relaxed mb-2.5 break-words [overflow-wrap:anywhere]">
+                  "{renderHighlightedText(post.rawText, post.matchedSlang, post.entities)}"
                 </p>
 
-                {/* Extracted Identifiers (Minimal uniform monospace chips) */}
+                {/* Extracted identifiers: click any chip to copy the full value */}
                 <div className="flex flex-wrap gap-1.5 mb-2.5">
-                  {post.entities.upis.map((u) => (
-                    <span
-                      key={u}
-                      className="bg-white/[0.03] text-slate-300 border border-white/[0.06] px-2 py-0.5 rounded font-mono text-[10px]"
-                    >
-                      UPI: <span className="text-cyan-300 font-medium">{u}</span>
-                    </span>
-                  ))}
-                  {post.entities.phones.map((p) => (
-                    <span
-                      key={p}
-                      className="bg-white/[0.03] text-slate-300 border border-white/[0.06] px-2 py-0.5 rounded font-mono text-[10px]"
-                    >
-                      TEL: <span className="text-amber-300 font-medium">{p}</span>
-                    </span>
-                  ))}
-                  {post.entities.wallets.map((w) => (
-                    <span
-                      key={w}
-                      className="bg-white/[0.03] text-slate-300 border border-white/[0.06] px-2 py-0.5 rounded font-mono text-[10px]"
-                    >
-                      CRYPTO: <span className="text-rose-300 font-medium">{w.slice(0, 10)}…</span>
-                    </span>
-                  ))}
+                  {(
+                    [
+                      ['UPI', post.entities.upis, 'text-cyan-300'],
+                      ['TEL', post.entities.phones, 'text-amber-300'],
+                      ['CRYPTO', post.entities.wallets, 'text-purple-300'],
+                      ['BANK', post.entities.bankAccounts, 'text-emerald-300'],
+                      ['IFSC', post.entities.ifscCodes || [], 'text-emerald-300'],
+                      ['TG', post.entities.handles, 'text-sky-300'],
+                    ] as [string, string[], string][]
+                  ).flatMap(([label, list, color]) =>
+                    list.map((value) => {
+                      const chipKey = `${post.id}:${label}:${value}`;
+                      const copied = copiedChip === chipKey;
+                      return (
+                        <button
+                          key={chipKey}
+                          type="button"
+                          title={copied ? 'Copied' : `Copy ${value}`}
+                          onClick={(e) => copyIdentifier(e, chipKey, value)}
+                          className="bg-white/[0.03] hover:bg-white/[0.08] text-slate-300 border border-white/[0.06] px-2 py-0.5 rounded font-mono text-[10px] max-w-full text-left transition-colors"
+                        >
+                          {label}:{' '}
+                          <span className={`${color} font-medium break-all`}>
+                            {copied ? 'copied ✓' : value.length > 22 ? `${value.slice(0, 10)}…${value.slice(-6)}` : value}
+                          </span>
+                        </button>
+                      );
+                    })
+                  )}
                 </div>
 
                 {/* Footer Telemetry */}
                 <div className="flex items-center justify-between text-[10px] text-slate-500 pt-2 border-t border-white/[0.04] font-mono">
                   <span className="flex items-center gap-1">
                     <Clock className="w-3 h-3 text-slate-600" />
-                    {Number.isNaN(new Date(post.timestamp).getTime())
-                      ? post.timestamp || 'just now'
-                      : `${new Date(post.timestamp).toLocaleTimeString('en-GB', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          timeZone: 'UTC',
-                        })} UTC`}
+                    <span className="whitespace-nowrap">{formatIST(post.timestamp, false)}</span>
                   </span>
                   
                   {onExploreTopology && (
