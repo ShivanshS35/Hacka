@@ -305,3 +305,47 @@ def test_gemini_check_runs_real_generation(monkeypatch):
     r = TestClient(main.app).post("/api/gemini/check", headers={"X-Gemini-Key": "AIzaFakeKey1234567890"}).json()
     assert r["generation"]["ok"] is True and r["generation"]["sample"] == "DRUGS"
     assert "AIza" not in str(r)
+
+
+def test_gemini_model_fallback_reports_tried_and_available(monkeypatch):
+    """Default names 404, key can only use another model: we must find it and report what we tried when none work."""
+    import json, threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    import gemini_classifier as g
+    usable = {"name": "gemini-3-flash"}
+
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a): pass
+        def _send(self, code, obj):
+            b = json.dumps(obj).encode(); self.send_response(code)
+            self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(b)))
+            self.end_headers(); self.wfile.write(b)
+        def do_GET(self):
+            self._send(200, {"models": [
+                {"name": "models/gemini-3-flash-image", "supportedGenerationMethods": ["generateContent"]},
+                {"name": "models/gemini-3-pro", "supportedGenerationMethods": ["generateContent"]},
+                {"name": "models/gemini-3-flash", "supportedGenerationMethods": ["generateContent"]},
+                {"name": "models/embed-1", "supportedGenerationMethods": ["embedContent"]}]})
+        def do_POST(self):
+            self.rfile.read(int(self.headers["Content-Length"]))
+            if usable["name"] and self.path.endswith(f"/{usable['name']}:generateContent"):
+                inner = {"category": "DRUGS", "confidence": 0.9, "reason": "r", "slang": []}
+                return self._send(200, {"candidates": [{"content": {"parts": [{"text": json.dumps(inner)}]}}]})
+            self._send(404, {"error": "nope"})
+
+    srv = HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        monkeypatch.setattr(g, "API_ROOT", f"http://127.0.0.1:{srv.server_port}/v1beta")
+        for reset in (None,):
+            monkeypatch.setattr(g, "_resolved_model", None)
+        g._cache.clear(); g._recent.clear(); g._total_calls = 0
+        res = g.self_test("AIzaFakeKey1234567890")
+        assert res["ok"] and res["model"] == "gemini-3-flash"      # flash ranked above image/pro variants
+        usable["name"] = None                                      # now nothing works
+        monkeypatch.setattr(g, "_resolved_model", None); g._recent.clear()
+        res = g.self_test("AIzaFakeKey1234567890")
+        assert not res["ok"] and res["status"] == "http_404"
+        assert "gemini-3-flash" in res["tried"] and "gemini-3-flash" in res["available"] and "embed-1" not in res["available"]
+    finally:
+        srv.shutdown()
