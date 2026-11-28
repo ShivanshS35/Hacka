@@ -39,7 +39,12 @@ export const ApiKeyConfig: React.FC = () => {
     if (!r.valid) setMsg(r.reason);
     else if (!r.generation) setMsg('Key accepted, but the backend is an older version (redeploy needed).');
     else if (r.generation.ok) setMsg(`Key works. AI classified the test post as ${r.generation.sample} (${r.generation.model}).`);
-    else setMsg(`Key accepted but the AI call failed (${describeStatus(r.generation.status)}).`);
+    else {
+      const g = r.generation;
+      const tried = g.tried?.length ? ` Tried: ${g.tried.join(', ')}.` : '';
+      const avail = g.available?.length ? ` Models on this key: ${g.available.join(', ')}.` : '';
+      setMsg(`Key accepted but the AI call failed (${describeStatus(g.status)}).${tried}${avail}`);
+    }
     setBusy(false);
   };
 

@@ -104,7 +104,7 @@ export const prahariApi = {
   async checkGeminiKey(): Promise<{
     valid: boolean;
     reason: string;
-    generation?: { ok: boolean; model?: string; sample?: string; confidence?: number; status?: string };
+    generation?: { ok: boolean; model?: string; sample?: string; confidence?: number; status?: string; tried?: string[]; available?: string[] };
   }> {
     try {
       const res = await fetch(`${API_BASE_URL}/gemini/check`, {

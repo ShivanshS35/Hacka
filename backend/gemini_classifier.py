@@ -71,20 +71,46 @@ def _post(url: str, key: str, body: Optional[dict]) -> dict:
         return json.load(resp)
 
 
-def _discover_model(key: str) -> Optional[str]:
-    """Pick a flash model that supports generateContent when the default name is unavailable."""
-    global _resolved_model
+_available: list = []
+_last_tried: list = []
+
+
+def _list_models(key: str) -> list:
+    """Names of models that support generateContent for this key (no usage charged)."""
+    global _available
     try:
-        models = _post(f"{API_ROOT}/models?pageSize=100", key, None).get("models", [])
+        models = _post(f"{API_ROOT}/models?pageSize=1000", key, None).get("models", [])
     except Exception:
-        return None
-    for m in models:
-        name = m.get("name", "").replace("models/", "")
-        if "flash" in name and "generateContent" in m.get("supportedGenerationMethods", []) \
-                and not any(x in name for x in ("image", "tts", "live", "embedding", "thinking")):
-            _resolved_model = name
-            return name
-    return None
+        return []
+    names = [m.get("name", "").replace("models/", "") for m in models
+             if "generateContent" in m.get("supportedGenerationMethods", [])]
+    _available = names
+    return names
+
+
+def _rank(name: str) -> tuple:
+    """Prefer stable text 'flash' models; avoid preview/experimental/specialised ones."""
+    bad = any(x in name for x in ("image", "tts", "live", "embedding", "thinking", "audio", "robotics", "computer", "vision", "gemma"))
+    return (
+        0 if "flash" in name and not bad else 1 if "pro" in name and not bad else 2,
+        1 if any(x in name for x in ("preview", "exp")) else 0,
+        1 if "lite" in name else 0,
+        name,
+    )
+
+
+def _candidates(key: str) -> list:
+    out = [_resolved_model] if _resolved_model else []
+    for n in (DEFAULT_MODEL, "gemini-flash-latest"):
+        if n not in out:
+            out.append(n)
+    return out
+
+
+def _try_model(model: str, body: dict, key: str):
+    out = _post(f"{API_ROOT}/models/{model}:generateContent", key, body)
+    raw = out["candidates"][0]["content"]["parts"][0]["text"]
+    return json.loads(raw)
 
 
 def _call(text: str, key: str):
@@ -94,24 +120,34 @@ def _call(text: str, key: str):
         "contents": [{"parts": [{"text": PROMPT + text[:MAX_TEXT_CHARS]}]}],
         "generationConfig": {"temperature": 0, "maxOutputTokens": 300, "responseMimeType": "application/json"},
     }
-    model = _resolved_model or DEFAULT_MODEL
-    for attempt in range(2):
+    _last_tried.clear()
+    tried = _last_tried
+    queue = _candidates(key)
+    discovered = False
+    last = "http_404"
+    while queue and len(tried) < 5:
+        model = queue.pop(0)
+        if model in tried:
+            continue
+        tried.append(model)
         try:
-            out = _post(f"{API_ROOT}/models/{model}:generateContent", key, body)
-            raw = out["candidates"][0]["content"]["parts"][0]["text"]
-            return json.loads(raw), None
+            parsed = _try_model(model, body, key)
+            _resolved_model = model
+            return parsed, None
         except urllib.error.HTTPError as e:
-            if e.code == 404 and attempt == 0:
-                found = _discover_model(key)
-                if found and found != model:
-                    model = found
-                    continue
-            return None, f"http_{e.code}"
+            last = f"http_{e.code}"
+            if e.code == 404:
+                if not discovered:  # default names failed: ask Google which models this key can use
+                    discovered = True
+                    queue += [n for n in sorted(_list_models(key), key=_rank) if n not in tried]
+                continue
+            if e.code in (400, 429, 401, 403, 500, 503):
+                return None, last
         except (KeyError, IndexError, ValueError):
             return None, "bad_reply"
         except Exception:
             return None, "network"
-    return None, "http_404"
+    return None, last
 
 
 def _clean(parsed: Any) -> Optional[Dict[str, Any]]:
@@ -157,7 +193,8 @@ def self_test(key: str) -> Dict[str, Any]:
     model = _resolved_model or DEFAULT_MODEL
     if op:
         return {"ok": True, "model": model, "sample": op["category"], "confidence": op["confidence"]}
-    return {"ok": False, "model": model, "status": status}
+    # Model names are not secret; they let us see which names the key can actually use.
+    return {"ok": False, "model": model, "status": status, "tried": list(_last_tried), "available": _available[:12]}
 
 
 def hybrid_classify(text: str, key: Optional[str]) -> Dict[str, Any]:
