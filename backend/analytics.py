@@ -5,13 +5,15 @@ The SHA-256 is a content digest of rawText only (see README: not a legal certifi
 """
 from typing import Any, Dict, List
 
+import images
+
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 SIMILARITY_THRESHOLD = 0.65
 
 
-def risk_for(post: Dict[str, Any], identifier_channels: Dict[str, int]) -> Dict[str, Any]:
+def risk_for(post: Dict[str, Any], identifier_channels: Dict[str, int], image_channels: int = 1) -> Dict[str, Any]:
     """Transparent, additive risk score. Each reason is returned so it can be shown as evidence."""
     reasons: List[str] = []
     score = 0
@@ -31,6 +33,8 @@ def risk_for(post: Dict[str, Any], identifier_channels: Dict[str, int]) -> Dict[
     reused = [i for i in ids if identifier_channels.get(i, 0) >= 2]
     if reused:
         score += 2; reasons.append(f"identifier seen in 2+ channels ({len(reused)})")
+    if image_channels >= 2:
+        score += 2; reasons.append(f"near-identical image seen in {image_channels} channels")
     if "FINANCIAL" in cats and (ents.get("bankAccounts") or ents.get("upis")):
         score += 1; reasons.append("financial ad with account/UPI detail")
     level = "HIGH" if score >= 5 else "MEDIUM" if score >= 3 else "LOW"
@@ -46,6 +50,15 @@ def build_alerts(posts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                   *e.get("bankAccounts", [])]:
             channels_by_id.setdefault(i, set()).add(p.get("channel", ""))
     counts = {k: len(v) for k, v in channels_by_id.items()}
+    # Same picture (perceptual-hash distance <= 10) posted in other channels counts like a reused identifier.
+    with_image = [p for p in flagged if (p.get("image") or {}).get("phash")]
+    image_channels: Dict[str, int] = {}
+    for p in with_image:
+        chans = {p.get("channel", "")}
+        for q in with_image:
+            if q is not p and images.hamming(p["image"]["phash"], q["image"]["phash"]) <= images.SIMILAR_MAX_DISTANCE:
+                chans.add(q.get("channel", ""))
+        image_channels[p["id"]] = len(chans)
     alerts = []
     for p in flagged:
         day = (p.get("capturedAtUtc") or p.get("timestamp") or "")[:10] or "0000-00-00"
@@ -54,6 +67,9 @@ def build_alerts(posts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             "alertId": f"ALRT-{day}-{int(sha[:8], 16) % 10000:04d}" if sha else f"ALRT-{day}-{p['id']}",
             "postId": p["id"],
             "channel": p.get("channel"),
+            "platform": p.get("platform", "UNKNOWN"),
+            "direction": p.get("direction", "UNKNOWN"),
+            "image": p.get("image"),
             "categories": p.get("categories"),
             "confidence": p.get("confidence"),
             "matchedSlang": p.get("matchedSlang"),
@@ -66,7 +82,7 @@ def build_alerts(posts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "sha256": sha,
                 "sha256Scope": p.get("sha256Scope", "UTF-8 rawText bytes"),
             },
-            **risk_for(p, counts),
+            **risk_for(p, counts, image_channels.get(p["id"], 1)),
         })
     order = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}
     alerts.sort(key=lambda a: (order[a["riskLevel"]], -a["riskScore"]))

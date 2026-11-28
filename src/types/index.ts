@@ -9,6 +9,33 @@ export interface ExtractedEntities {
   ifscCodes?: string[];
 }
 
+export type Platform = 'TELEGRAM' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK' | 'X' | 'OLX' | 'QUIKR' | 'OTHER' | 'UNKNOWN';
+export type Direction = 'SELL' | 'BUY' | 'RENT_OFFER' | 'RENT_WANTED' | 'UNKNOWN';
+export type AnalystStatus = 'NEW' | 'REVIEWING' | 'ESCALATED' | 'FALSE_POSITIVE' | 'CLOSED';
+
+export interface ImageInfo {
+  sha256: string;
+  phash: string;
+  width: number;
+  height: number;
+  bytes: number;
+  format?: string;
+  ocrSource?: 'server_tesseract' | 'browser_ocr' | 'none';
+  note?: string;
+}
+
+export interface SimilarImage {
+  postId: string;
+  channel?: string;
+  distance: number;
+}
+
+export interface SharedIdentifier {
+  type: string;
+  value: string;
+  reason: string;
+}
+
 export interface InterceptPost {
   id: string;
   channel: string;
@@ -25,12 +52,22 @@ export interface InterceptPost {
   aiModel?: string | null;
   aiStatus?: string | null;
   entities: ExtractedEntities;
+  /** Generic handles, placeholder numbers and helplines: shown but never used for linking. */
+  sharedIdentifiers?: SharedIdentifier[];
+  platform?: Platform;
+  direction?: Direction;
+  analystStatus?: AnalystStatus;
+  analystNote?: string;
+  image?: ImageInfo | null;
+  similarImages?: SimilarImage[];
+  /** Set by the backend when this exact message was already stored (nothing new was added). */
+  duplicate?: boolean;
   districtId: string;
   districtName: string;
   sha256: string;
   views: number;
   verified: boolean;
-  sourceType?: 'LIVE_TELEGRAM_PREVIEW' | 'ANALYST_SUBMISSION' | 'UPLOADED_DATASET' | 'SYNTHETIC_DEMO' | 'LOCAL_ANALYSIS' | 'LEGACY_UNKNOWN' | 'DEMO';
+  sourceType?: 'LIVE_TELEGRAM_PREVIEW' | 'ANALYST_SUBMISSION' | 'UPLOADED_DATASET' | 'UPLOADED_IMAGE' | 'SYNTHETIC_DEMO' | 'LOCAL_ANALYSIS' | 'LEGACY_UNKNOWN' | 'DEMO';
   sourceTimestamp?: string | null;
   sourceReference?: string | null;
   capturedAtUtc?: string;
@@ -68,6 +105,7 @@ export interface EntityNode {
   id: string;
   label: string;
   type: 'post' | 'upi' | 'phone' | 'telegram' | 'crypto' | 'bank_account' | 'ifsc' | 'district';
+  flaggedCount?: number;
   category?: CrimeCategory | 'UNCLASSIFIED';
   channels?: string[];
   isHero?: boolean;
@@ -95,6 +133,13 @@ export interface ThreatAlert {
   alertId: string;
   postId: string;
   channel: string;
+  platform?: Platform;
+  direction?: Direction;
+  image?: ImageInfo | null;
+  analystStatus?: AnalystStatus;
+  analystNote?: string;
+  statusActor?: string | null;
+  statusUpdatedAt?: string | null;
   categories: CrimeCategory[];
   confidence: number;
   matchedSlang: string[];
@@ -112,4 +157,34 @@ export interface CoordinatedGroup {
   crossChannel: boolean;
   maxSimilarity: number;
   postIds: string[];
+}
+
+export interface VerifyResult {
+  postId: string;
+  match: boolean;
+  recomputed: string;
+  recorded: { column?: string; record?: string; evidenceDigest?: string };
+  textCopiesAgree: boolean;
+  algorithm: string;
+  scope: string;
+  checkedAtUtc: string;
+  note: string;
+}
+
+export interface AuditEntry {
+  id: number;
+  ts: string;
+  actor: string;
+  action: string;
+  postId: string | null;
+  detail: Record<string, unknown>;
+  prevHash: string;
+  entryHash: string;
+}
+
+export interface AuditChainStatus {
+  ok: boolean;
+  entries: number;
+  headHash?: string | null;
+  brokenAtId?: number;
 }

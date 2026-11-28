@@ -3,6 +3,7 @@ import { Search, Upload, AlertCircle, Clock, Eye, Radio, Sparkles, Network } fro
 import { InterceptPost, CrimeCategory } from '../types';
 import { sound } from '../utils/audio';
 import { renderHighlightedText, formatIST } from '../utils/highlightIdentifiers';
+import { PlatformBadge, DirectionBadge, StatusBadge } from './MetaBadges';
 
 interface LiveInterceptFeedProps {
   posts: InterceptPost[];
@@ -96,6 +97,7 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
     LIVE_TELEGRAM_PREVIEW: 'Telegram preview',
     ANALYST_SUBMISSION: 'Analyst submission',
     UPLOADED_DATASET: 'Uploaded dataset',
+    UPLOADED_IMAGE: 'Uploaded image',
     SYNTHETIC_DEMO: 'Synthetic demo',
     LOCAL_ANALYSIS: 'Local analysis',
     LEGACY_UNKNOWN: 'Legacy source unknown',
@@ -257,6 +259,9 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
                     <span className="text-[10px] text-slate-500">
                       · {post.districtName}
                     </span>
+                    <PlatformBadge platform={post.platform} />
+                    <DirectionBadge direction={post.direction} />
+                    <StatusBadge status={post.analystStatus} />
                   </div>
 
                   <div className="flex items-center gap-2">

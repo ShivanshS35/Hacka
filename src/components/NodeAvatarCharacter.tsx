@@ -16,46 +16,36 @@ export const NodeAvatarCharacter: React.FC<NodeAvatarCharacterProps> = ({
   pedestalColor,
   hideInternalLabels = false,
 }) => {
-  const isHero = Boolean(node.isHero || node.id === 'raj.pay@oksbi');
-  const isSeller = node.id === '@seller_raj';
-  const isCrypto = node.id === 'bc1qar...mdq' || node.type === 'crypto';
-  const isPhone = node.id === '9876543210' || node.type === 'phone';
+  // Appearance depends on what kind of identifier the node is, never on a specific ID, so live data is never
+  // labelled with a role (seller, broker) that nothing in the data establishes.
+  const isHero = Boolean(node.isHero);
+  const isSeller = node.type === 'telegram';
+  const isCrypto = node.type === 'crypto';
+  const isPhone = node.type === 'phone';
   const isPost = node.type === 'post';
 
-  // Role badge text and dimensions
+  // Neutral label and badge size
   let roleText = 'NODE';
   let badgeWidth = 44;
 
   if (isHero) {
-    roleText = 'HERO NEXUS';
-    badgeWidth = 52;
+    roleText = 'IN 2+ CHANNELS';
+    badgeWidth = 58;
   } else if (isSeller) {
-    roleText = 'DARK SELLER';
-    badgeWidth = 50;
+    roleText = 'HANDLE';
+    badgeWidth = 40;
   } else if (isCrypto) {
-    roleText = 'CRYPTO ESCROW';
-    badgeWidth = 56;
+    roleText = 'WALLET';
+    badgeWidth = 40;
   } else if (isPhone) {
-    roleText = 'ARMS BROKER';
-    badgeWidth = 50;
-  } else if (node.id === 'post_001') {
-    roleText = 'NARCOTICS';
-    badgeWidth = 46;
-  } else if (node.id === 'post_002') {
-    roleText = 'MULE BAZAAR';
-    badgeWidth = 50;
-  } else if (node.id === 'post_003') {
-    roleText = 'ARMS HUB';
-    badgeWidth = 44;
-  } else if (node.id === 'post_004') {
-    roleText = 'DOC FORGE';
-    badgeWidth = 46;
-  } else if (node.id === 'post_005') {
-    roleText = 'BORDER DROP';
-    badgeWidth = 50;
+    roleText = 'PHONE';
+    badgeWidth = 40;
+  } else if (node.type === 'upi') {
+    roleText = 'UPI ID';
+    badgeWidth = 40;
   } else if (isPost) {
-    roleText = 'POST INTEL';
-    badgeWidth = 46;
+    roleText = node.category && node.category !== 'UNCLASSIFIED' ? `${node.category} AD` : 'POST';
+    badgeWidth = 8 + roleText.length * 4.6;
   }
 
   // Unique SVG prefix to avoid defs collision

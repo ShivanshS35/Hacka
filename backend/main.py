@@ -11,12 +11,14 @@ from pathlib import Path
 from contextlib import closing
 from zoneinfo import ZoneInfo
 from typing import List, Dict, Any, Optional
-from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect, Header
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, WebSocket, WebSocketDisconnect, Header
+from fastapi.responses import HTMLResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
-from classifier import classify_text
+from classifier import classify_text, detect_direction
+import casework
+import images
 from gemini_classifier import hybrid_classify, self_test as gemini_self_test
 from extractor import extract_entities, generate_sha256
 from graph_engine import DynamicEntityGraph
@@ -47,6 +49,7 @@ app.add_middleware(
 # In-memory intelligence repository
 MAX_STORED_POSTS = 300   # newest posts kept in memory (all are still saved to SQLite)
 INTERCEPTS_STORE: List[Dict[str, Any]] = []
+DEDUP_INDEX: Dict[tuple, str] = {}   # (channel, sha256, sourceTimestamp) -> post id; filled after init_db()
 ENTITY_GRAPH = DynamicEntityGraph()
 ACTIVE_WEBSOCKETS: List[WebSocket] = []
 
@@ -72,6 +75,7 @@ def init_db():
         )
         """)
         conn.commit()
+    casework.init_tables(DB_PATH)
 
 def save_to_db(post: Dict[str, Any]):
     try:
@@ -121,6 +125,9 @@ def load_from_db() -> List[Dict[str, Any]]:
                     "timestampUtc": post.get("capturedAtUtc", "")
                 }
                 cursor.execute("UPDATE intercepts SET data_json = ?, sha256 = ? WHERE id = ?", (json.dumps(post), post.get("sha256", ""), post_id))
+            post.setdefault("platform", "UNKNOWN")
+            post.setdefault("direction", "UNKNOWN")
+            post.setdefault("sharedIdentifiers", [])
             posts.append(post)
         conn.commit()
         return posts
@@ -168,10 +175,45 @@ def _clean_channel(channel: str) -> str:
     cleaned = re.sub(r"[^\w@. \-]", "", str(channel)).strip().lstrip("=+-@ ")[:64].strip()
     return f"@{cleaned}" if cleaned else "@unknown"
 
-def process_and_store_post(channel: str, raw_text: str, district_hint: str = "", views: str = "0", source_type: str = "ANALYST_SUBMISSION", source_timestamp: Optional[str] = None, source_reference: Optional[str] = None, classification: Optional[Dict[str, Any]] = None, entities: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def _str(value: Any, default: str = "") -> str:
+    """Form()/Header() defaults are objects when an endpoint function is called directly (as the tests do)."""
+    return value if isinstance(value, str) else default
+
+PLATFORMS = {"TELEGRAM", "WHATSAPP", "INSTAGRAM", "FACEBOOK", "X", "OLX", "QUIKR", "OTHER", "UNKNOWN"}
+_PLATFORM_ALIASES = {"TWITTER": "X", "WA": "WHATSAPP", "IG": "INSTAGRAM", "FB": "FACEBOOK", "TG": "TELEGRAM"}
+
+def normalize_platform(value: Any) -> str:
+    v = re.sub(r"[^A-Z]", "", str(value or "").upper())
+    v = _PLATFORM_ALIASES.get(v, v)
+    if not v:
+        return "UNKNOWN"
+    return v if v in PLATFORMS else "OTHER"
+
+def link_similar_images(post: Dict[str, Any], others: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Connect this post to earlier posts whose image is a near-duplicate (perceptual-hash distance <= 10 of 64)."""
+    phash = (post.get("image") or {}).get("phash")
+    if not phash:
+        return []
+    matches = images.find_similar(phash, [o for o in others if o["id"] != post["id"]])
+    cat = (post.get("categories") or ["UNCLASSIFIED"])[0]
+    for m in matches:
+        ENTITY_GRAPH.add_edge(post["id"], m["postId"], f"SIMILAR IMAGE (d={m['distance']})", cat)
+    return matches
+
+def process_and_store_post(channel: str, raw_text: str, district_hint: str = "", views: str = "0", source_type: str = "ANALYST_SUBMISSION", source_timestamp: Optional[str] = None, source_reference: Optional[str] = None, classification: Optional[Dict[str, Any]] = None, entities: Optional[Dict[str, Any]] = None, platform: str = "UNKNOWN", image: Optional[Dict[str, Any]] = None, actor: str = "analyst", log: bool = True) -> Dict[str, Any]:
     # `classification` may be precomputed off the event loop (Gemini calls are slow network I/O).
     classification = classification or hybrid_classify(raw_text, None)
     entities = entities or extract_entities(raw_text)
+
+    # The same message imported again (same channel, same exact text, same source timestamp) is not stored twice.
+    sha256_hash = generate_sha256(raw_text)
+    clean_channel = _clean_channel(channel)
+    source_timestamp = str(source_timestamp) if source_timestamp not in (None, "") else None
+    dedup_key = (clean_channel, sha256_hash, source_timestamp)
+    existing_id = DEDUP_INDEX.get(dedup_key)
+    if existing_id:
+        existing = casework.stored_post(DB_PATH, existing_id) or {"id": existing_id}
+        return {**existing, "duplicate": True}
 
     aliases = {"bundli": "bundi", "sawaimadhopur": "sawai-madhopur", "sawai madhopur": "sawai-madhopur"}
     normalized_hint = district_hint.strip().lower().replace("_", "-")
@@ -190,14 +232,14 @@ def process_and_store_post(channel: str, raw_text: str, district_hint: str = "",
         except ValueError:
             pass
 
-    # Content digest only: deterministic SHA-256 over the exact captured text.
-    sha256_hash = generate_sha256(raw_text)
-
+    # Content digest only: deterministic SHA-256 over the exact captured text (computed above).
     district_name = district_id.replace("-", " ").title()
 
     post_record = {
         "id": post_id,
-        "channel": _clean_channel(channel),
+        "channel": clean_channel,
+        "platform": normalize_platform(platform),
+        "direction": (classification.get("direction") or detect_direction(raw_text)) if classification["categories"] else "UNKNOWN",
         "channelSubscribers": "Unknown",
         "timestamp": now.astimezone(datetime.timezone.utc).isoformat(),
         "capturedAt": now.astimezone(ZoneInfo("Asia/Kolkata")).strftime("%I:%M:%S %p IST"),
@@ -217,6 +259,7 @@ def process_and_store_post(channel: str, raw_text: str, district_hint: str = "",
             "bankAccounts": entities["bank_accounts"],
             "ifscCodes": entities["ifsc_codes"]
         },
+        "sharedIdentifiers": entities.get("shared", []),
         "districtId": district_id,
         "districtName": district_name,
         "sha256": sha256_hash,
@@ -241,8 +284,14 @@ def process_and_store_post(channel: str, raw_text: str, district_hint: str = "",
         }
     }
 
+    if image:
+        post_record["image"] = image
+
     # Persist first; a failed write must not leave an API-visible record.
     save_to_db(post_record)
+    DEDUP_INDEX[dedup_key] = post_id
+    if log:
+        casework.log_event(DB_PATH, "INGEST", post_id, actor, {"channel": clean_channel, "sourceType": source_type, "sha256": sha256_hash})
 
     # Prepend to store
     INTERCEPTS_STORE.insert(0, post_record)
@@ -251,6 +300,8 @@ def process_and_store_post(channel: str, raw_text: str, district_hint: str = "",
 
     # Update Dynamic Entity Graph
     ENTITY_GRAPH.ingest_intercept(post_record)
+    if image:
+        post_record["similarImages"] = link_similar_images(post_record, INTERCEPTS_STORE[1:])
 
     # Update District Threat Counts
     DISTRICT_COUNTS[district_id] = DISTRICT_COUNTS.get(district_id, 0) + 1
@@ -259,15 +310,22 @@ def process_and_store_post(channel: str, raw_text: str, district_hint: str = "",
 
 # Initialize SQLite database & Seed Data
 init_db()
+DEDUP_INDEX.update(casework.load_dedup_index(DB_PATH))
 existing_db_posts = load_from_db()
 DISTRICT_COUNTS.update(load_district_counts())
 if existing_db_posts:
     for p in reversed(existing_db_posts):
         INTERCEPTS_STORE.insert(0, p)
         ENTITY_GRAPH.ingest_intercept(p)
+    _earlier: List[Dict[str, Any]] = []
+    for p in reversed(existing_db_posts):   # oldest first, so each image links to the ones before it
+        if (p.get("image") or {}).get("phash"):
+            link_similar_images(p, _earlier)
+        _earlier.append(p)
 else:
     for seed in SEED_INTERCEPTS:
-        process_and_store_post(seed["channel"], seed["text"], seed["district"], source_type="SYNTHETIC_DEMO")
+        process_and_store_post(seed["channel"], seed["text"], seed["district"], source_type="SYNTHETIC_DEMO", platform="TELEGRAM", actor="system", log=False)
+    casework.log_event(DB_PATH, "SEED", None, "system", {"count": len(SEED_INTERCEPTS), "note": "synthetic demo records"})
 
 # -----------------
 # API Models
@@ -276,6 +334,8 @@ class TextScanRequest(BaseModel):
     text: str = Field(min_length=1, max_length=50_000)
     channel: Optional[str] = Field(default="@manual_ingest", max_length=256)
     districtId: Optional[str] = Field(default="", max_length=64)
+    platform: Optional[str] = Field(default="UNKNOWN", max_length=32)
+    analyst: Optional[str] = Field(default="analyst", max_length=64)
 
     @field_validator("text")
     @classmethod
@@ -283,6 +343,12 @@ class TextScanRequest(BaseModel):
         if not value.strip():
             raise ValueError("text must contain at least one non-space character")
         return value
+
+class StatusRequest(BaseModel):
+    status: str = Field(max_length=32)
+    note: Optional[str] = Field(default="", max_length=500)
+    analyst: Optional[str] = Field(default="analyst", max_length=64)
+
 
 class ChannelScanRequest(BaseModel):
     channel: str = Field(min_length=1, max_length=256)
@@ -499,7 +565,8 @@ def get_intercept_feed(limit: int = 50, category: Optional[str] = None):
     results = INTERCEPTS_STORE
     if category and category != "ALL":
         results = [p for p in results if category in p["categories"]]
-    return results[:limit]
+    statuses = casework.all_statuses(DB_PATH)
+    return [_decorate(p, statuses) for p in results[:limit]]
 
 @app.post("/api/scan/text")
 async def scan_raw_text(req: TextScanRequest, x_gemini_key: Optional[str] = Header(default=None)):
@@ -510,10 +577,12 @@ async def scan_raw_text(req: TextScanRequest, x_gemini_key: Optional[str] = Head
         district_hint=req.districtId or "",
         classification=classification,
         entities=await asyncio.to_thread(extract_entities, req.text),
+        platform=req.platform or "UNKNOWN",
+        actor=req.analyst or "analyst",
     )
-    # Broadcast to active WebSockets
-    await broadcast_new_intercept(record)
-    return record
+    if not record.get("duplicate"):
+        await broadcast_new_intercept(record)
+    return _decorate(record)
 
 @app.post("/api/scan/channel")
 async def scan_telegram_channel(req: ChannelScanRequest, x_gemini_key: Optional[str] = Header(default=None)):
@@ -523,6 +592,7 @@ async def scan_telegram_channel(req: ChannelScanRequest, x_gemini_key: Optional[
     except TelegramPreviewError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     processed_records = []
+    duplicates = 0
 
     for item in scraped_posts:
         rec = process_and_store_post(
@@ -533,13 +603,18 @@ async def scan_telegram_channel(req: ChannelScanRequest, x_gemini_key: Optional[
             source_timestamp=item.get("timestamp"),
             classification=await asyncio.to_thread(hybrid_classify, item["raw_text"], gkey),
             entities=await asyncio.to_thread(extract_entities, item["raw_text"]),
+            platform="TELEGRAM",
         )
+        if rec.get("duplicate"):
+            duplicates += 1
+            continue
         processed_records.append(rec)
         await broadcast_new_intercept(rec)
 
     return {
         "channel": req.channel,
         "scraped_count": len(processed_records),
+        "duplicates_skipped": duplicates,
         "intercepts": processed_records
     }
 
@@ -553,8 +628,9 @@ def _flatten_text(value: Any) -> Optional[str]:
     return None
 
 @app.post("/api/ingest/file")
-async def ingest_dataset_file(file: UploadFile = File(...), x_gemini_key: Optional[str] = Header(default=None)):
+async def ingest_dataset_file(file: UploadFile = File(...), platform: str = Form(""), analyst: str = Form("analyst"), x_gemini_key: Optional[str] = Header(default=None)):
     gkey = key_from_header(x_gemini_key)
+    platform, analyst = _str(platform), _str(analyst, "analyst") or "analyst"
     content = await file.read()
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File exceeds 10 MB limit")
@@ -563,6 +639,7 @@ async def ingest_dataset_file(file: UploadFile = File(...), x_gemini_key: Option
     except UnicodeDecodeError:
         raise HTTPException(status_code=400, detail="File must be UTF-8 encoded")
     new_records = []
+    duplicates = 0
     export_name = None
     filename = (file.filename or "").lower()
     if filename.endswith(".json") or raw_str.lstrip().startswith(("[", "{")):
@@ -604,16 +681,26 @@ async def ingest_dataset_file(file: UploadFile = File(...), x_gemini_key: Option
         if not text:
             continue
         channel = normalized.get("channel") or export_name or "uploaded_dataset"
-        rec = process_and_store_post(channel=str(channel), raw_text=text.strip(), views=str(normalized.get("views", "0")), source_type="UPLOADED_DATASET", source_timestamp=normalized.get("timestamp") or normalized.get("date"), source_reference=str(normalized.get("source") or file.filename or "uploaded file"), classification=await asyncio.to_thread(hybrid_classify, text.strip(), gkey), entities=await asyncio.to_thread(extract_entities, text.strip()))
+        row_platform = normalized.get("platform") or platform or ("TELEGRAM" if export_name else "")
+        rec = process_and_store_post(channel=str(channel), raw_text=text.strip(), views=str(normalized.get("views", "0")), source_type="UPLOADED_DATASET", source_timestamp=normalized.get("timestamp") or normalized.get("date"), source_reference=str(normalized.get("source") or file.filename or "uploaded file"), classification=await asyncio.to_thread(hybrid_classify, text.strip(), gkey), entities=await asyncio.to_thread(extract_entities, text.strip()), platform=str(row_platform), actor=analyst, log=False)
+        if rec.get("duplicate"):
+            duplicates += 1
+            continue
         new_records.append(rec)
         await broadcast_new_intercept(rec)
 
-    if not new_records:
+    if not new_records and not duplicates:
         raise HTTPException(status_code=422, detail="No rows with a non-empty text, message, or rawText field were found")
+
+    # One audit entry per import (not per row) keeps a 500-row import fast.
+    await asyncio.to_thread(casework.log_event, DB_PATH, "INGEST_BATCH", None, analyst, {
+        "filename": file.filename, "ingested": len(new_records), "duplicatesSkipped": duplicates,
+        "firstId": new_records[0]["id"] if new_records else None, "lastId": new_records[-1]["id"] if new_records else None})
 
     return {
         "filename": file.filename,
         "ingested_count": len(new_records),
+        "duplicates_skipped": duplicates,
         "records": new_records
     }
 
@@ -633,11 +720,8 @@ async def gemini_check(x_gemini_key: Optional[str] = Header(default=None)):
 
 
 @app.get("/api/alerts")
-def get_alerts(limit: int = 50, risk: Optional[str] = None):
-    alerts = build_alerts(INTERCEPTS_STORE)
-    if risk:
-        alerts = [a for a in alerts if a["riskLevel"] == risk.upper()]
-    return alerts[: max(1, min(limit, 200))]
+def get_alerts(limit: int = 50, risk: Optional[str] = None, status: Optional[str] = None):
+    return _alerts_with_status(risk, status)[: max(1, min(limit, 200))]
 
 
 @app.get("/api/coordinated")
@@ -661,8 +745,178 @@ def get_district_telemetry():
 def get_dossier(post_id: str):
     for post in INTERCEPTS_STORE:
         if post["id"] == post_id:
-            return post
+            return _decorate(post)
     raise HTTPException(status_code=404, detail=f"Dossier not found: {post_id}")
+
+
+@app.post("/api/dossier/{post_id}/verify")
+def verify_dossier_hash(post_id: str, analyst: str = "analyst"):
+    """Re-hash the text as stored in the database right now and compare it with the digest recorded at capture."""
+    result = casework.verify_hash(DB_PATH, post_id, analyst)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Dossier not found: {post_id}")
+    return result
+
+
+# -----------------
+# Analyst workflow, audit log, export
+# -----------------
+def _decorate(post: Dict[str, Any], statuses: Optional[Dict[str, Dict[str, Any]]] = None) -> Dict[str, Any]:
+    statuses = statuses if statuses is not None else casework.all_statuses(DB_PATH)
+    default = {"analystStatus": "NEW", "analystNote": "", "statusActor": None, "statusUpdatedAt": None}
+    return {**post, **statuses.get(post["id"], default)}
+
+
+def _alerts_with_status(risk: Optional[str] = None, status: Optional[str] = None) -> List[Dict[str, Any]]:
+    statuses = casework.all_statuses(DB_PATH)
+    alerts = [_decorate_alert(a, statuses) for a in build_alerts(INTERCEPTS_STORE)]
+    if risk:
+        alerts = [a for a in alerts if a["riskLevel"] == risk.upper()]
+    if status:
+        alerts = [a for a in alerts if a["analystStatus"] == status.upper()]
+    return alerts
+
+
+def _decorate_alert(alert: Dict[str, Any], statuses: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    default = {"analystStatus": "NEW", "analystNote": "", "statusActor": None, "statusUpdatedAt": None}
+    return {**alert, **statuses.get(alert["postId"], default)}
+
+
+@app.post("/api/posts/{post_id}/status")
+def set_post_status(post_id: str, req: StatusRequest):
+    if not any(p["id"] == post_id for p in INTERCEPTS_STORE) and casework.stored_post(DB_PATH, post_id) is None:
+        raise HTTPException(status_code=404, detail=f"Post not found: {post_id}")
+    try:
+        return casework.set_status(DB_PATH, post_id, req.status, req.note or "", req.analyst or "analyst")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/api/posts/{post_id}/history")
+def post_history(post_id: str):
+    return casework.audit_entries(DB_PATH, post_id=post_id, limit=200)
+
+
+@app.get("/api/audit")
+def audit_log(limit: int = 100):
+    return casework.audit_entries(DB_PATH, limit=limit)
+
+
+@app.get("/api/audit/verify")
+def audit_verify():
+    return casework.verify_chain(DB_PATH)
+
+
+_EXPORT_FIELDS = ["alertId", "postId", "capturedAtUtc", "platform", "channel", "sourceType", "categories", "direction",
+                  "confidence", "riskLevel", "riskScore", "riskReasons", "districtId", "phones", "upis", "handles",
+                  "wallets", "bankAccounts", "analystStatus", "analystNote", "sha256", "text"]
+
+
+def _csv_safe(value: Any) -> str:
+    """Untrusted text must not become a spreadsheet formula when the export is opened in Excel."""
+    text = "" if value is None else str(value)
+    return "'" + text if text[:1] in ("=", "+", "-", "@", "\t", "\r") else text
+
+
+def _export_row(a: Dict[str, Any]) -> Dict[str, Any]:
+    ents = a.get("entities") or {}
+    return {
+        "alertId": a["alertId"], "postId": a["postId"], "capturedAtUtc": a["evidence"].get("capturedAtUtc"),
+        "platform": a.get("platform"), "channel": a.get("channel"), "sourceType": a["evidence"].get("sourceType"),
+        "categories": a.get("categories"), "direction": a.get("direction"), "confidence": a.get("confidence"),
+        "riskLevel": a["riskLevel"], "riskScore": a["riskScore"], "riskReasons": a["riskReasons"],
+        "districtId": a.get("districtId"), "phones": ents.get("phones", []), "upis": ents.get("upis", []),
+        "handles": ents.get("handles", []), "wallets": ents.get("wallets", []), "bankAccounts": ents.get("bankAccounts", []),
+        "analystStatus": a["analystStatus"], "analystNote": a.get("analystNote", ""),
+        "sha256": a["evidence"].get("sha256"), "text": a["evidence"].get("text"),
+    }
+
+
+@app.get("/api/export")
+def export_alerts(format: str = "csv", risk: Optional[str] = None, status: Optional[str] = None, analyst: str = "analyst"):
+    rows = [_export_row(a) for a in _alerts_with_status(risk, status)]
+    casework.log_event(DB_PATH, "EXPORT", None, analyst, {"format": format, "risk": risk, "status": status, "rows": len(rows)})
+    stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    if format.lower() == "json":
+        body = json.dumps({"exportedAtUtc": stamp, "note": "Prototype export; SHA-256 values are content digests, not legal certificates", "alerts": rows}, ensure_ascii=False, indent=2)
+        return Response(body, media_type="application/json", headers={"Content-Disposition": f'attachment; filename="prahari_alerts_{stamp}.json"'})
+    if format.lower() != "csv":
+        raise HTTPException(status_code=422, detail="format must be csv or json")
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(_EXPORT_FIELDS)
+    for r in rows:
+        writer.writerow([_csv_safe("; ".join(r[f]) if isinstance(r[f], list) else r[f]) for f in _EXPORT_FIELDS])
+    return Response("\ufeff" + buf.getvalue(), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": f'attachment; filename="prahari_alerts_{stamp}.csv"'})
+
+
+# -----------------
+# Image intake (OCR + perceptual hash)
+# -----------------
+@app.post("/api/ingest/image")
+async def ingest_image(file: UploadFile = File(...), channel: str = Form("@image_upload"), platform: str = Form("UNKNOWN"),
+                       districtId: str = Form(""), ocrText: str = Form(""), analyst: str = Form("analyst"),
+                       x_gemini_key: Optional[str] = Header(default=None)):
+    channel, platform, districtId = _str(channel, "@image_upload"), _str(platform, "UNKNOWN"), _str(districtId)
+    ocrText, analyst = _str(ocrText), _str(analyst, "analyst") or "analyst"
+    data = await file.read(images.MAX_IMAGE_BYTES + 1)
+    try:
+        meta, _img = await asyncio.to_thread(images.analyse_image, data)
+    except images.ImageError as exc:
+        raise HTTPException(status_code=413 if "8 MB" in str(exc) else 400, detail=str(exc)) from exc
+    text = await asyncio.to_thread(images.server_ocr, data)
+    ocr_source = "server_tesseract"
+    if not text.strip():
+        text = (ocrText or "").strip()[:50_000]
+        ocr_source = "browser_ocr" if text else "none"
+    if not text:
+        # Keep the image (its hash can still link it to other posts), with a text unique to this file.
+        text = f"[no readable text in image sha256:{meta['sha256'][:16]}]"
+    meta["ocrSource"] = ocr_source
+    meta["note"] = "The image file itself is not stored; only its SHA-256, perceptual hash and the extracted text are kept"
+    gkey = key_from_header(x_gemini_key)
+    rec = process_and_store_post(
+        channel=channel, raw_text=text, district_hint=districtId, source_type="UPLOADED_IMAGE",
+        source_reference=file.filename or "uploaded image",
+        classification=await asyncio.to_thread(hybrid_classify, text, gkey),
+        entities=await asyncio.to_thread(extract_entities, text),
+        platform=platform, image=meta, actor=analyst)
+    if not rec.get("duplicate"):
+        await broadcast_new_intercept(rec)
+    return _decorate(rec)
+
+
+@app.get("/api/image-matches")
+def image_matches(max_distance: int = 10):
+    """Groups of posts whose images are near-identical (perceptual-hash distance), nearest pairs first."""
+    max_distance = max(0, min(max_distance, 20))
+    posts = [p for p in INTERCEPTS_STORE if (p.get("image") or {}).get("phash")]
+    parent = {p["id"]: p["id"] for p in posts}
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+    best: Dict[str, int] = {}
+    for i, a in enumerate(posts):
+        for b in posts[i + 1:]:
+            d = images.hamming(a["image"]["phash"], b["image"]["phash"])
+            if d <= max_distance:
+                parent[find(a["id"])] = find(b["id"])
+                best[a["id"]] = min(best.get(a["id"], 64), d)
+                best[b["id"]] = min(best.get(b["id"], 64), d)
+    groups: Dict[str, List[Dict[str, Any]]] = {}
+    for p in posts:
+        groups.setdefault(find(p["id"]), []).append(p)
+    out = []
+    for members in groups.values():
+        if len(members) < 2:
+            continue
+        chans = sorted({m["channel"] for m in members})
+        out.append({"size": len(members), "channels": chans, "crossChannel": len(chans) > 1,
+                    "postIds": [m["id"] for m in members], "closest": min(best.get(m["id"], 64) for m in members)})
+    out.sort(key=lambda g: (-g["crossChannel"], -g["size"]))
+    return out
 
 # -----------------
 # WebSocket Real-time Stream

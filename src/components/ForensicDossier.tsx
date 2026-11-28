@@ -24,7 +24,8 @@ import {
   Sparkles,
   ShieldAlert
 } from 'lucide-react';
-import { InterceptPost } from '../types';
+import { InterceptPost, VerifyResult } from '../types';
+import { prahariApi } from '../services/api';
 import { sound } from '../utils/audio';
 import { generateDossierPDF } from '../utils/pdfGenerator';
 import { INITIAL_INTERCEPTS } from '../data/mockData';
@@ -50,6 +51,9 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
   const [activePost, setActivePost] = useState<InterceptPost>(() => post || caseList[0]);
   const [viewMode, setViewMode] = useState<DossierViewMode>('BINDER');
   const [copied, setCopied] = useState(false);
+  const [verify, setVerify] = useState<
+    { state: 'busy' } | { state: 'ok'; result: VerifyResult } | { state: 'missing' } | { state: 'offline' } | null
+  >(null);
   const [expandedEvidence, setExpandedEvidence] = useState<{
     title: string;
     tag: string;
@@ -81,11 +85,24 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
     if (onSelectPost) onSelectPost(nextPost);
   };
 
+  React.useEffect(() => {
+    setVerify(null);
+  }, [activePost.id]);
+
   const handleCopyHash = () => {
     sound.playSuccessChime();
     navigator.clipboard.writeText(activePost.sha256);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Asks the backend to re-hash the text it has stored now and compare it with the digest recorded at capture.
+  const handleVerifyHash = async () => {
+    sound.playClick();
+    setVerify({ state: 'busy' });
+    const out = await prahariApi.verifyHash(activePost.id);
+    if (out.status === 'ok' && out.result) setVerify({ state: 'ok', result: out.result });
+    else setVerify({ state: out.status === 'not_found' ? 'missing' : 'offline' });
   };
 
   const handleWaxSealClick = () => {
@@ -455,13 +472,44 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                         </div>
                       </div>
 
-                      <button
-                        onClick={handleCopyHash}
-                        className="mt-2 w-full py-1 rounded bg-[#E4D5BC] hover:bg-[#D5C4A6] text-[#4A321E] border border-[#B39F80] text-[9px] font-mono font-semibold flex items-center justify-center gap-1 transition-colors"
-                      >
-                        {copied ? <Check className="w-2.5 h-2.5 text-emerald-700" /> : <Copy className="w-2.5 h-2.5" />}
-                        <span>{copied ? 'HASH COPIED TO CLIPBOARD' : 'VERIFY & COPY HASH'}</span>
-                      </button>
+                      <div className="mt-2 grid grid-cols-2 gap-1.5">
+                        <button
+                          onClick={handleVerifyHash}
+                          disabled={verify?.state === 'busy'}
+                          title="Re-hash the text stored on the server right now and compare it with the digest recorded at capture"
+                          className="py-1 rounded bg-[#E4D5BC] hover:bg-[#D5C4A6] disabled:opacity-60 text-[#4A321E] border border-[#B39F80] text-[9px] font-mono font-semibold flex items-center justify-center gap-1 transition-colors"
+                        >
+                          <ShieldCheck className="w-2.5 h-2.5" />
+                          <span>{verify?.state === 'busy' ? 'CHECKING…' : 'RE-VERIFY HASH'}</span>
+                        </button>
+                        <button
+                          onClick={handleCopyHash}
+                          className="py-1 rounded bg-[#E4D5BC] hover:bg-[#D5C4A6] text-[#4A321E] border border-[#B39F80] text-[9px] font-mono font-semibold flex items-center justify-center gap-1 transition-colors"
+                        >
+                          {copied ? <Check className="w-2.5 h-2.5 text-emerald-700" /> : <Copy className="w-2.5 h-2.5" />}
+                          <span>{copied ? 'COPIED' : 'COPY HASH'}</span>
+                        </button>
+                      </div>
+                      {verify && verify.state !== 'busy' && (
+                        <div
+                          className={`mt-1.5 p-1.5 rounded border text-[8.5px] font-mono leading-tight ${
+                            verify.state === 'ok' && verify.result.match
+                              ? 'bg-emerald-50 border-emerald-600/50 text-emerald-900'
+                              : verify.state === 'ok'
+                              ? 'bg-red-50 border-red-600/60 text-red-900'
+                              : 'bg-amber-50 border-amber-600/50 text-amber-900'
+                          }`}
+                        >
+                          {verify.state === 'ok' && verify.result.match && (
+                            <>MATCH: the stored text still hashes to the recorded digest ({new Date(verify.result.checkedAtUtc).toLocaleTimeString('en-IN')}). This shows the text was not changed since capture; it does not show who captured it or when.</>
+                          )}
+                          {verify.state === 'ok' && !verify.result.match && (
+                            <>MISMATCH: the stored text no longer hashes to the recorded digest{!verify.result.textCopiesAgree ? ' (the two stored copies of the text also differ)' : ''}. Treat this record as altered.</>
+                          )}
+                          {verify.state === 'missing' && <>Not on the server: this is a local sample record, so there is no stored copy to check.</>}
+                          {verify.state === 'offline' && <>Backend not reachable (a free instance can take about a minute to wake up). Try again.</>}
+                        </div>
+                      )}
                     </div>
                   </div>
 

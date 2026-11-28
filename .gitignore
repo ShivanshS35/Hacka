@@ -31,3 +31,6 @@ __pycache__
 *.pyc
 *.db
 .env
+
+# Copied from node_modules by scripts/copy-ocr-assets.mjs
+public/tesseract

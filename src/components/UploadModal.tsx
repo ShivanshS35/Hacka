@@ -11,8 +11,10 @@ import {
   Search,
   Cpu,
   Layers,
+  Image as ImageIcon,
 } from 'lucide-react';
-import { InterceptPost } from '../types';
+import { InterceptPost, Platform } from '../types';
+import { PLATFORMS } from './MetaBadges';
 import { prahariApi } from '../services/api';
 import { sound } from '../utils/audio';
 import { classifyText, generateSHA256 } from '../utils/detectionEngine';
@@ -23,7 +25,28 @@ interface UploadModalProps {
   onIngestPosts: (newPosts: InterceptPost[]) => void;
 }
 
-type IngestMode = 'CHANNEL' | 'TEXT' | 'FILE' | 'BENCHMARK';
+type IngestMode = 'CHANNEL' | 'TEXT' | 'FILE' | 'IMAGE' | 'BENCHMARK';
+
+/** Read the text in an image in the browser (tesseract.js is loaded only when this is used). */
+async function ocrInBrowser(file: File, onProgress: (pct: number) => void): Promise<string> {
+  const { createWorker } = await import('tesseract.js');
+  // Engine and English model are served from this site (public/tesseract), so no third-party CDN is involved.
+  const base = `${import.meta.env.BASE_URL}tesseract`;
+  const worker = await createWorker('eng', 1, {
+    workerPath: `${base}/worker.min.js`,
+    corePath: `${base}/core`,
+    langPath: `${base}/lang`,
+    logger: (m: { status: string; progress: number }) => {
+      if (m.status === 'recognizing text') onProgress(Math.round(m.progress * 100));
+    },
+  });
+  try {
+    const { data } = await worker.recognize(file);
+    return (data.text || '').trim();
+  } finally {
+    await worker.terminate();
+  }
+}
 
 export const UploadModal: React.FC<UploadModalProps> = ({
   isOpen,
@@ -37,8 +60,63 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [successCount, setSuccessCount] = useState<number | null>(null);
+  const [platform, setPlatform] = useState<Platform>('UNKNOWN');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageText, setImageText] = useState('');
+  const [ocrPct, setOcrPct] = useState<number | null>(null);
 
   if (!isOpen) return null;
+
+  const finish = (count: number, note?: string) => {
+    setSuccessCount(count);
+    if (note) setStatusMessage(note);
+    setTimeout(() => {
+      setSuccessCount(null);
+      setStatusMessage(null);
+      onClose();
+    }, note ? 2600 : 1500);
+  };
+
+  // 5. Screenshot / photo: OCR in the browser, then the backend hashes it and compares it with earlier images
+  const handleImageChosen = async (file: File) => {
+    setImageFile(file);
+    setImageText('');
+    setOcrPct(0);
+    setStatusMessage('Reading the text in the image (runs in your browser; the first run downloads about 10 MB of language data)...');
+    try {
+      const text = await ocrInBrowser(file, setOcrPct);
+      setImageText(text);
+      setStatusMessage(text ? 'Text read from the image. Check it, fix any mistakes, then submit.' : 'No text found in the image. You can type what it says, or submit it for image matching only.');
+    } catch {
+      setStatusMessage('In-browser text reading is unavailable (no internet?). Type the text from the image, or submit it for image matching only.');
+    } finally {
+      setOcrPct(null);
+    }
+  };
+
+  const handleSubmitImage = async () => {
+    if (!imageFile) return;
+    setIsProcessing(true);
+    setStatusMessage('Uploading image: hashing, reading text and comparing with earlier images...');
+    try {
+      sound.playClick();
+      const rec = await prahariApi.ingestImage(imageFile, { channel: channelInput.trim() ? `@${channelInput.trim().replace(/^@/, '')}` : '@image_upload', platform, ocrText: imageText });
+      sound.playSuccessChime();
+      if (rec.duplicate) {
+        finish(0, 'This exact image from this channel is already stored, so nothing new was added.');
+      } else {
+        onIngestPosts([rec]);
+        const sims = rec.similarImages?.length ?? 0;
+        finish(1, sims > 0 ? `Near-identical image found in ${sims} earlier post${sims > 1 ? 's' : ''}; a SIMILAR IMAGE link was added to the graph.` : undefined);
+      }
+      setImageFile(null);
+      setImageText('');
+    } catch (err) {
+      setStatusMessage(err instanceof Error ? err.message : 'Image upload failed.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   // 1. Live Telegram Channel Scraping
   const handleScanChannel = async () => {
@@ -79,18 +157,18 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       const res = await prahariApi.scanText({
         text: rawTextInput.trim(),
         channel: '@live_analyst_input',
+        platform,
       });
 
       if (res) {
         sound.playSuccessChime();
-        onIngestPosts([res]);
-        setSuccessCount(1);
-        setTimeout(() => {
-          setSuccessCount(null);
-          setStatusMessage(null);
-          setRawTextInput('');
-          onClose();
-        }, 1500);
+        if (res.duplicate) {
+          finish(0, 'This exact text from this channel is already stored, so nothing new was added.');
+        } else {
+          onIngestPosts([res]);
+          finish(1);
+        }
+        setRawTextInput('');
       }
     } catch {
       // Fallback to local client classifier
@@ -146,16 +224,14 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
     try {
       sound.playClick();
-      const res = await prahariApi.ingestFile(file);
+      const res = await prahariApi.ingestFile(file, platform);
+      const skipped = res?.duplicates_skipped ?? 0;
       if (res && res.records && res.records.length > 0) {
         sound.playSuccessChime();
         onIngestPosts(res.records);
-        setSuccessCount(res.records.length);
-        setTimeout(() => {
-          setSuccessCount(null);
-          setStatusMessage(null);
-          onClose();
-        }, 1500);
+        finish(res.records.length, skipped > 0 ? `${skipped} message${skipped > 1 ? 's were' : ' was'} already stored and skipped.` : undefined);
+      } else if (skipped > 0) {
+        finish(0, `All ${skipped} messages in this file were already stored, so nothing new was added.`);
       } else {
         throw new Error('No valid records parsed');
       }
@@ -184,7 +260,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   // 4. One-Click R4C Benchmark Dataset
   const handleLoadBenchmark = async () => {
     setIsProcessing(true);
-    setStatusMessage('Injecting 4 authenticated R4C benchmark crime intercepts...');
+    setStatusMessage('Injecting 4 synthetic benchmark posts...');
     sound.playClick();
 
     const sampleTexts = [
@@ -214,8 +290,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     for (let i = 0; i < sampleTexts.length; i++) {
       const s = sampleTexts[i];
       try {
-        const res = await prahariApi.scanText({ text: s.text, channel: s.channel, districtId: s.districtId });
-        newPosts.push(res);
+        const res = await prahariApi.scanText({ text: s.text, channel: s.channel, districtId: s.districtId, platform: 'TELEGRAM' });
+        if (!res.duplicate) newPosts.push(res);
       } catch {
         const detected = classifyText(s.text);
         const hash = await generateSHA256(s.text);
@@ -242,14 +318,13 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     }
 
     sound.playSuccessChime();
-    onIngestPosts(newPosts);
-    setSuccessCount(newPosts.length);
+    if (newPosts.length > 0) onIngestPosts(newPosts);
     setIsProcessing(false);
-    setTimeout(() => {
-      setSuccessCount(null);
-      setStatusMessage(null);
-      onClose();
-    }, 1500);
+    if (newPosts.length === 0) {
+      finish(0, 'The benchmark posts are already stored, so nothing new was added.');
+    } else {
+      finish(newPosts.length);
+    }
   };
 
   return (
@@ -287,6 +362,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             { key: 'CHANNEL', label: 'Telegram Scraper', icon: Radio },
             { key: 'TEXT', label: 'Raw Slang Scanner', icon: Send },
             { key: 'FILE', label: 'CSV / JSON Export', icon: Upload },
+            { key: 'IMAGE', label: 'Screenshot / Image', icon: ImageIcon },
             { key: 'BENCHMARK', label: 'R4C Benchmark', icon: Sparkles },
           ].map((tab) => {
             const Icon = tab.icon;
@@ -317,10 +393,10 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             <div className="py-8 text-center space-y-3">
               <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto animate-bounce" />
               <div className="text-emerald-400 font-bold text-base">
-                INGESTION SUCCESSFUL — {successCount} INTERCEPTS CLASSIFIED
+                {successCount > 0 ? `IMPORT COMPLETE: ${successCount} NEW POST${successCount > 1 ? 'S' : ''} SCANNED` : 'NOTHING NEW TO ADD'}
               </div>
               <p className="text-slate-400 text-xs">
-                Entities extracted (UPI, Phone, Crypto), SHA-256 hashed, and mapped onto the Rajasthan Tactical Grid.
+                {statusMessage || 'Identifiers extracted (UPI, phone, wallet, handle), a SHA-256 content digest recorded, and the district matched from the text.'}
               </p>
             </div>
           ) : (
@@ -461,7 +537,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                   <div className="p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl space-y-1">
                     <div className="text-white font-medium">R4C Hackathon Pre-loaded Benchmark</div>
                     <p className="text-slate-400 text-[11px] leading-relaxed">
-                      Injects 4 multi-category authentic test intercepts spanning Narcotics (Bikaner), Illegal Arms (Sikar), Mule Bank Kits (Jaipur), and Fake Aadhaar/DL Documents (Udaipur).
+                      Injects 4 synthetic test posts spanning Narcotics (Bikaner), Illegal Arms (Sikar), Mule Bank Kits (Jaipur), and Fake Aadhaar/DL Documents (Udaipur).
                     </p>
                   </div>
 
@@ -473,6 +549,79 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     <Sparkles className="w-4 h-4" />
                     <span>{isProcessing ? 'Injecting...' : 'Load R4C Benchmark Dataset (One-Click)'}</span>
                   </button>
+                </div>
+              )}
+
+              {/* Tab 5: image */}
+              {activeMode === 'IMAGE' && (
+                <div className="space-y-3">
+                  <div className="p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl space-y-1">
+                    <div className="text-slate-200 font-medium">Ad screenshots and photos</div>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      The text in the picture is read in your browser and scanned like any post. The image gets a SHA-256 and a perceptual
+                      hash, so the same picture re-posted in another channel is linked even if it was resized or re-compressed. The image
+                      file itself is not stored.
+                    </p>
+                  </div>
+                  <label className="block border-2 border-dashed border-white/[0.1] hover:border-cyan-500/40 rounded-xl p-5 text-center cursor-pointer bg-[#070A10]">
+                    <ImageIcon className="w-8 h-8 text-cyan-400/80 mx-auto mb-1.5" />
+                    <span className="text-slate-200 font-medium">{imageFile ? imageFile.name : 'Choose a PNG, JPG or WebP (max 8 MB)'}</span>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"
+                      className="hidden"
+                      onChange={(e) => e.target.files?.[0] && handleImageChosen(e.target.files[0])}
+                    />
+                  </label>
+                  {ocrPct !== null && (
+                    <div className="h-1.5 rounded bg-white/[0.06] overflow-hidden">
+                      <div className="h-full bg-cyan-400 transition-all" style={{ width: `${ocrPct}%` }} />
+                    </div>
+                  )}
+                  {imageFile && (
+                    <>
+                      <label className="text-[11px] text-slate-400 font-mono">TEXT IN THE IMAGE (EDIT IF OCR GOT IT WRONG):</label>
+                      <textarea
+                        rows={3}
+                        value={imageText}
+                        onChange={(e) => setImageText(e.target.value)}
+                        className="w-full p-3 bg-[#070A10] border border-white/[0.08] focus:border-cyan-500/50 rounded-xl text-white text-xs leading-relaxed focus:outline-none resize-none"
+                      />
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={channelInput}
+                          onChange={(e) => setChannelInput(e.target.value)}
+                          placeholder="channel / account the image came from"
+                          className="flex-1 px-3 py-2 bg-[#070A10] border border-white/[0.08] rounded-xl text-white text-xs font-mono focus:outline-none"
+                        />
+                        <button
+                          onClick={handleSubmitImage}
+                          disabled={isProcessing || ocrPct !== null}
+                          className="bg-cyan-400 hover:bg-cyan-300 disabled:opacity-50 text-slate-950 px-4 py-2 rounded-xl font-semibold shrink-0"
+                        >
+                          {isProcessing ? 'Uploading...' : 'Scan image'}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Platform the material came from (recorded on each post) */}
+              {(activeMode === 'TEXT' || activeMode === 'FILE' || activeMode === 'IMAGE') && (
+                <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono">
+                  <label htmlFor="platform-select">SOURCE PLATFORM:</label>
+                  <select
+                    id="platform-select"
+                    value={platform}
+                    onChange={(e) => setPlatform(e.target.value as Platform)}
+                    className="bg-[#070A10] border border-white/[0.1] rounded-lg px-2 py-1 text-slate-200 focus:outline-none"
+                  >
+                    {PLATFORMS.map((p) => (
+                      <option key={p} value={p}>{p === 'UNKNOWN' ? 'Not specified' : p}</option>
+                    ))}
+                  </select>
                 </div>
               )}
 

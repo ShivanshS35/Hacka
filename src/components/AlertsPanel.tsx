@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { BellRing, Copy, Check, Link2, RefreshCw, ShieldAlert } from 'lucide-react';
-import { prahariApi } from '../services/api';
-import { CoordinatedGroup, InterceptPost, ThreatAlert } from '../types';
+import { BellRing, Copy, Check, Link2, RefreshCw, ShieldAlert, Download, ScrollText, Image as ImageIcon } from 'lucide-react';
+import { prahariApi, getAnalystName, setAnalystName } from '../services/api';
+import { AnalystStatus, AuditChainStatus, AuditEntry, CoordinatedGroup, InterceptPost, ThreatAlert } from '../types';
+import { DirectionBadge, PlatformBadge, STATUSES, STATUS_LABEL } from './MetaBadges';
 
 interface AlertsPanelProps {
   posts: InterceptPost[];
@@ -23,15 +24,35 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({ posts, refreshKey, onO
   const [offline, setOffline] = useState(false);
   const [risk, setRisk] = useState<'ALL' | ThreatAlert['riskLevel']>('ALL');
   const [copied, setCopied] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'ALL' | AnalystStatus>('ALL');
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+  const [analyst, setAnalyst] = useState(getAnalystName());
+  const [audit, setAudit] = useState<AuditEntry[] | null>(null);
+  const [chain, setChain] = useState<AuditChainStatus | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [a, g] = await Promise.all([prahariApi.getAlerts(), prahariApi.getCoordinated()]);
+    const [a, g, au, ch] = await Promise.all([
+      prahariApi.getAlerts(),
+      prahariApi.getCoordinated(),
+      prahariApi.getAudit(6),
+      prahariApi.verifyAuditChain(),
+    ]);
     setOffline(a === null);
     setAlerts(a);
     setGroups(g);
+    setAudit(au);
+    setChain(ch);
     setLoading(false);
   }, []);
+
+  const changeStatus = async (a: ThreatAlert, status: AnalystStatus) => {
+    setSaving(a.postId);
+    const ok = await prahariApi.setStatus(a.postId, status, notes[a.postId] ?? a.analystNote ?? '');
+    setSaving(null);
+    if (ok) await load();
+  };
 
   useEffect(() => {
     load();
@@ -47,7 +68,9 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({ posts, refreshKey, onO
     setTimeout(() => setCopied(null), 1500);
   };
 
-  const shown = (alerts ?? []).filter((a) => risk === 'ALL' || a.riskLevel === risk);
+  const shown = (alerts ?? []).filter(
+    (a) => (risk === 'ALL' || a.riskLevel === risk) && (statusFilter === 'ALL' || (a.analystStatus ?? 'NEW') === statusFilter)
+  );
   const textFor = (id: string) => posts.find((p) => p.id === id)?.rawText ?? '';
 
   return (
@@ -73,6 +96,27 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({ posts, refreshKey, onO
               >
                 {r}
               </button>
+            ))}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as 'ALL' | AnalystStatus)}
+              title="Filter by analyst status"
+              className="bg-[#070A10] border border-white/10 rounded px-1.5 py-0.5 text-slate-300 focus:outline-none"
+            >
+              <option value="ALL">ANY STATUS</option>
+              {STATUSES.map((st) => (
+                <option key={st} value={st}>{STATUS_LABEL[st].text}</option>
+              ))}
+            </select>
+            {(['csv', 'json'] as const).map((f) => (
+              <a
+                key={f}
+                href={prahariApi.exportUrl(f, { risk, status: statusFilter })}
+                title={`Download the ${shown.length} alerts matching these filters as ${f.toUpperCase()} (also written to the audit log)`}
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-white/10 text-slate-400 hover:text-white"
+              >
+                <Download className="w-3 h-3" />{f.toUpperCase()}
+              </a>
             ))}
             <button
               onClick={load}
@@ -103,6 +147,13 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({ posts, refreshKey, onO
                 <span className="text-cyan-300">{a.alertId}</span>
                 <span className="text-slate-400">{a.channel}</span>
                 {a.districtId !== 'unknown' && <span className="text-slate-500">· {a.districtId}</span>}
+                <PlatformBadge platform={a.platform} />
+                <DirectionBadge direction={a.direction} />
+                {a.image && (
+                  <span title={`Image ${a.image.sha256.slice(0, 12)}…, ${a.image.width}×${a.image.height}`} className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-white/10 text-slate-300 text-[9px]">
+                    <ImageIcon className="w-3 h-3" />IMAGE
+                  </span>
+                )}
                 <span className="ml-auto text-slate-400">{Math.round(a.confidence * 100)}% match</span>
               </div>
               <p className="mt-2 text-[13px] leading-snug text-slate-200 break-words">{a.evidence.text}</p>
@@ -121,6 +172,40 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({ posts, refreshKey, onO
               {a.riskReasons.length > 0 && (
                 <p className="mt-2 text-[11px] text-slate-500">
                   Why: {a.riskReasons.join(' · ')}
+                </p>
+              )}
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] font-mono">
+                <span className="text-slate-500">STATUS</span>
+                {STATUSES.map((st) => {
+                  const active = (a.analystStatus ?? 'NEW') === st;
+                  return (
+                    <button
+                      key={st}
+                      disabled={saving === a.postId}
+                      onClick={() => !active && changeStatus(a, st)}
+                      className={`px-1.5 py-0.5 rounded border transition-colors ${
+                        active ? STATUS_LABEL[st].cls : 'text-slate-500 border-white/10 hover:text-white'
+                      }`}
+                    >
+                      {STATUS_LABEL[st].text}
+                    </button>
+                  );
+                })}
+                <input
+                  value={notes[a.postId] ?? a.analystNote ?? ''}
+                  onChange={(e) => setNotes((n) => ({ ...n, [a.postId]: e.target.value }))}
+                  onBlur={() => {
+                    const draft = notes[a.postId];
+                    if (draft !== undefined && draft !== (a.analystNote ?? '')) changeStatus(a, a.analystStatus ?? 'NEW');
+                  }}
+                  maxLength={500}
+                  placeholder="note (saved when you click away)"
+                  className="flex-1 min-w-[140px] bg-[#070A10] border border-white/10 rounded px-2 py-0.5 text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500/40"
+                />
+              </div>
+              {a.statusUpdatedAt && (
+                <p className="mt-1 text-[10px] text-slate-600 font-mono">
+                  last changed by {a.statusActor} · {new Date(a.statusUpdatedAt).toLocaleString('en-IN')}
                 </p>
               )}
               <div className="mt-2 flex items-center justify-between gap-2 text-[10px] font-mono text-slate-500">
@@ -182,6 +267,44 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({ posts, refreshKey, onO
               </ul>
             </div>
           ))}
+        </div>
+        <div className="shrink-0 border-t border-white/[0.07] p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <ScrollText className="w-3.5 h-3.5 text-cyan-400" />
+            <h3 className="text-xs font-semibold">Audit trail</h3>
+            {chain && (
+              <span
+                className={`ml-auto px-1.5 py-0.5 rounded border text-[9px] font-mono ${
+                  chain.ok ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10' : 'text-rose-300 border-rose-500/30 bg-rose-500/10'
+                }`}
+                title="Each entry stores a hash of the one before it. A broken chain means an old entry was edited or removed. It does not authenticate who made an entry."
+              >
+                {chain.ok ? `CHAIN OK · ${chain.entries}` : `CHAIN BROKEN AT #${chain.brokenAtId}`}
+              </span>
+            )}
+          </div>
+          <label className="flex items-center gap-2 text-[10px] font-mono text-slate-500">
+            LOGGED AS
+            <input
+              value={analyst}
+              onChange={(e) => setAnalyst(e.target.value)}
+              onBlur={() => setAnalystName(analyst)}
+              maxLength={64}
+              className="flex-1 bg-[#070A10] border border-white/10 rounded px-2 py-0.5 text-slate-300 focus:outline-none focus:border-cyan-500/40"
+            />
+          </label>
+          <ul className="space-y-1 max-h-28 overflow-y-auto">
+            {(audit ?? []).map((e) => (
+              <li key={e.id} className="text-[10px] font-mono text-slate-400 leading-snug">
+                <span className="text-slate-600">{new Date(e.ts).toLocaleTimeString('en-IN')}</span>{' '}
+                <span className="text-cyan-300">{e.action}</span> {e.postId ?? ''} <span className="text-slate-500">by {e.actor}</span>
+              </li>
+            ))}
+            {audit && audit.length === 0 && <li className="text-[10px] text-slate-600">No entries yet.</li>}
+          </ul>
+          <p className="text-[9px] text-slate-600 leading-snug">
+            The name above is typed in by the user; the prototype has no logins, so entries show who said they acted, not who did.
+          </p>
         </div>
       </section>
     </div>
