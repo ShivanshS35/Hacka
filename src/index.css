@@ -8,6 +8,8 @@
     --canvas-bg: #070A10;
     --panel-bg: #0C101A;
     --card-bg: #101522;
+    /* Space kept free at the bottom so the floating dock never covers content. */
+    --dock-clearance: 96px;
   }
   
   body {
@@ -106,3 +108,9 @@
   animation: streamFlow 0.8s linear infinite;
 }
 
+
+
+/* Reduced motion: no slides, lifts or pixel effects anywhere in the new dock / team UI. */
+@media (prefers-reduced-motion: reduce) {
+  .team-card { transition: opacity 150ms ease !important; transform: none !important; }
+}

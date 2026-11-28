@@ -51,6 +51,11 @@ import { prahariApi } from '../services/api';
 
 interface WarMonitorLiveAppProps {
   onOpenEditorial: () => void;
+  /** Optional: lets the bottom dock choose the tab. The top tab bar keeps working either way. */
+  navTab?: WarMonitorNavTab;
+  onNavTabChange?: (tab: WarMonitorNavTab) => void;
+  /** Optional: each new value opens the Import Intel dialog (used by the dock's Settings menu). */
+  importRequestId?: number;
 }
 
 const THREAT_RANK: Record<DistrictIntel['threatLevel'], number> = { MODERATE: 0, ELEVATED: 1, HIGH: 2, CRITICAL: 3 };
@@ -70,10 +75,22 @@ function bumpDistrict(d: DistrictIntel): DistrictIntel {
 
 export type WarMonitorNavTab = 'COMMAND' | 'TOPOLOGY' | 'DOSSIER' | 'ALERTS';
 
-export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEditorial }) => {
+let lastImportRequestHandled = 0;
+
+export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEditorial, navTab, onNavTabChange, importRequestId }) => {
   const seenStreamIds = useRef<Set<string>>(new Set());
-  // Navigation Tab: COMMAND CENTER | 3D ENTITY TOPOLOGY | FORENSIC DOSSIER
-  const [activeNavTab, setActiveNavTab] = useState<WarMonitorNavTab>('COMMAND');
+  // Navigation Tab: COMMAND CENTER | 3D ENTITY TOPOLOGY | FORENSIC DOSSIER | ALERTS
+  const [activeNavTab, setActiveNavTabState] = useState<WarMonitorNavTab>(navTab ?? 'COMMAND');
+  const onNavTabChangeRef = useRef(onNavTabChange);
+  onNavTabChangeRef.current = onNavTabChange;
+  const setActiveNavTab = (tab: WarMonitorNavTab) => {
+    setActiveNavTabState(tab);
+    onNavTabChangeRef.current?.(tab);
+  };
+  // The dock (outside this component) can switch tabs too.
+  useEffect(() => {
+    if (navTab) setActiveNavTabState(navTab);
+  }, [navTab]);
 
   const [posts, setPosts] = useState<InterceptPost[]>(INITIAL_INTERCEPTS);
   const [districts, setDistricts] = useState<DistrictIntel[]>(RAJASTHAN_DISTRICTS);
@@ -86,6 +103,13 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
   const [isIntelModeModalOpen, setIsIntelModeModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  useEffect(() => {
+    // Module-level memory so a remount (e.g. coming back from the Team page) does not reopen the dialog.
+    if (importRequestId && importRequestId !== lastImportRequestHandled) {
+      lastImportRequestHandled = importRequestId;
+      setIsUploadModalOpen(true);
+    }
+  }, [importRequestId]);
   const [highlightedDistricts, setHighlightedDistricts] = useState<string[]>([]);
   const [isSimulating, setIsSimulating] = useState(true);
   // Real (non-demo) posts take over the feed: the simulator is paused so its four fixed demo posts
@@ -297,7 +321,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
   };
 
   return (
-    <div className="h-screen w-screen bg-[#070A10] text-slate-100 flex flex-col overflow-hidden font-sans select-none relative">
+    <div className="h-screen w-screen bg-[#070A10] text-slate-100 flex flex-col overflow-hidden font-sans select-none relative pb-[var(--dock-clearance,0px)]">
       {/* ======================================================== */}
       {/* 1. PALANTIR / LINEAR 52PX SINGLE-ROW GLASS TOP COMMAND BAR */}
       {/* ======================================================== */}
