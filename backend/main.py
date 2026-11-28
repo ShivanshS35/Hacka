@@ -1,5 +1,6 @@
 import datetime
 import json
+import re
 import uuid
 import asyncio
 import sqlite3
@@ -13,7 +14,7 @@ from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect, Header
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from classifier import classify_text
 from gemini_classifier import hybrid_classify, self_test as gemini_self_test
@@ -159,10 +160,16 @@ SEED_INTERCEPTS = [
     }
 ]
 
-def process_and_store_post(channel: str, raw_text: str, district_hint: str = "", views: str = "0", source_type: str = "ANALYST_SUBMISSION", source_timestamp: Optional[str] = None, source_reference: Optional[str] = None, classification: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def _clean_channel(channel: str) -> str:
+    """Channel names come from untrusted files; drop control characters and spreadsheet-formula
+    characters (=, +, -, @ at the start of a cell, quotes, pipes) so an export cannot smuggle a formula."""
+    cleaned = re.sub(r"[^\w@. \-]", "", str(channel)).strip().lstrip("=+-@ ")[:64].strip()
+    return f"@{cleaned}" if cleaned else "@unknown"
+
+def process_and_store_post(channel: str, raw_text: str, district_hint: str = "", views: str = "0", source_type: str = "ANALYST_SUBMISSION", source_timestamp: Optional[str] = None, source_reference: Optional[str] = None, classification: Optional[Dict[str, Any]] = None, entities: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     # `classification` may be precomputed off the event loop (Gemini calls are slow network I/O).
     classification = classification or hybrid_classify(raw_text, None)
-    entities = extract_entities(raw_text)
+    entities = entities or extract_entities(raw_text)
 
     aliases = {"bundli": "bundi", "sawaimadhopur": "sawai-madhopur", "sawai madhopur": "sawai-madhopur"}
     normalized_hint = district_hint.strip().lower().replace("_", "-")
@@ -188,7 +195,7 @@ def process_and_store_post(channel: str, raw_text: str, district_hint: str = "",
 
     post_record = {
         "id": post_id,
-        "channel": channel if channel.startswith("@") else f"@{channel}",
+        "channel": _clean_channel(channel),
         "channelSubscribers": "Unknown",
         "timestamp": now.astimezone(datetime.timezone.utc).isoformat(),
         "capturedAt": now.astimezone(ZoneInfo("Asia/Kolkata")).strftime("%I:%M:%S %p IST"),
@@ -266,6 +273,13 @@ class TextScanRequest(BaseModel):
     text: str = Field(min_length=1, max_length=50_000)
     channel: Optional[str] = Field(default="@manual_ingest", max_length=256)
     districtId: Optional[str] = Field(default="", max_length=64)
+
+    @field_validator("text")
+    @classmethod
+    def _text_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("text must contain at least one non-space character")
+        return value
 
 class ChannelScanRequest(BaseModel):
     channel: str = Field(min_length=1, max_length=256)
@@ -492,6 +506,7 @@ async def scan_raw_text(req: TextScanRequest, x_gemini_key: Optional[str] = Head
         raw_text=req.text,
         district_hint=req.districtId or "",
         classification=classification,
+        entities=await asyncio.to_thread(extract_entities, req.text),
     )
     # Broadcast to active WebSockets
     await broadcast_new_intercept(record)
@@ -514,6 +529,7 @@ async def scan_telegram_channel(req: ChannelScanRequest, x_gemini_key: Optional[
             source_type=item.get("source", "LIVE_TELEGRAM_PREVIEW"),
             source_timestamp=item.get("timestamp"),
             classification=await asyncio.to_thread(hybrid_classify, item["raw_text"], gkey),
+            entities=await asyncio.to_thread(extract_entities, item["raw_text"]),
         )
         processed_records.append(rec)
         await broadcast_new_intercept(rec)
@@ -523,6 +539,15 @@ async def scan_telegram_channel(req: ChannelScanRequest, x_gemini_key: Optional[
         "scraped_count": len(processed_records),
         "intercepts": processed_records
     }
+
+def _flatten_text(value: Any) -> Optional[str]:
+    """Telegram exports store formatted text as a list of strings and {"type", "text"} entities."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        parts = [p if isinstance(p, str) else p.get("text", "") if isinstance(p, dict) and isinstance(p.get("text"), str) else "" for p in value]
+        return "".join(parts)
+    return None
 
 @app.post("/api/ingest/file")
 async def ingest_dataset_file(file: UploadFile = File(...), x_gemini_key: Optional[str] = Header(default=None)):
@@ -535,14 +560,20 @@ async def ingest_dataset_file(file: UploadFile = File(...), x_gemini_key: Option
     except UnicodeDecodeError:
         raise HTTPException(status_code=400, detail="File must be UTF-8 encoded")
     new_records = []
+    export_name = None
     filename = (file.filename or "").lower()
     if filename.endswith(".json") or raw_str.lstrip().startswith(("[", "{")):
         try:
             data = json.loads(raw_str)
         except json.JSONDecodeError as exc:
             raise HTTPException(status_code=400, detail=f"Invalid JSON: {exc.msg}") from exc
+        export_name = None
         if isinstance(data, dict):
-            data = data.get("records", [data])
+            # Accept a bare record, {"records": [...]}, or a Telegram Desktop export ({"name", "messages": [...]}).
+            if isinstance(data.get("name"), str):
+                export_name = data["name"]
+            wrapped = next((data[k] for k in ("records", "messages", "posts", "items", "data", "results") if isinstance(data.get(k), list)), None)
+            data = wrapped if wrapped is not None else [data]
         if not isinstance(data, list):
             raise HTTPException(status_code=400, detail="JSON must be an object or array of records")
         rows = data
@@ -566,11 +597,11 @@ async def ingest_dataset_file(file: UploadFile = File(...), x_gemini_key: Option
         if not isinstance(item, dict):
             continue
         normalized = {str(k).strip().lower(): v for k, v in item.items() if k is not None}
-        text = normalized.get("text") or normalized.get("message") or normalized.get("rawtext") or normalized.get("raw_text")
-        if not isinstance(text, str) or not text.strip():
+        text = next((t for t in (_flatten_text(normalized.get(k)) for k in ("text", "message", "rawtext", "raw_text")) if t and t.strip()), None)
+        if not text:
             continue
-        channel = normalized.get("channel") or "uploaded_dataset"
-        rec = process_and_store_post(channel=str(channel), raw_text=text.strip(), views=str(normalized.get("views", "0")), source_type="UPLOADED_DATASET", source_timestamp=normalized.get("timestamp") or normalized.get("date"), source_reference=str(normalized.get("source") or file.filename or "uploaded file"), classification=await asyncio.to_thread(hybrid_classify, text.strip(), gkey))
+        channel = normalized.get("channel") or export_name or "uploaded_dataset"
+        rec = process_and_store_post(channel=str(channel), raw_text=text.strip(), views=str(normalized.get("views", "0")), source_type="UPLOADED_DATASET", source_timestamp=normalized.get("timestamp") or normalized.get("date"), source_reference=str(normalized.get("source") or file.filename or "uploaded file"), classification=await asyncio.to_thread(hybrid_classify, text.strip(), gkey), entities=await asyncio.to_thread(extract_entities, text.strip()))
         new_records.append(rec)
         await broadcast_new_intercept(rec)
 

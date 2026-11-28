@@ -19,6 +19,7 @@ interface LiveInterceptFeedProps {
 function aiNote(status?: string | null): string {
   switch (status) {
     case 'ai_says_none': return ' · AI: not illegal trade';
+    case 'ai_cleared': return ' · AI: cleared (keyword false alarm)';
     case 'ai_low_confidence': return ' · AI: unsure';
     case 'http_429': return ' · AI: rate limited';
     case 'http_401': case 'http_403': return ' · AI: key rejected';

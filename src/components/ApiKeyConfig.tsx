@@ -26,7 +26,7 @@ export const ApiKeyConfig: React.FC = () => {
 
   const save = () => {
     if (!setGeminiKey(draft)) {
-      setMsg('Enter a key to save.');
+      setMsg('That does not look like an API key (10-200 characters, no spaces). Not saved.');
       return;
     }
     setDraft('');

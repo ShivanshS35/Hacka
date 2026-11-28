@@ -24,6 +24,7 @@ from classifier import classify_text
 CATEGORIES = ("DRUGS", "ARMS", "DOCUMENTS", "FINANCIAL")
 LEXICON_CONFIDENT = 0.85
 MIN_AI_CONFIDENCE = 0.60
+MIN_AI_VETO = 0.70          # how sure the AI must be that a post is harmless to clear a weak keyword flag
 MAX_TEXT_CHARS = 1500
 API_ROOT = "https://generativelanguage.googleapis.com/v1beta"
 
@@ -231,6 +232,17 @@ def hybrid_classify(text: str, key: Optional[str]) -> Dict[str, Any]:
     if not op:
         base["ai"]["status"] = status
         return base
+    if op["category"] == "NONE" and op["confidence"] >= MIN_AI_VETO and base["categories"]:
+        # The keyword match was weak (below LEXICON_CONFIDENT) and the model is sure the post is harmless:
+        # let the AI clear the false positive instead of leaving a flag on an ordinary post.
+        return {
+            "categories": [],
+            "primary_category": None,
+            "confidence": 0.0,
+            "matched_slang": [],
+            "ai": {"assisted": False, "status": "ai_cleared", "reason": op["reason"],
+                   "model": _resolved_model or DEFAULT_MODEL},
+        }
     if op["category"] == "NONE" or op["confidence"] < MIN_AI_CONFIDENCE:
         base["ai"]["status"] = "ai_says_none" if op["category"] == "NONE" else "ai_low_confidence"
         base["ai"]["reason"] = op["reason"]

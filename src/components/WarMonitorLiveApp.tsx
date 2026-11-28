@@ -294,7 +294,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
       {/* ======================================================== */}
       {/* 1. PALANTIR / LINEAR 52PX SINGLE-ROW GLASS TOP COMMAND BAR */}
       {/* ======================================================== */}
-      <header className="h-[52px] bg-[#070A10]/85 backdrop-blur-md border-b border-white/[0.07] px-4 flex items-center justify-between z-30 shrink-0">
+      <header className="h-[52px] bg-[#070A10]/85 backdrop-blur-md border-b border-white/[0.07] px-4 flex items-center justify-between z-30 shrink-0 max-md:overflow-x-auto max-md:[scrollbar-width:none] max-md:gap-2">
         {/* Left Section: Branding & Return to Editorial */}
         <div className="flex items-center gap-3 shrink-0">
           <button
