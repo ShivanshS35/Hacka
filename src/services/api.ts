@@ -1,5 +1,5 @@
 import { geminiHeaders } from './geminiKey';
-import { authHeaders, getAccessToken, markTokenRejected } from './accessToken';
+import { authHeaders, getAccessToken, markTokenRejected, type OfficerProfile } from './accessToken';
 import {
   ComplaintSummary,
   InterceptPost, DistrictIntel, CrimeCategory, EntityNode, EntityEdge, ThreatAlert, CoordinatedGroup,
@@ -58,6 +58,40 @@ export const prahariApi = {
   /**
    * Check if the real Python backend is running
    */
+  /** Officer sign-in. Returns the access token and profile, or throws with the server's message. */
+  async login(username: string, password: string): Promise<{ accessToken: string; officer: OfficerProfile }> {
+    const res = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+      signal: AbortSignal.timeout(75000),
+    });
+    if (!res.ok) {
+      let message = res.status === 401 ? 'Invalid username or password' : `Sign-in failed (${res.status})`;
+      try {
+        const err = await res.json();
+        if (typeof err.detail === 'string') message = err.detail;
+      } catch {
+        /* keep message */
+      }
+      throw new Error(message);
+    }
+    return res.json();
+  },
+
+  /** Profile for a bearer token (used to check a pasted legacy service token). Null when it is rejected. */
+  async me(token: string): Promise<OfficerProfile | null> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(75000),
+      });
+      return res.ok ? await res.json() : null;
+    } catch {
+      return null;
+    }
+  },
+
   async checkHealth(): Promise<boolean> {
     try {
       const res = await fetch(`${API_BASE_URL}/health`, { signal: AbortSignal.timeout(10000) });
@@ -183,16 +217,25 @@ export const prahariApi = {
     }
   },
 
-  async setStatus(postId: string, status: AnalystStatus, note: string): Promise<boolean> {
+  /** Change a case status. `error` carries the server's reason, e.g. a rank check (403). */
+  async setStatus(postId: string, status: AnalystStatus, note: string): Promise<{ ok: boolean; error?: string }> {
     try {
       const res = await apiFetch(`${API_BASE_URL}/posts/${encodeURIComponent(postId)}/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status, note, analyst: getAnalystName() }),
+        body: JSON.stringify({ status, note }),
       });
-      return res.ok;
+      if (res.ok) return { ok: true };
+      let error = `Status change failed (${res.status})`;
+      try {
+        const err = await res.json();
+        if (typeof err.detail === 'string') error = err.detail;
+      } catch {
+        /* keep message */
+      }
+      return { ok: false, error };
     } catch {
-      return false;
+      return { ok: false, error: 'Backend not reachable' };
     }
   },
 

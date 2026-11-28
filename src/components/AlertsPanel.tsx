@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { BellRing, Copy, Check, Link2, RefreshCw, ShieldAlert, Download, ScrollText, Image as ImageIcon } from 'lucide-react';
-import { prahariApi, getAnalystName, setAnalystName } from '../services/api';
+import { prahariApi } from '../services/api';
+import { getOfficer, hasRank, officerLabel, STATUS_MIN_RANK, subscribeAccessToken } from '../services/accessToken';
 import { AnalystStatus, AuditChainStatus, AuditEntry, ComplaintSummary, CoordinatedGroup, InterceptPost, ThreatAlert } from '../types';
 import { DirectionBadge, PlatformBadge, STATUSES, STATUS_LABEL } from './MetaBadges';
 
@@ -27,7 +28,9 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({ posts, refreshKey, onO
   const [statusFilter, setStatusFilter] = useState<'ALL' | AnalystStatus>('ALL');
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<string | null>(null);
-  const [analyst, setAnalyst] = useState(getAnalystName());
+  const [officer, setOfficer] = useState(getOfficer());
+  const [statusError, setStatusError] = useState<{ postId: string; message: string } | null>(null);
+  useEffect(() => subscribeAccessToken(() => setOfficer(getOfficer())), []);
   const [audit, setAudit] = useState<AuditEntry[] | null>(null);
   const [chain, setChain] = useState<AuditChainStatus | null>(null);
   const [complaintSummary, setComplaintSummary] = useState<ComplaintSummary | null>(null);
@@ -52,9 +55,11 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({ posts, refreshKey, onO
 
   const changeStatus = async (a: ThreatAlert, status: AnalystStatus) => {
     setSaving(a.postId);
-    const ok = await prahariApi.setStatus(a.postId, status, notes[a.postId] ?? a.analystNote ?? '');
+    setStatusError(null);
+    const res = await prahariApi.setStatus(a.postId, status, notes[a.postId] ?? a.analystNote ?? '');
     setSaving(null);
-    if (ok) await load();
+    if (res.ok) await load();
+    else setStatusError({ postId: a.postId, message: res.error || 'Status change failed' });
   };
 
   useEffect(() => {
@@ -200,13 +205,16 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({ posts, refreshKey, onO
                 <span className="text-slate-500">STATUS</span>
                 {STATUSES.map((st) => {
                   const active = (a.analystStatus ?? 'NEW') === st;
+                  const needed = STATUS_MIN_RANK[st];
+                  const allowed = !needed || hasRank(officer, needed);
                   return (
                     <button
                       key={st}
-                      disabled={saving === a.postId}
-                      onClick={() => !active && changeStatus(a, st)}
+                      disabled={saving === a.postId || (!allowed && !active)}
+                      onClick={() => !active && allowed && changeStatus(a, st)}
+                      title={allowed ? undefined : `Needs ${needed} rank or above (you are ${officer?.rank ?? 'not signed in'})`}
                       className={`px-1.5 py-0.5 rounded border transition-colors ${
-                        active ? STATUS_LABEL[st].cls : 'text-slate-500 border-white/10 hover:text-white'
+                        active ? STATUS_LABEL[st].cls : allowed ? 'text-slate-500 border-white/10 hover:text-white' : 'text-slate-700 border-white/5 cursor-not-allowed'
                       }`}
                     >
                       {STATUS_LABEL[st].text}
@@ -225,6 +233,9 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({ posts, refreshKey, onO
                   className="flex-1 min-w-[140px] bg-[#070A10] border border-white/10 rounded px-2 py-0.5 text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500/40"
                 />
               </div>
+              {statusError?.postId === a.postId && (
+                <p className="mt-1 text-[10px] text-rose-300 font-mono" role="alert">{statusError.message}</p>
+              )}
               {a.statusUpdatedAt && (
                 <p className="mt-1 text-[10px] text-slate-600 font-mono">
                   last changed by {a.statusActor} · {new Date(a.statusUpdatedAt).toLocaleString('en-IN')}
@@ -325,16 +336,17 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({ posts, refreshKey, onO
               </span>
             )}
           </div>
-          <label className="flex items-center gap-2 text-[10px] font-mono text-slate-500">
+          <div className="flex items-center gap-2 text-[10px] font-mono text-slate-500" title="Taken from your sign-in; every action you take is recorded under this identity">
             LOGGED AS
-            <input
-              value={analyst}
-              onChange={(e) => setAnalyst(e.target.value)}
-              onBlur={() => setAnalystName(analyst)}
-              maxLength={64}
-              className="flex-1 bg-[#070A10] border border-white/10 rounded px-2 py-0.5 text-slate-300 focus:outline-none focus:border-cyan-500/40"
-            />
-          </label>
+            {officer ? (
+              <span className="flex-1 flex items-center gap-1.5 min-w-0 rounded border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                <span className="truncate">{officerLabel(officer)}</span>
+              </span>
+            ) : (
+              <span className="flex-1 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-amber-300">not signed in</span>
+            )}
+          </div>
           <ul className="space-y-1 max-h-28 overflow-y-auto">
             {(audit ?? []).map((e) => (
               <li key={e.id} className="text-[10px] font-mono text-slate-400 leading-snug">
@@ -345,7 +357,7 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({ posts, refreshKey, onO
             {audit && audit.length === 0 && <li className="text-[10px] text-slate-600">No entries yet.</li>}
           </ul>
           <p className="text-[9px] text-slate-600 leading-snug">
-            The name above is typed in by the user; the prototype has no logins, so entries show who said they acted, not who did.
+            Entries name the signed-in officer from their login token, and the officer's badge is part of each entry's hash. Older entries may show a self-declared name.
           </p>
         </div>
       </section>

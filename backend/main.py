@@ -16,7 +16,8 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
-from auth import require_token, token_matches
+import auth
+from auth import OfficerProfile, SYSTEM_ACCOUNT, LoginLocked, get_current_officer, officer_for_bearer, require_rank
 from classifier import classify_text, detect_direction
 import casework
 import complaints
@@ -36,16 +37,25 @@ _DOCS_OFF = os.environ.get("PRAHARI_DISABLE_DOCS", "").strip().lower() in ("1", 
 app = FastAPI(
     title="PRAHARI OSINT Backend Engine",
     description="Hackathon prototype for cross-channel OSINT data analysis; not an operational agency system. "
-                "All /api/* routes except /api/health and /api/pubkey need 'Authorization: Bearer <PRAHARI_API_TOKEN>' "
-                "(use the Authorize button).",
+                "Log in with POST /api/auth/login, then send 'Authorization: Bearer <accessToken>' (use the Authorize "
+                "button). All /api/* routes except /api/health, /api/pubkey and /api/auth/login require it.",
     version="1.0.0",
     docs_url=None if _DOCS_OFF else "/docs",
     redoc_url=None if _DOCS_OFF else "/redoc",
     openapi_url=None if _DOCS_OFF else "/openapi.json",
 )
 
-# Every /api/* route is registered on this router, which requires the bearer token (health and pubkey stay on `app`).
-protected = APIRouter(dependencies=[Depends(require_token)])
+# Every /api/* route is registered on this router, which requires a logged-in officer (or the legacy service token).
+# /api/health, /api/pubkey and /api/auth/login stay public on `app`.
+protected = APIRouter(dependencies=[Depends(get_current_officer)])
+
+# Ranks allowed to move a case to these statuses (anyone logged in may set the others).
+STATUS_MIN_RANK = {"ESCALATED": "INSPECTOR", "CLOSED": "INSPECTOR"}
+
+
+# Endpoint functions are also called directly by tests; then the Depends() default is not an officer.
+def _officer(value: Any) -> OfficerProfile:
+    return value if isinstance(value, OfficerProfile) else SYSTEM_ACCOUNT
 
 MAX_DATASET_BYTES = 20 * 1024 * 1024         # /api/ingest/file (PS02 exports need up to 20 MB)
 MAX_MULTIPART_OVERHEAD = 64 * 1024           # form fields + multipart boundaries around the file
@@ -118,6 +128,7 @@ def init_db():
         """)
         conn.commit()
     casework.init_tables(DB_PATH)
+    auth.init_tables(DB_PATH)
     complaints.init_tables(DB_PATH)
     evidence.init_tables(DB_PATH)
 
@@ -605,6 +616,32 @@ def health_check():
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
 
+class LoginRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=1, max_length=256)
+
+
+# Public: exchange an officer's username and password for a 24-hour access token.
+@app.post("/api/auth/login")
+def login(req: LoginRequest):
+    try:
+        officer = auth.authenticate(req.username, req.password)
+    except LoginLocked:
+        raise HTTPException(status_code=429, detail="Too many failed attempts for this account; try again in 15 minutes")
+    if officer is None:
+        casework.log_event(DB_PATH, "LOGIN_FAILED", None, "unauthenticated", {"username": req.username.strip().lower()[:64]})
+        raise HTTPException(status_code=401, detail="Invalid username or password", headers={"WWW-Authenticate": "Bearer"})
+    casework.log_event(DB_PATH, "LOGIN", None, officer.actor(), {"officer": officer.audit_meta()})
+    return {"accessToken": auth.issue_token(officer), "tokenType": "bearer", "expiresIn": auth.TOKEN_TTL_SECONDS,
+            "officer": officer.public()}
+
+
+# The officer behind the current token.
+@protected.get("/api/auth/me")
+def whoami(officer: OfficerProfile = Depends(get_current_officer)):
+    return officer.public()
+
+
 # Public: the station's Ed25519 public key, so anyone can check signatures without trusting this server later.
 @app.get("/api/pubkey")
 def public_key():
@@ -633,7 +670,9 @@ def get_intercept_feed(limit: int = 50, category: Optional[str] = None):
     return [_decorate(p, statuses, links) for p in results[:limit]]
 
 @protected.post("/api/scan/text")
-async def scan_raw_text(req: TextScanRequest, x_gemini_key: Optional[str] = Header(default=None)):
+async def scan_raw_text(req: TextScanRequest, x_gemini_key: Optional[str] = Header(default=None),
+                        officer: OfficerProfile = Depends(get_current_officer)):
+    officer = _officer(officer)
     classification = await asyncio.to_thread(hybrid_classify, req.text, key_from_header(x_gemini_key))
     record = process_and_store_post(
         channel=req.channel or "@manual_ingest",
@@ -642,7 +681,7 @@ async def scan_raw_text(req: TextScanRequest, x_gemini_key: Optional[str] = Head
         classification=classification,
         entities=await asyncio.to_thread(extract_entities, req.text),
         platform=req.platform or "UNKNOWN",
-        actor=req.analyst or "analyst",
+        actor=officer.actor(),
     )
     if not record.get("duplicate"):
         await broadcast_new_intercept(record)
@@ -699,9 +738,11 @@ def _flatten_text(value: Any) -> Optional[str]:
     return None
 
 @protected.post("/api/ingest/file")
-async def ingest_dataset_file(file: UploadFile = File(...), platform: str = Form(""), analyst: str = Form("analyst"), x_gemini_key: Optional[str] = Header(default=None)):
+async def ingest_dataset_file(file: UploadFile = File(...), platform: str = Form(""), analyst: str = Form("analyst"), x_gemini_key: Optional[str] = Header(default=None),
+                              officer: OfficerProfile = Depends(get_current_officer)):
     gkey = key_from_header(x_gemini_key)
-    platform, analyst = _str(platform), _str(analyst, "analyst") or "analyst"
+    platform = _str(platform)
+    analyst = _officer(officer).actor()   # the client-supplied `analyst` form field is ignored
     # Read in chunks and stop as soon as the limit is passed (the middleware already checked Content-Length).
     chunks, size = [], 0
     while chunk := await file.read(64 * 1024):
@@ -846,9 +887,11 @@ def get_dossier(post_id: str):
 
 
 @protected.post("/api/dossier/{post_id}/verify")
-def verify_dossier_hash(post_id: str, analyst: str = "analyst"):
-    """Re-hash the text as stored in the database right now and compare it with the digest recorded at capture."""
-    result = casework.verify_hash(DB_PATH, post_id, analyst)
+def verify_dossier_hash(post_id: str, analyst: str = "analyst", officer: OfficerProfile = Depends(get_current_officer)):
+    """Re-hash the text as stored in the database right now and compare it with the digest recorded at capture.
+    The audit entry names the logged-in officer; the `analyst` query parameter is accepted but ignored."""
+    officer = _officer(officer)
+    result = casework.verify_hash(DB_PATH, post_id, officer.actor(), officer.audit_meta())
     if result is None:
         raise HTTPException(status_code=404, detail=f"Dossier not found: {post_id}")
     # Also check the record's evidence-chain link and its Ed25519 signature.
@@ -934,9 +977,12 @@ def _check_admin(token: Optional[str]) -> None:
 
 @protected.post("/api/complaints/upload")
 async def upload_complaints(files: List[UploadFile] = File(...), analyst: str = Form("analyst"),
-                            x_admin_token: Optional[str] = Header(default=None)):
+                            x_admin_token: Optional[str] = Header(default=None),
+                            officer: OfficerProfile = Depends(get_current_officer)):
+    officer = _officer(officer)
+    require_rank(officer, "INSPECTOR", "Loading NCRP complaint data")
     _check_admin(_str(x_admin_token) or None)
-    analyst = _str(analyst, "analyst") or "analyst"
+    analyst = officer.actor()
     totals = {"files": 0, "rows": 0, "identifiersAdded": 0}
     errors = []
     for f in files:
@@ -970,19 +1016,28 @@ def complaints_summary():
 
 
 @protected.delete("/api/complaints")
-def clear_complaints(analyst: str = "analyst", x_admin_token: Optional[str] = Header(default=None)):
+def clear_complaints(analyst: str = "analyst", x_admin_token: Optional[str] = Header(default=None),
+                     officer: OfficerProfile = Depends(get_current_officer)):
+    officer = _officer(officer)
+    require_rank(officer, "INSPECTOR", "Deleting NCRP complaint data")
     _check_admin(_str(x_admin_token) or None)
     complaints.clear(DB_PATH)
-    casework.log_event(DB_PATH, "COMPLAINTS_CLEARED", None, analyst or "analyst", {})
+    casework.log_event(DB_PATH, "COMPLAINTS_CLEARED", None, officer.actor(), {"officer": officer.audit_meta()})
     return {"cleared": True}
 
 
 @protected.post("/api/posts/{post_id}/status")
-def set_post_status(post_id: str, req: StatusRequest):
+def set_post_status(post_id: str, req: StatusRequest, officer: OfficerProfile = Depends(get_current_officer)):
+    """Change a case status. The actor is the logged-in officer (req.analyst is ignored);
+    ESCALATED and CLOSED need INSPECTOR rank or above."""
+    officer = _officer(officer)
     if not any(p["id"] == post_id for p in INTERCEPTS_STORE) and casework.stored_post(DB_PATH, post_id) is None:
         raise HTTPException(status_code=404, detail=f"Post not found: {post_id}")
+    minimum = STATUS_MIN_RANK.get((req.status or "").strip().upper())
+    if minimum:
+        require_rank(officer, minimum, f"Marking a case {req.status.strip().upper()}")
     try:
-        return casework.set_status(DB_PATH, post_id, req.status, req.note or "", req.analyst or "analyst")
+        return casework.set_status(DB_PATH, post_id, req.status, req.note or "", officer.actor(), officer.audit_meta())
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -1028,9 +1083,12 @@ def _export_row(a: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @protected.get("/api/export")
-def export_alerts(format: str = "csv", risk: Optional[str] = None, status: Optional[str] = None, analyst: str = "analyst"):
+def export_alerts(format: str = "csv", risk: Optional[str] = None, status: Optional[str] = None, analyst: str = "analyst",
+                  officer: OfficerProfile = Depends(get_current_officer)):
+    officer = _officer(officer)
     rows = [_export_row(a) for a in _alerts_with_status(risk, status)]
-    casework.log_event(DB_PATH, "EXPORT", None, analyst, {"format": format, "risk": risk, "status": status, "rows": len(rows)})
+    casework.log_event(DB_PATH, "EXPORT", None, officer.actor(),
+                       {"format": format, "risk": risk, "status": status, "rows": len(rows), "officer": officer.audit_meta()})
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     if format.lower() == "json":
         body = json.dumps({"exportedAtUtc": stamp, "note": "Prototype export; SHA-256 values are content digests, not legal certificates", "alerts": rows}, ensure_ascii=False, indent=2)
@@ -1051,10 +1109,11 @@ def export_alerts(format: str = "csv", risk: Optional[str] = None, status: Optio
 @protected.post("/api/ingest/image")
 async def ingest_image(file: UploadFile = File(...), channel: str = Form("@image_upload"), platform: str = Form("UNKNOWN"),
                        districtId: str = Form(""), ocrText: str = Form(""), analyst: str = Form("analyst"),
-                       sourceTimestamp: str = Form(""), x_gemini_key: Optional[str] = Header(default=None)):
+                       sourceTimestamp: str = Form(""), x_gemini_key: Optional[str] = Header(default=None),
+                       officer: OfficerProfile = Depends(get_current_officer)):
     channel, platform, districtId = _str(channel, "@image_upload"), _str(platform, "UNKNOWN"), _str(districtId)
     sourceTimestamp = _str(sourceTimestamp) or None
-    ocrText, analyst = _str(ocrText), _str(analyst, "analyst") or "analyst"
+    ocrText, analyst = _str(ocrText), _officer(officer).actor()
     data = await file.read(images.MAX_IMAGE_BYTES + 1)
     try:
         meta, _img = await asyncio.to_thread(images.analyse_image, data)
@@ -1121,7 +1180,7 @@ def image_matches(max_distance: int = 10):
 WS_AUTH_TIMEOUT_SECONDS = 10
 
 # Browsers cannot set an Authorization header on a WebSocket, so the first message must be
-# {"type": "auth", "token": "<PRAHARI_API_TOKEN>"}. Anything else closes the socket with 1008 (policy violation).
+# {"type": "auth", "token": "<officer JWT or PRAHARI_API_TOKEN>"}. Anything else closes the socket with 1008.
 @app.websocket("/ws/stream")
 async def websocket_stream(websocket: WebSocket):
     await websocket.accept()
@@ -1131,7 +1190,7 @@ async def websocket_stream(websocket: WebSocket):
         token = msg.get("token") if isinstance(msg, dict) and msg.get("type") == "auth" else None
     except (asyncio.TimeoutError, ValueError, WebSocketDisconnect):
         token = None
-    if not token_matches(token if isinstance(token, str) else None):
+    if officer_for_bearer(token if isinstance(token, str) else None) is None:
         try:
             await websocket.close(code=1008, reason="Missing or invalid access token")
         except RuntimeError:

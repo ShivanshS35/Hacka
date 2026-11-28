@@ -31,6 +31,7 @@ import { RajasthanMap } from './RajasthanMap';
 import { LiveInterceptFeed } from './LiveInterceptFeed';
 import { ForensicDossier } from './ForensicDossier';
 import { AlertsPanel } from './AlertsPanel';
+import { OfficerBadge } from './OfficerBadge';
 import { EntityGraph } from './EntityGraph';
 import { VerifyHashInline } from './VerifyHashInline';
 import { PlatformBadge, DirectionBadge, StatusBadge } from './MetaBadges';
@@ -457,6 +458,9 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
               <span>PYTHON OSINT: ONLINE</span>
             </div>
           )}
+
+          {/* Signed-in officer + logout */}
+          <OfficerBadge />
 
           {/* Status Pill */}
           <div className="hidden min-[1700px]:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300 text-[11px] font-sans font-medium whitespace-nowrap">

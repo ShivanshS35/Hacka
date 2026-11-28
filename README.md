@@ -215,19 +215,27 @@ source venv/bin/activate    # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 # Required: a random access token for the API (the server refuses to start without one)
-export PRAHARI_API_TOKEN=$(python -c 'import secrets; print(secrets.token_urlsafe(32))')
-echo "$PRAHARI_API_TOKEN"   # paste this into the token bar in the web UI
+# Recommended: a fixed secret for signing officer logins (otherwise logins reset on every restart)
+export PRAHARI_JWT_SECRET=$(python -c 'import secrets; print(secrets.token_urlsafe(48))')
 
 # Launch FastAPI server with Uvicorn
 python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 The FastAPI documentation will be accessible at **`http://localhost:8000/docs`** (use the **Authorize** button with the token).
 
+**Demo officers** (seeded into an empty database for evaluation; set `PRAHARI_SEED_DEMO_OFFICERS=0` to disable). Password for all three: `Prahari@2026`.
+
+| Username | Officer | Rank | Can escalate / close |
+|---|---|---|---|
+| `inspector_alwar` | Vikram Singh Rathore, RJ-CY-4412, Alwar | INSPECTOR | yes |
+| `dsp_jaipur` | Ananya Sharma, RJ-IPS-1092, Jaipur Rural | DSP | yes |
+| `constable_ganganagar` | Manish Meena, RJ-CY-7821, Sri Ganganagar | CONSTABLE | no (triage only) |
+
 On first start the backend creates its Ed25519 signing key at `backend/keys/station_ed25519.key` (permissions `0600`, git-ignored) and prints a warning to back it up.
 
 ### Hosted frontend/backend connection
 
-For a hosted frontend, set Vercel's `VITE_API_URL` to the deployed FastAPI HTTPS origin and `VITE_WS_URL` to its secure WebSocket endpoint (`wss://…/ws/stream`). Set the backend's `PRAHARI_CORS_ORIGINS` to the exact deployed frontend origin (`*` is refused; Vercel preview URLs need an explicit `PRAHARI_CORS_REGEX` that matches only your project). Set `PRAHARI_API_TOKEN` on the backend and give it to analysts, who enter it once in the web UI; it is stored in their browser and never built into the frontend. The Vite API defaults point to `localhost`, so these variables are required for a hosted frontend to reach a hosted backend. See [backend deployment and SQLite persistence notes](backend/README.md#persistence-and-deployment).
+For a hosted frontend, set Vercel's `VITE_API_URL` to the deployed FastAPI HTTPS origin and `VITE_WS_URL` to its secure WebSocket endpoint (`wss://…/ws/stream`). Set the backend's `PRAHARI_CORS_ORIGINS` to the exact deployed frontend origin (`*` is refused; Vercel preview URLs need an explicit `PRAHARI_CORS_REGEX` that matches only your project). Set `PRAHARI_JWT_SECRET` on the backend. Officers sign in with their own username and password; the session token is stored in their browser and never built into the frontend. The Vite API defaults point to `localhost`, so these variables are required for a hosted frontend to reach a hosted backend. See [backend deployment and SQLite persistence notes](backend/README.md#persistence-and-deployment).
 
 > **Note on Standalone Mode**: When running without the Python backend, PRAHARI automatically operates in autonomous simulation mode using authentic cryptographic digests and mock telemetry so all features (GIS map, 3D topology, and PDF export) remain fully functional for evaluators.
 
@@ -283,7 +291,7 @@ Electronic records in Indian courts are governed by **Section 63 of the Bharatiy
 | Append-only evidence chain | Implemented | `evidence_chain` table in SQLite: `chain_hash = sha256(sequence\|prevHash\|recordSha256\|createdAt)`, written in the same transaction as the record; `GET /api/chain/verify`, `GET /api/chain/head` |
 | Append-only records | Implemented | SQLite triggers reject UPDATE/DELETE on records, chain links and keys |
 | Hash-chained audit log | Implemented | Status changes, verifications, exports; `GET /api/audit/verify` |
-| API authentication | Implemented (shared token) | One bearer token for the deployment; not per-user accounts. The `analyst` name in the audit log is self-declared |
+| Officer authentication & RBAC | Implemented | Per-officer accounts (scrypt-hashed passwords, 24 h HS256 session tokens). Ranks CONSTABLE < INSPECTOR < DSP < ADMIN; ESCALATED/CLOSED and NCRP complaint upload/delete need INSPECTOR+. Audit entries name the signed-in officer, never a client-typed name, and the officer's badge is inside each entry's hash |
 | RFC 3161 trusted timestamp | **Not implemented** | Needs an external Time Stamping Authority. `createdAt` is the server clock and is not independently attested; records say `"notImplemented": true` |
 | External WORM / write-once storage | **Not implemented** | Records live in an ordinary SQLite file |
 | Hardware key storage (HSM) | **Not implemented** | The private key is a file (or env var) on the server |

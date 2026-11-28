@@ -4,9 +4,9 @@ Everything here lives in separate SQLite tables. The stored intercept record (an
 modified by a status change, so working a case cannot alter the evidence.
 
 The audit log is hash-chained: each entry stores the hash of the previous one, so editing or deleting an old row is
-detectable by `verify_chain`. That is tamper-EVIDENCE against casual edits, not authentication: there are no user
-accounts in this prototype, the `actor` is whatever the client sent, and someone who owns the database file could
-rewrite the whole chain.
+detectable by `verify_chain`. The `actor` comes from the authenticated officer (see auth.py), and the officer's
+username, badge and rank are stored inside each entry's hashed detail, so changing who did something breaks the chain.
+It is tamper-EVIDENCE, not proof against someone who owns the database file and rewrites the whole chain.
 """
 import datetime
 import hashlib
@@ -64,7 +64,7 @@ def _entry_hash(prev_hash: str, body: Dict[str, Any]) -> str:
 
 def log_event(db_path: Path, action: str, post_id: Optional[str] = None, actor: str = "analyst",
               detail: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    actor = (actor or "analyst").strip()[:64] or "analyst"
+    actor = (actor or "analyst").strip()[:128] or "analyst"
     with closing(_connect(db_path)) as conn:
         conn.execute("BEGIN IMMEDIATE")   # one writer at a time, so the chain cannot fork
         last = conn.execute("SELECT entry_hash FROM audit_log ORDER BY id DESC LIMIT 1").fetchone()
@@ -108,12 +108,13 @@ def verify_chain(db_path: Path) -> Dict[str, Any]:
 
 
 # ----------------------------------------------------------------------------------------------- status workflow
-def set_status(db_path: Path, post_id: str, status: str, note: str = "", actor: str = "analyst") -> Dict[str, Any]:
+def set_status(db_path: Path, post_id: str, status: str, note: str = "", actor: str = "analyst",
+               officer: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     status = (status or "").strip().upper()
     if status not in STATUSES:
         raise ValueError(f"status must be one of {', '.join(STATUSES)}")
     note = (note or "").strip()[:500]
-    actor = (actor or "analyst").strip()[:64] or "analyst"
+    actor = (actor or "analyst").strip()[:128] or "analyst"
     with closing(_connect(db_path)) as conn:
         old = conn.execute("SELECT status FROM case_status WHERE post_id = ?", (post_id,)).fetchone()
         previous = old["status"] if old else "NEW"
@@ -122,7 +123,10 @@ def set_status(db_path: Path, post_id: str, status: str, note: str = "", actor: 
             "ON CONFLICT(post_id) DO UPDATE SET status=excluded.status, note=excluded.note, actor=excluded.actor, updated_at=excluded.updated_at",
             (post_id, status, note, actor, _now()))
         conn.commit()
-    log_event(db_path, "STATUS_CHANGE", post_id, actor, {"from": previous, "to": status, "note": note})
+    detail = {"from": previous, "to": status, "note": note}
+    if officer:
+        detail["officer"] = officer
+    log_event(db_path, "STATUS_CHANGE", post_id, actor, detail)
     return {"postId": post_id, "status": status, "note": note, "actor": actor, "previous": previous}
 
 
@@ -156,7 +160,8 @@ def stored_post(db_path: Path, post_id: str) -> Optional[Dict[str, Any]]:
     return json.loads(row["data_json"]) if row else None
 
 
-def verify_hash(db_path: Path, post_id: str, actor: str = "analyst") -> Optional[Dict[str, Any]]:
+def verify_hash(db_path: Path, post_id: str, actor: str = "analyst",
+                officer: Optional[Dict[str, str]] = None) -> Optional[Dict[str, Any]]:
     """Re-hash the text as it is stored in the database now and compare with the digest recorded at capture."""
     with closing(_connect(db_path)) as conn:
         row = conn.execute("SELECT raw_text, sha256, data_json FROM intercepts WHERE id = ?", (post_id,)).fetchone()
@@ -178,5 +183,8 @@ def verify_hash(db_path: Path, post_id: str, actor: str = "analyst") -> Optional
         "checkedAtUtc": _now(),
         "note": "Detects a change to the stored text since capture. It does not prove who captured it or when.",
     }
-    log_event(db_path, "VERIFY_HASH", post_id, actor, {"match": result["match"], "recomputed": recomputed})
+    detail = {"match": result["match"], "recomputed": recomputed}
+    if officer:
+        detail["officer"] = officer
+    log_event(db_path, "VERIFY_HASH", post_id, actor, detail)
     return result
