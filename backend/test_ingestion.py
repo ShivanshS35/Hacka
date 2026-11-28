@@ -362,3 +362,38 @@ def test_gemini_reply_parsing_is_tolerant():
     import pytest
     with pytest.raises(ValueError):
         g._parse_reply(wrap("sorry I cannot help"))
+
+
+def test_gemini_slow_model_times_out_then_next_model_works(monkeypatch):
+    """First model hangs past the timeout: we must move on to the next one instead of giving up."""
+    import json, threading, time
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    import gemini_classifier as g
+
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a): pass
+        def _send(self, code, obj):
+            b = json.dumps(obj).encode(); self.send_response(code)
+            self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(b)))
+            self.end_headers(); self.wfile.write(b)
+        def do_POST(self):
+            self.rfile.read(int(self.headers["Content-Length"]))
+            if "slow-model" in self.path:
+                time.sleep(2.5)
+                return self._send(200, {})
+            inner = {"category": "DRUGS", "confidence": 0.9, "reason": "r", "slang": []}
+            self._send(200, {"candidates": [{"content": {"parts": [{"text": json.dumps(inner)}]}}]})
+
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        monkeypatch.setattr(g, "API_ROOT", f"http://127.0.0.1:{srv.server_port}/v1beta")
+        monkeypatch.setattr(g, "REQUEST_TIMEOUT", 1)
+        monkeypatch.setattr(g, "DEFAULT_MODEL", "slow-model")
+        monkeypatch.setattr(g, "_resolved_model", None)
+        g._cache.clear(); g._recent.clear(); g._total_calls = 0
+        res = g.self_test("AIzaFakeKey1234567890")
+        assert res["ok"] and res["model"] == "gemini-flash-latest"
+        assert res["model"] != "slow-model"
+    finally:
+        srv.shutdown()

@@ -7,6 +7,7 @@ function describeStatus(s?: string): string {
   if (s === 'http_429') return 'rate limit or quota reached — wait a minute';
   if (s === 'http_403' || s === 'http_401') return 'key not allowed to use this model';
   if (s === 'http_404') return 'no usable model found for this key';
+  if (s === 'timeout') return 'Gemini took too long to answer';
   if (s === 'network') return 'network error';
   if (s === 'budget') return 'call limit reached';
   if (s === 'bad_reply') return 'unreadable reply';
