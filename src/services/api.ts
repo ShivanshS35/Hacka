@@ -110,7 +110,7 @@ export const prahariApi = {
       const res = await fetch(`${API_BASE_URL}/gemini/check`, {
         method: 'POST',
         headers: geminiHeaders(),
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(75000),
       });
       return await res.json();
     } catch {

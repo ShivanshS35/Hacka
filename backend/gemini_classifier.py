@@ -11,6 +11,7 @@ Rules
 import hashlib
 import json
 import os
+import socket
 import threading
 import time
 import urllib.error
@@ -26,7 +27,11 @@ MIN_AI_CONFIDENCE = 0.60
 MAX_TEXT_CHARS = 1500
 API_ROOT = "https://generativelanguage.googleapis.com/v1beta"
 
-DEFAULT_MODEL = os.environ.get("PRAHARI_GEMINI_MODEL", "gemini-2.5-flash")
+# Short-text classification does not need a big model: start with the fast "lite" alias.
+DEFAULT_MODEL = os.environ.get("PRAHARI_GEMINI_MODEL", "gemini-flash-lite-latest")
+FALLBACK_MODELS = ("gemini-flash-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash")
+REQUEST_TIMEOUT = 20      # seconds per model attempt
+TOTAL_DEADLINE = 45       # stop trying more models after this many seconds
 MAX_CALLS_PER_MINUTE = int(os.environ.get("PRAHARI_GEMINI_RPM", "30"))
 MAX_TOTAL_CALLS = int(os.environ.get("PRAHARI_GEMINI_MAX_CALLS", "300"))
 ENABLED = os.environ.get("PRAHARI_GEMINI_ENABLED", "1") != "0"
@@ -61,13 +66,13 @@ def _budget_ok() -> bool:
         return True
 
 
-def _post(url: str, key: str, body: Optional[dict]) -> dict:
+def _post(url: str, key: str, body: Optional[dict], timeout: Optional[float] = None) -> dict:
     data = json.dumps(body).encode() if body is not None else None
     headers = {"x-goog-api-key": key}
     if data is not None:
         headers["Content-Type"] = "application/json"
     req = urllib.request.Request(url, data=data, headers=headers)
-    with urllib.request.urlopen(req, timeout=12) as resp:
+    with urllib.request.urlopen(req, timeout=timeout or REQUEST_TIMEOUT) as resp:
         return json.load(resp)
 
 
@@ -101,7 +106,7 @@ def _rank(name: str) -> tuple:
 
 def _candidates(key: str) -> list:
     out = [_resolved_model] if _resolved_model else []
-    for n in (DEFAULT_MODEL, "gemini-flash-latest"):
+    for n in (DEFAULT_MODEL,) + FALLBACK_MODELS:
         if n not in out:
             out.append(n)
     return out
@@ -122,7 +127,7 @@ def _parse_reply(out: dict) -> dict:
 
 
 def _try_model(model: str, body: dict, key: str):
-    out = _post(f"{API_ROOT}/models/{model}:generateContent", key, body)
+    out = _post(f"{API_ROOT}/models/{model}:generateContent", key, body, REQUEST_TIMEOUT)
     return _parse_reply(out)
 
 
@@ -138,7 +143,8 @@ def _call(text: str, key: str):
     queue = _candidates(key)
     discovered = False
     last = "http_404"
-    while queue and len(tried) < 5:
+    started = time.time()
+    while queue and len(tried) < 6 and time.time() - started < TOTAL_DEADLINE:
         model = queue.pop(0)
         if model in tried:
             continue
@@ -149,17 +155,19 @@ def _call(text: str, key: str):
             return parsed, None
         except urllib.error.HTTPError as e:
             last = f"http_{e.code}"
-            if e.code == 404:
-                if not discovered:  # default names failed: ask Google which models this key can use
-                    discovered = True
-                    queue += [n for n in sorted(_list_models(key), key=_rank) if n not in tried]
-                continue
-            if e.code in (400, 429, 401, 403, 500, 503):
-                return None, last
+            if e.code == 404 and not discovered:
+                # Names failed: ask Google which models this key can actually use.
+                discovered = True
+                queue += [n for n in sorted(_list_models(key), key=_rank) if n not in tried]
+            elif e.code in (401, 403, 429):
+                return None, last          # key/quota problem: other models will not help
+            # 404 / 400 / 5xx: try the next model
         except (KeyError, IndexError, ValueError):
-            return None, "bad_reply"
+            last = "bad_reply"             # e.g. truncated or blocked reply: try next model
+        except (TimeoutError, socket.timeout):
+            last = "timeout"
         except Exception:
-            return None, "network"
+            last = "network"
     return None, last
 
 
