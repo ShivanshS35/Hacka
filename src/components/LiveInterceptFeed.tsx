@@ -41,7 +41,7 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
   onToggleSimulate,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [minConfidence, setMinConfidence] = useState(0.85);
+  const [minConfidence, setMinConfidence] = useState(0.7);   // 70% = the backend's flag threshold, so every flagged post shows by default
 
   const categories: (CrimeCategory | 'ALL')[] = [
     'ALL',
@@ -220,9 +220,9 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
           <div className="flex items-center gap-2">
             <input
               type="range"
-              min="0.50"
-              max="0.95"
-              step="0.05"
+              min="0"
+              max="0.99"
+              step="0.01"
               value={minConfidence}
               onChange={(e) => setMinConfidence(parseFloat(e.target.value))}
               className="w-20 h-1 bg-white/[0.08] rounded-lg appearance-none cursor-pointer accent-cyan-400"

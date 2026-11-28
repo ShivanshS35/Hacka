@@ -45,6 +45,7 @@ app.add_middleware(
 )
 
 # In-memory intelligence repository
+MAX_STORED_POSTS = 300   # newest posts kept in memory (all are still saved to SQLite)
 INTERCEPTS_STORE: List[Dict[str, Any]] = []
 ENTITY_GRAPH = DynamicEntityGraph()
 ACTIVE_WEBSOCKETS: List[WebSocket] = []
@@ -98,7 +99,7 @@ def save_to_db(post: Dict[str, Any]):
 def load_from_db() -> List[Dict[str, Any]]:
     with closing(sqlite3.connect(DB_PATH)) as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, data_json FROM intercepts ORDER BY created_at DESC LIMIT 100")
+        cursor.execute("SELECT id, data_json FROM intercepts ORDER BY created_at DESC LIMIT 300")
         rows = cursor.fetchall()
         posts = []
         for post_id, raw_json in rows:
@@ -243,7 +244,7 @@ def process_and_store_post(channel: str, raw_text: str, district_hint: str = "",
 
     # Prepend to store
     INTERCEPTS_STORE.insert(0, post_record)
-    if len(INTERCEPTS_STORE) > 100:
+    if len(INTERCEPTS_STORE) > MAX_STORED_POSTS:
         INTERCEPTS_STORE.pop()
 
     # Update Dynamic Entity Graph
