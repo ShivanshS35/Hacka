@@ -37,8 +37,8 @@ export const prahariApi = {
   async getFeed(category: CrimeCategory | 'ALL' = 'ALL'): Promise<InterceptPost[]> {
     try {
       const url = category && category !== 'ALL'
-        ? `${API_BASE_URL}/feed?category=${category}`
-        : `${API_BASE_URL}/feed`;
+        ? `${API_BASE_URL}/feed?category=${category}&limit=300`
+        : `${API_BASE_URL}/feed?limit=300`;
       const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to fetch feed');
       return await res.json();

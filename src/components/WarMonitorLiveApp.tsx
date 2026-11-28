@@ -85,6 +85,9 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [highlightedDistricts, setHighlightedDistricts] = useState<string[]>([]);
   const [isSimulating, setIsSimulating] = useState(true);
+  // Real (non-demo) posts take over the feed: the simulator is paused so its four fixed demo posts
+  // do not bury them. The analyst can switch it back on with the "Simulation" button.
+  const MAX_FEED_POSTS = 300;
   const [isBackendLive, setIsBackendLive] = useState(false);
   const [unlocatedCount, setUnlocatedCount] = useState(0);
 
@@ -156,9 +159,10 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
       if (seenStreamIds.current.has(newPost.id)) return;
       seenStreamIds.current.add(newPost.id);
       sound.playRadarPing();
+      if (newPost.sourceType !== 'SYNTHETIC_DEMO') setIsSimulating(false);
       setPosts((prev) => prev.some((post) => post.id === newPost.id)
         ? prev
-        : [newPost, ...prev.slice(0, 49)]);
+        : [newPost, ...prev.slice(0, MAX_FEED_POSTS - 1)]);
       setSelectedPost(newPost);
       registerPost(newPost);
     });
@@ -251,7 +255,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
         status: 'FLAGGED',
       };
 
-      setPosts((prev) => [newPost, ...prev.slice(0, 49)]);
+      setPosts((prev) => [newPost, ...prev.slice(0, MAX_FEED_POSTS - 1)]);
       sound.playRadarPing();
 
       registerPost(newPost);
@@ -848,6 +852,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
         onIngestPosts={(newPosts) => {
+          if (newPosts.some((p) => p.sourceType !== 'SYNTHETIC_DEMO')) setIsSimulating(false);
           // The backend also broadcasts these over the WebSocket: skip ids already present.
           setPosts((prev) => {
             const have = new Set(prev.map((p) => p.id));
