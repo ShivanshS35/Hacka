@@ -1,7 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Network, ZoomIn, ZoomOut, RefreshCw, Shield, AlertTriangle } from 'lucide-react';
 import { ENTITY_GRAPH_DATA } from '../data/mockData';
-import { EntityNode } from '../types';
+import { EntityNode, EntityEdge } from '../types';
+import { prahariApi } from '../services/api';
+import { selectAndLayout } from '../utils/graphLayout';
 import { sound } from '../utils/audio';
 import { NodeAvatarCharacter } from './NodeAvatarCharacter';
 
@@ -10,9 +12,50 @@ interface EntityGraphProps {
 }
 
 export const EntityGraph: React.FC<EntityGraphProps> = ({ onSelectEntity }) => {
-  const [selectedNode, setSelectedNode] = useState<EntityNode | null>(
-    ENTITY_GRAPH_DATA.nodes.find((n) => n.isHero) || null
-  );
+  // Live graph from the backend; the bundled sample is shown only while the backend is unreachable.
+  const [graph, setGraph] = useState<{ nodes: EntityNode[]; edges: EntityEdge[] }>({ nodes: [], edges: [] });
+  const [source, setSource] = useState<'LOADING' | 'LIVE' | 'SAMPLE'>('LOADING');
+  const [selectedNode, setSelectedNode] = useState<EntityNode | null>(null);
+
+  const loadGraph = useCallback(async () => {
+    const live = await prahariApi.getGraph();
+    if (live && live.nodes.length > 0) {
+      setGraph(live);
+      setSource('LIVE');
+    } else {
+      // Backend unreachable or empty: show the bundled sample (clearly labelled) unless live data was already loaded.
+      setSource((s) => {
+        if (s === 'LIVE') return s;
+        setGraph(ENTITY_GRAPH_DATA);
+        return 'SAMPLE';
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    loadGraph();
+    const timer = window.setInterval(loadGraph, 10000);
+    let debounce: number | undefined;
+    const unsubscribe = prahariApi.subscribeToStream(() => {
+      window.clearTimeout(debounce);
+      debounce = window.setTimeout(loadGraph, 600);
+    });
+    return () => {
+      window.clearInterval(timer);
+      window.clearTimeout(debounce);
+      unsubscribe();
+    };
+  }, [loadGraph]);
+
+  const layout = useMemo(() => selectAndLayout(graph.nodes, graph.edges), [graph]);
+  const heroNode = layout.nodes.find((n) => n.isHero) ?? null;
+  const heroPos = heroNode ? layout.positions[heroNode.id] : null;
+
+  // Select the most-linked identifier once data arrives, unless the analyst already picked something.
+  useEffect(() => {
+    // Re-resolve by id so the drawer never keeps showing an older copy of the node (e.g. from the sample graph).
+    setSelectedNode((cur) => layout.nodes.find((n) => n.id === cur?.id) ?? heroNode);
+  }, [layout, heroNode]);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [zoom, setZoom] = useState<number>(1);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -26,25 +69,6 @@ export const EntityGraph: React.FC<EntityGraphProps> = ({ onSelectEntity }) => {
     panY: number;
   } | null>(null);
   const hasMovedRef = useRef<boolean>(false);
-
-  // Organic radial constellation layout around the central Hero node (raj.pay@oksbi)
-  // Generous spacing across a 560 x 420 coordinate space
-  const nodePositions: Record<string, { x: number; y: number }> = {
-    // Center: Hero Node Nexus
-    'raj.pay@oksbi': { x: 280, y: 210 },
-
-    // Primary Connected Entities (Radius ~ 120-140)
-    '9876543210': { x: 280, y: 80 }, // North (Phone broker)
-    '@seller_raj': { x: 280, y: 340 }, // South (Telegram admin)
-    'bc1qar...mdq': { x: 440, y: 210 }, // East (Crypto wallet)
-
-    // Satellite Posts (Outer perimeter)
-    post_001: { x: 120, y: 110 }, // North-West (Drugs ad via raj.pay)
-    post_002: { x: 100, y: 210 }, // West (Mule account ad via raj.pay)
-    post_003: { x: 120, y: 310 }, // South-West (Arms katta via 9876543210)
-    post_004: { x: 440, y: 90 }, // North-East (Forged IDs via 9876543210 & @seller_raj)
-    post_005: { x: 440, y: 330 }, // South-East (Border drugs via bc1qar & @seller_raj)
-  };
 
   useEffect(() => {
     const container = containerRef.current;
@@ -139,6 +163,22 @@ export const EntityGraph: React.FC<EntityGraphProps> = ({ onSelectEntity }) => {
           </span>
           <span className="text-white/[0.1]">/</span>
           <span className="text-slate-400 font-mono text-[10px]">Cross-Channel Links</span>
+          <span
+            className={`ml-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold border ${
+              source === 'LIVE'
+                ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'
+                : 'text-amber-300 border-amber-500/30 bg-amber-500/10'
+            }`}
+            title={
+              source === 'LIVE'
+                ? 'Built from the records currently stored on the backend'
+                : source === 'LOADING'
+                ? 'Contacting the backend...'
+                : 'Backend unreachable, so this is the bundled sample graph'
+            }
+          >
+            {source === 'LIVE' ? 'LIVE' : source === 'LOADING' ? 'LOADING' : 'SAMPLE'}
+          </span>
         </div>
 
         <div className="flex items-center gap-1.5">
@@ -212,24 +252,28 @@ export const EntityGraph: React.FC<EntityGraphProps> = ({ onSelectEntity }) => {
           </defs>
 
           {/* Halo ring under Hero Node */}
-          <circle cx={280} cy={210} r={55} fill="url(#hero-halo)" pointerEvents="none" />
-          <circle
-            cx={280}
-            cy={210}
-            r={70}
-            fill="none"
-            stroke="rgba(34, 211, 238, 0.12)"
-            strokeWidth={1}
-            strokeDasharray="4 6"
-            pointerEvents="none"
-          />
+          {heroPos && (
+            <>
+              <circle cx={heroPos.x} cy={heroPos.y} r={55} fill="url(#hero-halo)" pointerEvents="none" />
+              <circle
+                cx={heroPos.x}
+                cy={heroPos.y}
+                r={70}
+                fill="none"
+                stroke="rgba(34, 211, 238, 0.12)"
+                strokeWidth={1}
+                strokeDasharray="4 6"
+                pointerEvents="none"
+              />
+            </>
+          )}
 
           <g className="graph-content">
             {/* Smooth Curved Cubic/Quadratic Bezier Connection Lines */}
             <g className="edges-layer">
-              {ENTITY_GRAPH_DATA.edges.map((edge) => {
-                const sPos = nodePositions[edge.source];
-                const tPos = nodePositions[edge.target];
+              {layout.edges.map((edge) => {
+                const sPos = layout.positions[edge.source];
+                const tPos = layout.positions[edge.target];
                 if (!sPos || !tPos) return null;
 
                 const isEdgeHighlighted =
@@ -291,8 +335,8 @@ export const EntityGraph: React.FC<EntityGraphProps> = ({ onSelectEntity }) => {
 
             {/* Nodes Layer with Generous Constellation Spacing */}
             <g className="nodes-layer">
-              {ENTITY_GRAPH_DATA.nodes.map((node) => {
-                const pos = nodePositions[node.id];
+              {layout.nodes.map((node) => {
+                const pos = layout.positions[node.id];
                 if (!pos) return null;
 
                 const isSelected = selectedNode?.id === node.id;
@@ -326,6 +370,14 @@ export const EntityGraph: React.FC<EntityGraphProps> = ({ onSelectEntity }) => {
             </g>
           </g>
         </svg>
+        {source !== 'LOADING' && layout.nodes.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center text-[11px] text-slate-500 font-mono">
+            No linked records yet. Import or scan some posts.
+          </div>
+        )}
+        <div className="absolute bottom-1.5 left-2 text-[9px] font-mono text-slate-500 pointer-events-none">
+          showing {layout.nodes.length} of {layout.totalNodes} nodes
+        </div>
       </div>
 
       {/* Structured Glass Inspected Node Drawer (Palantir/Linear elevation) */}
@@ -369,9 +421,9 @@ export const EntityGraph: React.FC<EntityGraphProps> = ({ onSelectEntity }) => {
             <div className="p-2.5 bg-rose-500/[0.08] border border-rose-500/20 rounded-lg text-[11px] text-slate-300 flex items-start gap-2">
               <span className="text-rose-400 font-bold">●</span>
               <span className="leading-snug">
-                <strong className="text-rose-300">Demo graph link:</strong> This identifier is
-                associated with multiple sample channels. The link is exploratory and does not
-                establish identity, coordination, or criminal activity.
+                <strong className="text-rose-300">{source === 'LIVE' ? 'Seen in 2+ channels:' : 'Sample link:'}</strong>{' '}
+                This identifier appears in more than one channel{source === 'LIVE' ? '' : ' of the bundled sample data'}.
+                It is a lead for review and does not establish identity, coordination, or criminal activity.
               </span>
             </div>
           )}

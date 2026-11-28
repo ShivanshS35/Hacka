@@ -14,7 +14,7 @@ export const Preloader: React.FC<PreloaderProps> = ({ onComplete }) => {
   const getStatusText = (val: number) => {
     if (val < 18) return '[01/05] LOADING PUBLIC-POST COLLECTORS...';
     if (val < 38) return '[02/05] LOADING RAJASTHAN DISTRICT MAP...';
-    if (val < 62) return '[03/05] PARSING HINGLISH ILLICIT TRADE DIALECTS (189 TERMS)...';
+    if (val < 62) return '[03/05] PARSING HINGLISH ILLICIT TRADE DIALECTS (232 TERMS)...';
     if (val < 84) return '[04/05] SYNCHRONIZING CROSS-CHANNEL CRIME SYNDICATE TOPOLOGY...';
     if (val < 100) return '[05/05] VERIFYING DEMO CONTENT DIGEST LABELS...';
     return '[OK] ALL INTELLIGENCE VECTORS SYNCHRONIZED. READY.';

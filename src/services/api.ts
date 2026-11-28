@@ -1,5 +1,8 @@
 import { geminiHeaders } from './geminiKey';
-import { InterceptPost, DistrictIntel, CrimeCategory, EntityNode, EntityEdge, ThreatAlert, CoordinatedGroup } from '../types';
+import {
+  InterceptPost, DistrictIntel, CrimeCategory, EntityNode, EntityEdge, ThreatAlert, CoordinatedGroup,
+  AnalystStatus, VerifyResult, AuditEntry, AuditChainStatus, Platform,
+} from '../types';
 
 const RAW_API_URL = (import.meta.env.VITE_API_URL as string) || 'http://localhost:8000';
 const API_BASE_URL = `${RAW_API_URL.replace(/\/+$/, '')}/api`;
@@ -11,11 +14,32 @@ export interface ScanTextPayload {
   text: string;
   channel?: string;
   districtId?: string;
+  platform?: Platform;
+  analyst?: string;
 }
 
 export interface ChannelScanPayload {
   channel: string;
   limit?: number;
+}
+
+const ANALYST_KEY = 'prahari.analyst';
+
+/** Free-text name recorded in the audit log. There are no accounts in this prototype, so it is not authenticated. */
+export function getAnalystName(): string {
+  try {
+    return (localStorage.getItem(ANALYST_KEY) || 'analyst').slice(0, 64);
+  } catch {
+    return 'analyst';
+  }
+}
+
+export function setAnalystName(name: string): void {
+  try {
+    localStorage.setItem(ANALYST_KEY, name.trim().slice(0, 64) || 'analyst');
+  } catch {
+    /* storage unavailable */
+  }
 }
 
 export const prahariApi = {
@@ -55,7 +79,7 @@ export const prahariApi = {
     const res = await fetch(`${API_BASE_URL}/scan/text`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...geminiHeaders() },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ analyst: getAnalystName(), ...payload }),
     });
     if (!res.ok) throw new Error('Text scanning failed');
     return await res.json();
@@ -77,9 +101,14 @@ export const prahariApi = {
   /**
    * Ingest exported CSV/JSON dataset file into Python backend
    */
-  async ingestFile(file: File): Promise<{ filename: string; ingested_count: number; records: InterceptPost[] }> {
+  async ingestFile(
+    file: File,
+    platform?: Platform
+  ): Promise<{ filename: string; ingested_count: number; duplicates_skipped?: number; records: InterceptPost[] }> {
     const formData = new FormData();
     formData.append('file', file);
+    if (platform && platform !== 'UNKNOWN') formData.append('platform', platform);
+    formData.append('analyst', getAnalystName());
     const res = await fetch(`${API_BASE_URL}/ingest/file`, {
       method: 'POST',
       headers: geminiHeaders(),
@@ -98,6 +127,86 @@ export const prahariApi = {
     const result = await res.json();
     if (result.error) throw new Error(result.error);
     return result;
+  },
+
+  /** Upload a screenshot/photo. `ocrText` is the text read in the browser; the server uses its own OCR when it has one. */
+  async ingestImage(
+    file: File,
+    opts: { channel?: string; platform?: Platform; ocrText?: string; districtId?: string } = {}
+  ): Promise<InterceptPost> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (opts.channel) formData.append('channel', opts.channel);
+    if (opts.platform) formData.append('platform', opts.platform);
+    if (opts.ocrText) formData.append('ocrText', opts.ocrText);
+    if (opts.districtId) formData.append('districtId', opts.districtId);
+    formData.append('analyst', getAnalystName());
+    const res = await fetch(`${API_BASE_URL}/ingest/image`, { method: 'POST', headers: geminiHeaders(), body: formData });
+    if (!res.ok) {
+      let message = `Image upload failed (${res.status})`;
+      try {
+        const error = await res.json();
+        if (error.detail) message = String(error.detail);
+      } catch {
+        // keep the status message
+      }
+      throw new Error(message);
+    }
+    return await res.json();
+  },
+
+  /** Re-hash the stored text on the backend and compare with the digest recorded at capture. */
+  async verifyHash(postId: string): Promise<{ result?: VerifyResult; status: 'ok' | 'not_found' | 'offline' }> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/dossier/${encodeURIComponent(postId)}/verify?analyst=${encodeURIComponent(getAnalystName())}`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(20000),
+      });
+      if (res.status === 404) return { status: 'not_found' };
+      if (!res.ok) return { status: 'offline' };
+      return { status: 'ok', result: await res.json() };
+    } catch {
+      return { status: 'offline' };
+    }
+  },
+
+  async setStatus(postId: string, status: AnalystStatus, note: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/posts/${encodeURIComponent(postId)}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, note, analyst: getAnalystName() }),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+
+  async getAudit(limit = 8): Promise<AuditEntry[] | null> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/audit?limit=${limit}`);
+      return res.ok ? await res.json() : null;
+    } catch {
+      return null;
+    }
+  },
+
+  async verifyAuditChain(): Promise<AuditChainStatus | null> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/audit/verify`);
+      return res.ok ? await res.json() : null;
+    } catch {
+      return null;
+    }
+  },
+
+  /** URL the browser can open to download the alerts as CSV or JSON (the server sets the file name). */
+  exportUrl(format: 'csv' | 'json', filters: { risk?: string; status?: string } = {}): string {
+    const q = new URLSearchParams({ format, analyst: getAnalystName() });
+    if (filters.risk && filters.risk !== 'ALL') q.set('risk', filters.risk);
+    if (filters.status && filters.status !== 'ALL') q.set('status', filters.status);
+    return `${API_BASE_URL}/export?${q.toString()}`;
   },
 
   /** Ask the backend to verify the saved Gemini key (lists models; no usage charged). */

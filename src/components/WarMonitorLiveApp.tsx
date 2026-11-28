@@ -31,6 +31,9 @@ import { RajasthanMap } from './RajasthanMap';
 import { LiveInterceptFeed } from './LiveInterceptFeed';
 import { ForensicDossier } from './ForensicDossier';
 import { AlertsPanel } from './AlertsPanel';
+import { EntityGraph } from './EntityGraph';
+import { VerifyHashInline } from './VerifyHashInline';
+import { PlatformBadge, DirectionBadge, StatusBadge } from './MetaBadges';
 import { EntityTopologyPage } from './EntityTopologyPage';
 import { IntelModeModal } from './IntelModeModal';
 import { UploadModal } from './UploadModal';
@@ -693,6 +696,11 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
                 </div>
               </div>
 
+              {/* Live cross-channel link graph (reads /api/graph; shows a labelled sample when the backend is offline) */}
+              <div className="h-[480px] rounded-xl border border-white/[0.07] overflow-hidden shrink-0">
+                <EntityGraph />
+              </div>
+
               {/* Selected Post Quick Intel Summary */}
               {selectedPost ? (
                 <div className="p-3.5 bg-white/[0.02] border border-white/[0.06] rounded-xl space-y-3">
@@ -708,7 +716,12 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
 
                   {/* Channel & Confidence */}
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-mono text-cyan-300 font-medium">{selectedPost.channel}</span>
+                    <span className="font-mono text-cyan-300 font-medium flex items-center gap-1.5 flex-wrap">
+                      {selectedPost.channel}
+                      <PlatformBadge platform={selectedPost.platform} />
+                      <DirectionBadge direction={selectedPost.direction} />
+                      <StatusBadge status={selectedPost.analystStatus} />
+                    </span>
                     <span className="font-mono text-rose-400 font-bold">
                       {(selectedPost.confidence * 100).toFixed(0)}% MATCH
                     </span>
@@ -728,6 +741,8 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
                       {selectedPost.sha256}
                     </div>
                   </div>
+
+                  <VerifyHashInline postId={selectedPost.id} />
 
                   {/* Action Buttons */}
                   <div className="grid grid-cols-2 gap-2 pt-1">

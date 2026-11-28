@@ -189,17 +189,17 @@ def test_gemini_check_endpoint_never_echoes_key():
 
 
 def test_classifier_eval_numbers_match_site_claims():
-    """The landing page quotes 89.5% precision / 68.0% recall on the 50-post held-out set; keep that honest."""
+    """The landing page quotes 94.4% precision / 68.0% recall on the 50-post held-out set; keep that honest."""
     from eval_classifier import evaluate, HOLDOUT
     r = evaluate(HOLDOUT)
     assert r["n"] == 50
-    assert round(r["precision"] * 100, 1) == 89.5
+    assert round(r["precision"] * 100, 1) == 94.4
     assert round(r["recall"] * 100, 1) == 68.0
 
 
 def test_lexicon_term_count_matches_site_claim():
     import classifier
-    assert sum(len(g["terms"]) for gs in classifier.SLANG_DICTIONARY.values() for g in gs) == 189
+    assert sum(len(g["terms"]) for gs in classifier.SLANG_DICTIONARY.values() for g in gs) == 232
 
 
 def _fake_gemini(monkeypatch, payload, counter):
