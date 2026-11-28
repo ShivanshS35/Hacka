@@ -19,6 +19,10 @@ export interface InterceptPost {
   categories: CrimeCategory[];
   confidence: number;
   matchedSlang: string[];
+  /** True when Gemini (user's own key) classified this post because the lexicon was unsure. */
+  aiAssisted?: boolean;
+  aiReason?: string | null;
+  aiModel?: string | null;
   entities: ExtractedEntities;
   districtId: string;
   districtName: string;

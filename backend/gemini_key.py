@@ -13,7 +13,9 @@ GEMINI_MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/models?pag
 
 
 def key_from_header(value: Optional[str]) -> Optional[str]:
-    key = (value or "").strip()
+    if not isinstance(value, str):  # handler called directly without a header
+        return None
+    key = value.strip()
     return key if 10 <= len(key) <= 200 and " " not in key else None
 
 

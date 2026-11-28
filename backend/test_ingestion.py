@@ -194,3 +194,95 @@ def test_classifier_eval_numbers_match_site_claims():
     assert r["n"] == 60
     assert round(r["precision"] * 100, 1) == 96.9
     assert round(r["recall"] * 100, 1) == 64.6
+
+
+def _fake_gemini(monkeypatch, payload, counter):
+    import gemini_classifier as g
+    g._cache.clear(); g._recent.clear(); g._total_calls = 0
+    def fake_call(text, key):
+        counter.append(key)
+        return payload
+    monkeypatch.setattr(g, "_call", fake_call)
+    return g
+
+
+def test_gemini_not_called_without_key_or_when_lexicon_is_confident(monkeypatch):
+    calls = []
+    g = _fake_gemini(monkeypatch, {"category": "DRUGS", "confidence": 0.9, "reason": "x", "slang": []}, calls)
+    assert g.hybrid_classify("snow milega kya", None)["ai"]["assisted"] is False
+    assert g.hybrid_classify("Pure white available 5g", "AIzaFakeKey1234567890")["ai"]["assisted"] is False
+    assert calls == []
+
+
+def test_gemini_fills_lexicon_gap_and_falls_back(monkeypatch):
+    calls = []
+    g = _fake_gemini(monkeypatch, {"category": "DRUGS", "confidence": 0.9, "reason": "coded drug sale", "slang": ["snow"]}, calls)
+    r = g.hybrid_classify("snow milega kya, ek gram", "AIzaFakeKey1234567890")
+    assert r["categories"] == ["DRUGS"] and r["ai"]["assisted"] and calls == ["AIzaFakeKey1234567890"]
+    g.hybrid_classify("snow milega kya, ek gram", "AIzaFakeKey1234567890")  # cached
+    assert len(calls) == 1
+    g2 = _fake_gemini(monkeypatch, None, [])
+    assert g2.hybrid_classify("hello friends", "AIzaFakeKey1234567890")["categories"] == []
+
+
+def test_gemini_ignores_garbage_and_none(monkeypatch):
+    g = _fake_gemini(monkeypatch, {"category": "NONE", "confidence": 0.99, "reason": "", "slang": []}, [])
+    assert g.hybrid_classify("Happy Diwali", "AIzaFakeKey1234567890")["ai"]["assisted"] is False
+    assert g._clean({"category": "HACKED", "confidence": 1}) is None
+    assert g._clean({"category": "ARMS", "confidence": "abc"}) is None
+
+
+def test_gemini_budget_cap(monkeypatch):
+    g = _fake_gemini(monkeypatch, {"category": "ARMS", "confidence": 0.9, "reason": "", "slang": []}, [])
+    monkeypatch.setattr(g, "MAX_TOTAL_CALLS", 1)
+    assert g.hybrid_classify("kuch aur aa gaya hai A", "AIzaFakeKey1234567890")["ai"]["assisted"]
+    assert not g.hybrid_classify("kuch aur aa gaya hai B", "AIzaFakeKey1234567890")["ai"]["assisted"]
+
+
+def test_scan_endpoint_marks_ai_assisted(monkeypatch):
+    from fastapi.testclient import TestClient
+    import main
+    g = _fake_gemini(monkeypatch, {"category": "DRUGS", "confidence": 0.9, "reason": "coded", "slang": ["snow"]}, [])
+    c = TestClient(main.app)
+    r = c.post("/api/scan/text", json={"text": "snow milega kya zzq"}, headers={"X-Gemini-Key": "AIzaFakeKey1234567890"}).json()
+    assert r["aiAssisted"] is True and r["categories"] == ["DRUGS"] and "AIza" not in str(r)
+    r2 = c.post("/api/scan/text", json={"text": "snow milega kya zzr"}).json()
+    assert r2["aiAssisted"] is False and r2["categories"] == []
+
+
+def test_gemini_http_path_with_model_discovery(monkeypatch):
+    """Exercise the real HTTP code against a local fake Gemini, including 404 -> model discovery."""
+    import json, threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    import gemini_classifier as g
+    seen = {"keys": [], "paths": []}
+
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a): pass
+        def _send(self, code, obj):
+            b = json.dumps(obj).encode(); self.send_response(code)
+            self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(b)))
+            self.end_headers(); self.wfile.write(b)
+        def do_GET(self):
+            seen["keys"].append(self.headers.get("x-goog-api-key")); seen["paths"].append(self.path)
+            self._send(200, {"models": [{"name": "models/gemini-test-flash", "supportedGenerationMethods": ["generateContent"]}]})
+        def do_POST(self):
+            seen["keys"].append(self.headers.get("x-goog-api-key")); seen["paths"].append(self.path)
+            self.rfile.read(int(self.headers["Content-Length"]))
+            if "gemini-test-flash" not in self.path:
+                return self._send(404, {"error": "nope"})
+            inner = {"category": "DRUGS", "confidence": 0.91, "reason": "coded drug sale", "slang": ["snow"]}
+            self._send(200, {"candidates": [{"content": {"parts": [{"text": json.dumps(inner)}]}}]})
+
+    srv = HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        monkeypatch.setattr(g, "API_ROOT", f"http://127.0.0.1:{srv.server_port}/v1beta")
+        monkeypatch.setattr(g, "_resolved_model", None)
+        g._cache.clear(); g._recent.clear(); g._total_calls = 0
+        r = g.hybrid_classify("snow milega kya, ek gram", "AIzaFakeKey1234567890")
+        assert r["categories"] == ["DRUGS"] and r["ai"]["assisted"] and r["ai"]["model"] == "gemini-test-flash"
+        assert set(seen["keys"]) == {"AIzaFakeKey1234567890"}          # key only in header
+        assert not any("AIza" in p for p in seen["paths"])             # never in the URL
+    finally:
+        srv.shutdown()
