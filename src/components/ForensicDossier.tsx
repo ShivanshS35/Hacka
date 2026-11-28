@@ -206,14 +206,14 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
         </div>
 
         {/* Center: Vintage Case Dossier Seal Title */}
-        <div className="hidden md:flex flex-col items-center">
+        <div className="hidden min-[1500px]:flex flex-col items-center shrink-0 px-4">
           <span
-            className="text-xs tracking-[0.25em] text-amber-300 uppercase font-bold"
+            className="text-xs tracking-[0.2em] whitespace-nowrap text-amber-300 uppercase font-bold"
             style={{ fontFamily: "'Cinzel', serif" }}
           >
             PRAHARI // SYNTHETIC DEMO ARCHIVE
           </span>
-          <span className="text-[10px] font-mono text-amber-200/50">
+          <span className="text-[10px] font-mono whitespace-nowrap text-amber-200/50">
             CONFIDENTIAL DIGITAL EVIDENCE JOURNAL
           </span>
         </div>
