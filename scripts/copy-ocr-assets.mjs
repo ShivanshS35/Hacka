@@ -1,4 +1,4 @@
-// Copies the in-browser OCR engine (tesseract.js worker + wasm core + English model, about 11 MB) from node_modules
+// Copies the in-browser OCR engine (tesseract.js worker + wasm core + English + Hindi models, about 13 MB) from node_modules
 // into public/tesseract so the image tab works without any third-party CDN. Runs before dev and build.
 import { cpSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -11,6 +11,7 @@ const files = [
   ['node_modules/tesseract.js-core/tesseract-core-simd-lstm.wasm.js', 'core/tesseract-core-simd-lstm.wasm.js'],
   ['node_modules/tesseract.js-core/tesseract-core-lstm.wasm.js', 'core/tesseract-core-lstm.wasm.js'],
   ['node_modules/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz', 'lang/eng.traineddata.gz'],
+  ['node_modules/@tesseract.js-data/hin/4.0.0_best_int/hin.traineddata.gz', 'lang/hin.traineddata.gz'],
 ];
 let missing = 0;
 for (const [src, dest] of files) {

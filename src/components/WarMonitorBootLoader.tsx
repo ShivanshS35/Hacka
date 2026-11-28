@@ -15,7 +15,7 @@ export const WarMonitorBootLoader: React.FC<WarMonitorBootLoaderProps> = ({ onCo
     "[INT] Loading public Telegram preview collector and CSV / JSON importer...",
     "[INT] Initializing identifier extractor (UPI, phone, handle, wallet)...",
     "[SEC] Loading Rajasthan district map...",
-    "[SEC] Loading Hinglish slang lexicon (337 terms)...",
+    "[SEC] Loading Hinglish slang lexicon (343 terms)...",
     "[SEC] Initializing cross-channel link graph...",
     "[HUD] Loading district geometries...",
     "[VIS] Configuring map overlays...",

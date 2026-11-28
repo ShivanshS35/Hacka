@@ -6,11 +6,15 @@ browser text is the path that works. Images themselves are not stored, only thei
 """
 import hashlib
 import io
+import os
 import shutil
 import subprocess
 from typing import Any, Dict, List, Optional, Tuple
 
-from PIL import Image, ImageOps, UnidentifiedImageError
+import re
+import unicodedata
+
+from PIL import Image, ImageFilter, ImageOps, UnidentifiedImageError
 
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_PIXELS = 40_000_000          # reject decompression bombs before decoding
@@ -38,6 +42,9 @@ def hamming(a: str, b: str) -> int:
 
 
 def have_server_ocr() -> bool:
+    """PRAHARI_SERVER_OCR=0 turns server OCR off (then the browser's text is used, as on the free Render tier)."""
+    if os.environ.get("PRAHARI_SERVER_OCR", "1") == "0":
+        return False
     return shutil.which("tesseract") is not None
 
 
@@ -50,15 +57,58 @@ def _ocr_languages() -> str:
         return "eng"
 
 
+def _ocr_variant(image_bytes: bytes, denoise: bool = False) -> bytes:
+    """Grey, contrast-stretched copy, upscaled so the long side is about 1600 px: helps small, dark or blurred posters.
+    With denoise, a 5x5 median filter first: removes speckle noise (it recovered the grainy, tilted PS02 poster P12)."""
+    img = ImageOps.exif_transpose(Image.open(io.BytesIO(image_bytes))).convert("L")
+    if denoise:
+        img = img.filter(ImageFilter.MedianFilter(5))
+    scale = min(3.0, max(1.0, 1600 / max(img.size)))
+    if scale > 1.0:
+        img = img.resize((int(img.width * scale), int(img.height * scale)), Image.LANCZOS)
+    buf = io.BytesIO()
+    ImageOps.autocontrast(img).save(buf, "PNG")
+    return buf.getvalue()
+
+
 def server_ocr(image_bytes: bytes) -> str:
+    """Three passes (as uploaded, a grey upscaled copy, a denoised copy), English + Hindi when installed."""
     if not have_server_ocr():
         return ""
-    try:
-        proc = subprocess.run(["tesseract", "stdin", "stdout", "-l", _ocr_languages()], input=image_bytes,
-                              capture_output=True, timeout=45)
-        return proc.stdout.decode("utf-8", errors="replace").strip()
-    except Exception:
-        return ""
+    texts = []
+    variants: List[Optional[bytes]] = [image_bytes]
+    for denoise in (False, True):
+        try:
+            variants.append(_ocr_variant(image_bytes, denoise))
+        except Exception:
+            variants.append(None)
+    for data in variants:
+        if not data:
+            continue
+        try:
+            proc = subprocess.run(["tesseract", "stdin", "stdout", "-l", _ocr_languages()], input=data,
+                                  capture_output=True, timeout=45)
+            t = proc.stdout.decode("utf-8", errors="replace").strip()
+            if t and t not in texts:
+                texts.append(t)
+        except Exception:
+            continue
+    return "\n".join(texts)
+
+
+_JUNK_TOKEN = re.compile(r"^[^\w@₹]+$")
+
+
+def clean_ocr_text(text: str) -> str:
+    """Drop OCR noise before classification: poster borders read as '|', '!', '«', '*' and lone Devanagari marks.
+    Without this, 'CURRENT ACCOUNT | RENT' does not match the phrase 'current account rent'."""
+    lines = []
+    for line in (text or "").splitlines():
+        toks = [t for t in line.split()
+                if not _JUNK_TOKEN.match(t) and not all(unicodedata.category(ch).startswith("M") for ch in t)]
+        if toks:
+            lines.append(" ".join(toks))
+    return "\n".join(lines)
 
 
 def analyse_image(data: bytes) -> Tuple[Dict[str, Any], Image.Image]:

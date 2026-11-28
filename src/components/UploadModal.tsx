@@ -28,25 +28,161 @@ interface UploadModalProps {
 
 type IngestMode = 'CHANNEL' | 'TEXT' | 'FILE' | 'IMAGE' | 'COMPLAINTS' | 'BENCHMARK';
 
-/** Read the text in an image in the browser (tesseract.js is loaded only when this is used). */
-async function ocrInBrowser(file: File, onProgress: (pct: number) => void): Promise<string> {
+/** Grey, contrast-stretched copy, upscaled so the long side is about 1600 px (helps small, dark or blurred posters). */
+/** 5x5 median of a grey image (one byte per pixel). Removes speckle noise that breaks letters apart. */
+function median5(src: Uint8ClampedArray, w: number, h: number): Uint8ClampedArray {
+  const out = new Uint8ClampedArray(src.length);
+  const hist = new Uint16Array(256);
+  for (let y = 0; y < h; y++) {
+    hist.fill(0);
+    let n = 0;
+    // running histogram along the row: add the column entering the window, drop the one leaving it
+    const add = (x: number, d: number) => {
+      if (x < 0 || x >= w) return;
+      for (let yy = Math.max(0, y - 2); yy <= Math.min(h - 1, y + 2); yy++) {
+        hist[src[yy * w + x]] += d;
+        n += d;
+      }
+    };
+    for (let x = -2; x <= 1; x++) add(x, 1);
+    for (let x = 0; x < w; x++) {
+      add(x + 2, 1);
+      add(x - 3, -1);
+      let c = 0, v = 0;
+      const half = n >> 1;
+      while (v < 255 && c + hist[v] <= half) c += hist[v++];
+      out[y * w + x] = v;
+    }
+  }
+  return out;
+}
+
+/** Grey, contrast-stretched copy, upscaled so the long side is about 1600 px. With denoise, a 5x5 median first. */
+async function preprocessForOcr(file: File, denoise = false): Promise<HTMLCanvasElement | null> {
+  try {
+    const bmp = await createImageBitmap(file);
+    let grey: Uint8ClampedArray | null = null;
+    if (denoise) {
+      // median at the original size (cheaper), then upscale the cleaned picture
+      const small = document.createElement('canvas');
+      small.width = bmp.width;
+      small.height = bmp.height;
+      const sctx = small.getContext('2d');
+      if (!sctx) return null;
+      sctx.drawImage(bmp, 0, 0);
+      const sd = sctx.getImageData(0, 0, bmp.width, bmp.height);
+      grey = new Uint8ClampedArray(bmp.width * bmp.height);
+      for (let i = 0, j = 0; j < grey.length; i += 4, j++) grey[j] = 0.299 * sd.data[i] + 0.587 * sd.data[i + 1] + 0.114 * sd.data[i + 2];
+      const m = median5(grey, bmp.width, bmp.height);
+      for (let i = 0, j = 0; j < m.length; i += 4, j++) sd.data[i] = sd.data[i + 1] = sd.data[i + 2] = m[j];
+      sctx.putImageData(sd, 0, 0);
+      return stretch(small, bmp.width, bmp.height);
+    }
+    return stretch(bmp, bmp.width, bmp.height);
+  } catch {
+    return null;
+  }
+}
+
+function stretch(source: CanvasImageSource, w: number, h: number): HTMLCanvasElement | null {
+  const scale = Math.min(3, Math.max(1, 1600 / Math.max(w, h)));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(w * scale);
+  canvas.height = Math.round(h * scale);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+  const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = img.data;
+  let lo = 255, hi = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    const g = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    d[i] = d[i + 1] = d[i + 2] = g;
+    if (g < lo) lo = g;
+    if (g > hi) hi = g;
+  }
+  const range = Math.max(1, hi - lo);
+  for (let i = 0; i < d.length; i += 4) d[i] = d[i + 1] = d[i + 2] = ((d[i] - lo) * 255) / range;
+  ctx.putImageData(img, 0, 0);
+  return canvas;
+}
+
+type OcrWorker = Awaited<ReturnType<typeof import('tesseract.js')['createWorker']>>;
+
+/** One OCR worker, English + Hindi. Engine and models are served from this site (public/tesseract): no CDN. */
+async function makeOcrWorker(onProgress?: (p: number) => void): Promise<OcrWorker> {
   const { createWorker } = await import('tesseract.js');
-  // Engine and English model are served from this site (public/tesseract), so no third-party CDN is involved.
   const base = `${import.meta.env.BASE_URL}tesseract`;
-  const worker = await createWorker('eng', 1, {
+  return createWorker(['eng', 'hin'], 1, {
     workerPath: `${base}/worker.min.js`,
     corePath: `${base}/core`,
     langPath: `${base}/lang`,
     logger: (m: { status: string; progress: number }) => {
-      if (m.status === 'recognizing text') onProgress(Math.round(m.progress * 100));
+      if (m.status === 'recognizing text' && onProgress) onProgress(m.progress);
     },
   });
+}
+
+/** Three passes: the image as uploaded, a grey contrast-stretched upscaled copy, and a denoised copy. */
+async function readImageText(worker: OcrWorker, file: File, setPass?: (n: number) => void): Promise<string> {
+  const texts: string[] = [];
+  setPass?.(0);
+  const first = await worker.recognize(file);
+  texts.push((first.data.text || '').trim());
+  for (const denoise of [false, true]) {
+    setPass?.(denoise ? 2 : 1);
+    const canvas = await preprocessForOcr(file, denoise);
+    if (!canvas) continue;
+    const r = await worker.recognize(canvas);
+    const t = (r.data.text || '').trim();
+    if (t && !texts.includes(t)) texts.push(t);
+  }
+  return texts.filter(Boolean).join('\n');
+}
+
+/** Read the text in one image in the browser (tesseract.js loads only when used). */
+async function ocrInBrowser(file: File, onProgress: (pct: number) => void): Promise<string> {
+  let pass = 0;
+  const worker = await makeOcrWorker((p) => onProgress(Math.round(((pass + p) * 100) / 3)));
   try {
-    const { data } = await worker.recognize(file);
-    return (data.text || '').trim();
+    return await readImageText(worker, file, (n) => (pass = n));
   } finally {
     await worker.terminate();
   }
+}
+
+async function sha256Hex(file: File): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+interface PictureOnlyPost {
+  file: File;
+  channel: string;
+  date?: string;
+}
+
+/** Telegram Desktop exports: messages with a photo and no caption, matched to the photo files in the chosen folder. */
+async function findPictureOnlyPosts(all: File[]): Promise<PictureOnlyPost[]> {
+  const rel = (f: File) => (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name;
+  const byPath = new Map(all.map((f) => [rel(f), f]));
+  const out: PictureOnlyPost[] = [];
+  for (const f of all.filter((x) => /(^|\/)result\.json$/i.test(rel(x)))) {
+    try {
+      const data = JSON.parse(await f.text());
+      const dir = rel(f).replace(/result\.json$/i, '');
+      for (const m of data.messages || []) {
+        if (m.type !== 'message' || !m.photo) continue;
+        const text = typeof m.text === 'string' ? m.text : (m.text || []).map((t: unknown) => (typeof t === 'string' ? t : (t as { text?: string }).text || '')).join('');
+        if (text.trim()) continue;
+        const photo = byPath.get(dir + m.photo);
+        if (photo) out.push({ file: photo, channel: data.name || 'telegram_export', date: m.date });
+      }
+    } catch {
+      /* not a Telegram export */
+    }
+  }
+  return out;
 }
 
 export const UploadModal: React.FC<UploadModalProps> = ({
@@ -69,6 +205,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [successCount, setSuccessCount] = useState<number | null>(null);
   const [platform, setPlatform] = useState<Platform>('UNKNOWN');
+  const [ocrPictures, setOcrPictures] = useState(true);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageText, setImageText] = useState('');
   const [ocrPct, setOcrPct] = useState<number | null>(null);
@@ -269,9 +406,43 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         failed.push(`${label} (${err instanceof Error ? err.message : 'failed'})`);
       }
     }
+    // Picture-only posts (no caption): read each unique picture once in the browser, then store every post.
+    let pictures = 0;
+    if (imageOnly && ocrPictures) {
+      const items = await findPictureOnlyPosts(input);
+      if (items.length) {
+        const textByHash = new Map<string, string>();
+        let worker: OcrWorker | null = null;
+        try {
+          worker = await makeOcrWorker();
+          for (let i = 0; i < items.length; i++) {
+            const it = items[i];
+            setStatusMessage(`Reading picture-only posts: ${i + 1} / ${items.length} (${textByHash.size} unique pictures read)`);
+            try {
+              const h = await sha256Hex(it.file);
+              if (!textByHash.has(h)) textByHash.set(h, await readImageText(worker, it.file));
+              const rec = await prahariApi.ingestImage(it.file, {
+                channel: it.channel, platform: 'TELEGRAM', ocrText: textByHash.get(h) || '', sourceTimestamp: it.date,
+              });
+              if (!rec.duplicate) {
+                pictures++;
+                onIngestPosts([rec]);
+              }
+            } catch (err) {
+              failed.push(`${it.file.name} (${err instanceof Error ? err.message : 'failed'})`);
+            }
+          }
+        } finally {
+          await worker?.terminate();
+        }
+        added += pictures;
+        imageOnly = Math.max(0, imageOnly - pictures);
+      }
+    }
     setIsProcessing(false);
     const notes = [
       skipped ? `${skipped} already stored and skipped` : '',
+      pictures ? `${pictures} picture-only posts read with OCR` : '',
       imageOnly ? `${imageOnly} picture-only posts need the Screenshot / Image tab` : '',
       failed.length ? `${failed.length} file${failed.length > 1 ? 's' : ''} not imported: ${failed.slice(0, 3).join('; ')}${failed.length > 3 ? '...' : ''}` : '',
     ].filter(Boolean).join('. ');
@@ -616,6 +787,10 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                   <p className="text-slate-600 text-[10px] mt-3">
                     From a folder, only post files are imported (result.json, posts.csv). Lexicon, reference and complaint files are skipped.
                   </p>
+                  <label className="mt-2 flex items-center justify-center gap-2 text-[11px] text-slate-400" onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" checked={ocrPictures} onChange={(e) => setOcrPictures(e.target.checked)} />
+                    Also read picture-only posts with OCR (folder import; each unique picture once, in your browser)
+                  </label>
                 </div>
               )}
 

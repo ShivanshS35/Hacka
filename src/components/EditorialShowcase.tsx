@@ -231,7 +231,7 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
           {/* 3 Telemetry Pillars */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-16 pt-10 border-t border-slate-800/80 font-mono">
             <div className="bg-[#0d121a] p-4 rounded-xl border border-slate-800">
-              <div className="text-2xl sm:text-3xl font-black text-cyan-400">337</div>
+              <div className="text-2xl sm:text-3xl font-black text-cyan-400">343</div>
               <div className="text-[11px] text-slate-400 uppercase tracking-wider mt-1">
                 SLANG TERMS IN LEXICON
               </div>
@@ -279,7 +279,7 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
                 DETECTION LEXICON
               </div>
               <div className="text-4xl sm:text-5xl font-mono font-black text-white mb-2">
-                337
+                343
               </div>
               <p className="text-slate-400 text-sm leading-relaxed">
                 Curated slang, emoji and Hinglish terms across drugs, arms, documents and financial-account ads (measured from the lexicon file).

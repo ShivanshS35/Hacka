@@ -11,7 +11,7 @@ from typing import Dict, List, Any, Optional, Tuple
 # they are capped below the "confident" level so a Gemini second opinion is requested.
 SLANG_DICTIONARY: Dict[str, List[Dict[str, Any]]] = {
     "DRUGS": [
-        {"terms": ["chitta", "chita", "cheeta", "chhita", "chiita", "चिट्टा", "चीटा"], "weight": 0.96},
+        {"terms": ["chitta", "chita", "cheeta", "chhita", "chiita", "चिट्टा", "चीटा", "चिट्ठा", "चिट्टे"], "weight": 0.96},
         {"terms": ["pure white"], "weight": 0.96, "ambiguous": True},
         {"terms": ["afeem", "अफ़ीम", "doda post", "dodapost"], "weight": 0.94},
         {"terms": ["opium", "doda"], "weight": 0.94, "ambiguous": True},
@@ -35,7 +35,7 @@ SLANG_DICTIONARY: Dict[str, List[Dict[str, Any]]] = {
         {"terms": ["party ka saman", "party saman", "party ka maal", "party stuff", "pahadi stuff", "pahadi maal",
                    "special tablets", "neend ki dawai", "bina parchi"], "weight": 0.90, "ambiguous": True},
         {"terms": ["drops daily", "trusted plug", "your plug"], "weight": 0.85, "ambiguous": True},
-        {"terms": ["माल", "स्मैक", "चरस", "अफीम", "डोडा पोस्त", "डोडा"], "weight": 0.90, "ambiguous": True},
+        {"terms": ["माल", "स्मैक", "चरस", "अफीम", "डोडा पोस्त", "डोडा पोस्ट", "डोडा", "गांजा"], "weight": 0.90, "ambiguous": True},
     ],
     "ARMS": [
         {"terms": ["desi katta", "desi kata", "katta", "kaata", "kattaa", "कट्टा", "देशी कट्टा"], "weight": 0.98},
@@ -105,8 +105,8 @@ SLANG_DICTIONARY: Dict[str, List[Dict[str, Any]]] = {
                    "gaming work"], "weight": 0.92},
         {"terms": ["virtual numbers for otp", "virtual number for otp", "otp numbers", "otp number", "virtual numbers",
                    "virtual number"], "weight": 0.93},
-        {"terms": ["ca available", "ca chahiye", "current a/c", "savings / current", "kit"], "weight": 0.85,
-         "ambiguous": True},
+        {"terms": ["ca available", "ca chahiye", "current a/c", "savings / current", "kit", "account do",
+                   "net banking details"], "weight": 0.85, "ambiguous": True},
         # SIM cards: ordinary on their own; flagged only with a SIM-fraud cue (bulk, no KYC, someone else's name...).
         {"terms": ["sim", "sims", "sim card", "sim cards"], "weight": 0.92, "ambiguous": True, "needs": "sim"},
     ]
@@ -123,7 +123,7 @@ COMMERCE_RE = re.compile(
     r"pick-?up|ready|in stock|stock|supply|for sale|sale|selling|sell|buy|rent|kiraya|kiraye|kirya|escrow|"
     r"payment|advance|upi|paytm|gpay|phonepe|dispatch|shipping|hand to hand|milega|milegi|chahiye|bhejo|"
     r"bulk|commission|payout|mil jaye(ga|gi|nge)|milenge|mil jayenge|inbox|baat karo|aa gaya|aa gayi|aaya hai|"
-    r"aaye hai|aayi hai|order|drops|उपलब्ध|डिलीवरी|संपर्क|चाहिए)(?!\w)|📲"
+    r"aaye hai|aayi hai|order|drops|उपलब्ध|डिलीवरी|संपर्क|चाहिए|थोक|खुदरा)(?!\w)|📲"
     r"|(?<!\w)[6-9]\d{9}(?!\d)|(?<![\w])@[A-Za-z0-9_]{4,32}|\bbc1[a-z0-9]{10,}|\b0x[a-fA-F0-9]{20,}",
     re.IGNORECASE,
 )

@@ -981,8 +981,9 @@ def export_alerts(format: str = "csv", risk: Optional[str] = None, status: Optio
 @app.post("/api/ingest/image")
 async def ingest_image(file: UploadFile = File(...), channel: str = Form("@image_upload"), platform: str = Form("UNKNOWN"),
                        districtId: str = Form(""), ocrText: str = Form(""), analyst: str = Form("analyst"),
-                       x_gemini_key: Optional[str] = Header(default=None)):
+                       sourceTimestamp: str = Form(""), x_gemini_key: Optional[str] = Header(default=None)):
     channel, platform, districtId = _str(channel, "@image_upload"), _str(platform, "UNKNOWN"), _str(districtId)
+    sourceTimestamp = _str(sourceTimestamp) or None
     ocrText, analyst = _str(ocrText), _str(analyst, "analyst") or "analyst"
     data = await file.read(images.MAX_IMAGE_BYTES + 1)
     try:
@@ -994,6 +995,7 @@ async def ingest_image(file: UploadFile = File(...), channel: str = Form("@image
     if not text.strip():
         text = (ocrText or "").strip()[:50_000]
         ocr_source = "browser_ocr" if text else "none"
+    text = images.clean_ocr_text(text)
     if not text:
         # Keep the image (its hash can still link it to other posts), with a text unique to this file.
         text = f"[no readable text in image sha256:{meta['sha256'][:16]}]"
@@ -1002,7 +1004,7 @@ async def ingest_image(file: UploadFile = File(...), channel: str = Form("@image
     gkey = key_from_header(x_gemini_key)
     rec = process_and_store_post(
         channel=channel, raw_text=text, district_hint=districtId, source_type="UPLOADED_IMAGE",
-        source_reference=file.filename or "uploaded image",
+        source_reference=file.filename or "uploaded image", source_timestamp=sourceTimestamp,
         classification=await asyncio.to_thread(hybrid_classify, text, gkey),
         entities=await asyncio.to_thread(extract_entities, text),
         platform=platform, image=meta, actor=analyst)

@@ -133,7 +133,7 @@ export const prahariApi = {
   /** Upload a screenshot/photo. `ocrText` is the text read in the browser; the server uses its own OCR when it has one. */
   async ingestImage(
     file: File,
-    opts: { channel?: string; platform?: Platform; ocrText?: string; districtId?: string } = {}
+    opts: { channel?: string; platform?: Platform; ocrText?: string; districtId?: string; sourceTimestamp?: string } = {}
   ): Promise<InterceptPost> {
     const formData = new FormData();
     formData.append('file', file);
@@ -141,6 +141,7 @@ export const prahariApi = {
     if (opts.platform) formData.append('platform', opts.platform);
     if (opts.ocrText) formData.append('ocrText', opts.ocrText);
     if (opts.districtId) formData.append('districtId', opts.districtId);
+    if (opts.sourceTimestamp) formData.append('sourceTimestamp', opts.sourceTimestamp);
     formData.append('analyst', getAnalystName());
     const res = await fetch(`${API_BASE_URL}/ingest/image`, { method: 'POST', headers: geminiHeaders(), body: formData });
     if (!res.ok) {

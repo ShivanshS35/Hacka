@@ -199,7 +199,7 @@ def test_classifier_eval_numbers_match_site_claims():
 
 def test_lexicon_term_count_matches_site_claim():
     import classifier
-    assert sum(len(g["terms"]) for gs in classifier.SLANG_DICTIONARY.values() for g in gs) == 337
+    assert sum(len(g["terms"]) for gs in classifier.SLANG_DICTIONARY.values() for g in gs) == 343
 
 
 def _fake_gemini(monkeypatch, payload, counter):
@@ -505,3 +505,13 @@ def test_new_2023_districts_are_detected():
     }
     for text, expected in cases.items():
         assert extract_entities(text)["district_id"] == expected, text
+
+
+def test_clean_ocr_text_drops_poster_borders():
+    import images
+    raw = "i CURRENT ACCOUNT |\n| RENT\n! Corporate « Savings !\nं # 9783104472"
+    cleaned = images.clean_ocr_text(raw)
+    assert "|" not in cleaned and "«" not in cleaned and "!" not in cleaned
+    assert "9783104472" in cleaned
+    from classifier import classify_text
+    assert "FINANCIAL" in classify_text(cleaned)["categories"]
