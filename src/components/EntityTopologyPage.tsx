@@ -1091,7 +1091,7 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 24 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
-            className="absolute top-16 right-4 bottom-4 z-20 w-[360px] bg-[#0C101A]/90 backdrop-blur-xl border border-white/[0.08] rounded-2xl shadow-2xl flex flex-col overflow-hidden font-sans select-none"
+            className="absolute top-16 right-4 bottom-[calc(var(--dock-clearance,0px)+16px)] z-20 w-[360px] bg-[#0C101A]/90 backdrop-blur-xl border border-white/[0.08] rounded-2xl shadow-2xl flex flex-col overflow-hidden font-sans select-none"
           >
             {/* Drawer Header */}
             <div className="p-4 border-b border-white/[0.07] flex items-center justify-between">
@@ -1231,7 +1231,7 @@ export const EntityTopologyPage: React.FC<EntityTopologyPageProps> = ({
       {/* ======================================================== */}
       {/* 5. FLOATING BOTTOM-RIGHT ZOOM & RESET CONTROLS           */}
       {/* ======================================================== */}
-      <div className="absolute bottom-4 right-4 z-20 flex items-center gap-1.5 bg-[#0C101A]/90 backdrop-blur-xl border border-white/[0.08] rounded-xl p-1.5 shadow-2xl">
+      <div className={`absolute bottom-[calc(var(--dock-clearance,0px)+16px)] ${selectedNodeInfo ? 'right-[392px]' : 'right-4'} z-20 flex items-center gap-1.5 bg-[#0C101A]/90 backdrop-blur-xl border border-white/[0.08] rounded-xl p-1.5 shadow-2xl`}>
         <button
           onClick={() => {
             sound.playClick();

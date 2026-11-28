@@ -754,7 +754,7 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
         </AnimatePresence>
 
         {/* Bottom Overlay Bar: Legend (Left) + Selected District Callout (Right) */}
-        <div className="absolute bottom-3.5 left-4 right-4 z-20 flex flex-wrap items-end justify-between gap-2 pointer-events-none">
+        <div className="absolute bottom-[calc(var(--dock-clearance,0px)+14px)] left-4 right-4 z-20 flex flex-wrap items-end justify-between gap-2 pointer-events-none">
           {/* Compact, Translucent Floating Pill Legend */}
           <div className="pointer-events-auto bg-[#0C101A]/85 backdrop-blur-md border border-white/[0.08] px-3 py-1.5 rounded-full flex items-center gap-3 text-[10px] font-sans text-slate-400 shadow-xl">
             <div className="flex items-center gap-1.5">

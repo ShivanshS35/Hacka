@@ -86,7 +86,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
         {activeTab === 'DOSSIER' && <ForensicDossier post={selectedPost} />}
 
         {activeTab === 'DISTRICT' && selectedDistrict && (
-          <div className="h-full flex flex-col p-4 bg-[#0C101A] overflow-y-auto space-y-4">
+          <div className="h-full flex flex-col p-4 pb-[calc(var(--dock-clearance,0px)+12px)] bg-[#0C101A] overflow-y-auto space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-white/[0.07]">
               <div>
                 <div className="text-white font-semibold text-sm flex items-center gap-2">

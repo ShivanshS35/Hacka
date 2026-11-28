@@ -131,7 +131,7 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({ posts, refreshKey, onO
           </div>
         </header>
 
-        <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2.5">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 pb-[calc(var(--dock-clearance,0px)+12px)] space-y-2.5">
           {offline && (
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-200 text-xs p-3">
               The analysis backend is not reachable (a free instance can take about a minute to wake up).
@@ -254,7 +254,7 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({ posts, refreshKey, onO
           <h2 className="text-sm font-semibold tracking-tight">Coordinated ads</h2>
           <span className="text-[11px] font-mono text-slate-500">{groups?.length ?? 0} groups</span>
         </header>
-        <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2.5">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 pb-[calc(var(--dock-clearance,0px)+12px)] space-y-2.5">
           {complaintSummary && complaintSummary.complaints > 0 && (
             <div className="rounded-lg border border-rose-500/25 bg-rose-500/[0.06] p-3 space-y-1.5">
               <div className="flex items-center gap-2">

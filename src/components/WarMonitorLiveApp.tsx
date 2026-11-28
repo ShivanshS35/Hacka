@@ -321,7 +321,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
   };
 
   return (
-    <div className="h-screen w-screen bg-[#070A10] text-slate-100 flex flex-col overflow-hidden font-sans select-none relative pb-[var(--dock-clearance,0px)]">
+    <div className="h-screen w-screen bg-[#070A10] text-slate-100 flex flex-col overflow-hidden font-sans select-none relative">
       {/* ======================================================== */}
       {/* 1. PALANTIR / LINEAR 52PX SINGLE-ROW GLASS TOP COMMAND BAR */}
       {/* ======================================================== */}
@@ -691,7 +691,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
             </div>
 
             {/* RIGHT PANEL: Compact Quick Intel & Forensic Summary (3 cols on lg) */}
-            <div className="hidden lg:flex lg:col-span-3 h-full flex-col overflow-y-auto bg-[#0C101A] border-l border-white/[0.07] p-3.5 space-y-3.5 select-none font-sans">
+            <div className="hidden lg:flex lg:col-span-3 h-full flex-col overflow-y-auto bg-[#0C101A] border-l border-white/[0.07] p-3.5 pb-[calc(var(--dock-clearance,0px)+12px)] space-y-3.5 select-none font-sans">
               {/* Quick Action Card: Launch Dedicated Full-Screen 3D Entity Topology */}
               <div
                 onClick={() => {

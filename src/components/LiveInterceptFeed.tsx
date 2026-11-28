@@ -228,7 +228,7 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
       </div>
 
       {/* Intercepts List Container (Linear/Palantir clean cards) */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+      <div className="flex-1 overflow-y-auto p-3 pb-[calc(var(--dock-clearance,0px)+12px)] space-y-2.5">
         {filteredPosts.length === 0 ? (
           <div className="py-16 text-center text-slate-500">
             <AlertCircle className="w-6 h-6 mx-auto mb-2 opacity-40 text-slate-400" />
