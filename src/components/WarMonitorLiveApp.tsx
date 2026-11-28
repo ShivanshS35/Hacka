@@ -598,7 +598,7 @@ export const WarMonitorLiveApp: React.FC<WarMonitorLiveAppProps> = ({ onOpenEdit
             <div className="md:col-span-8 lg:col-span-6 h-full p-2 bg-[#070A10] overflow-hidden flex flex-col relative">
               {unlocatedCount > 0 && (
                 <div
-                  className="absolute top-3 left-3 z-20 px-2.5 py-1 rounded-full bg-[#090C10]/90 border border-amber-400/40 text-[10px] font-mono text-amber-300"
+                  className="absolute top-[64px] left-6 z-20 px-2.5 py-1 rounded-full bg-[#090C10]/90 border border-amber-400/40 text-[10px] font-mono text-amber-300"
                   title="These posts did not name a Rajasthan district, so no district was changed on the map."
                 >
                   {unlocatedCount} NEW POST{unlocatedCount === 1 ? '' : 'S'} WITH NO DISTRICT
