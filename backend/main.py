@@ -10,7 +10,7 @@ from pathlib import Path
 from contextlib import closing
 from zoneinfo import ZoneInfo
 from typing import List, Dict, Any, Optional
-from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect, Header
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 from classifier import classify_text
 from extractor import extract_entities, generate_sha256
 from graph_engine import DynamicEntityGraph
+from gemini_key import key_from_header, check_key
 from analytics import build_alerts, find_coordinated
 from telegram_scraper import TelegramPreviewError, scrape_public_telegram_channel
 
@@ -574,6 +575,12 @@ async def ingest_dataset_file(file: UploadFile = File(...)):
 @app.get("/api/graph")
 def get_entity_graph():
     return ENTITY_GRAPH.to_dict()
+
+@app.post("/api/gemini/check")
+async def gemini_check(x_gemini_key: Optional[str] = Header(default=None)):
+    """Verify a user-supplied key. The key is used for this call only and is never stored or logged."""
+    return await asyncio.to_thread(check_key, key_from_header(x_gemini_key))
+
 
 @app.get("/api/alerts")
 def get_alerts(limit: int = 50, risk: Optional[str] = None):

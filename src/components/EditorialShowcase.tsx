@@ -1,3 +1,4 @@
+import { ApiKeyConfig } from './ApiKeyConfig';
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -767,6 +768,7 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
           </div>
         </div>
       </footer>
+      <ApiKeyConfig />
     </div>
   );
 };

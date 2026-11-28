@@ -1,3 +1,4 @@
+import { geminiHeaders } from './geminiKey';
 import { InterceptPost, DistrictIntel, CrimeCategory, EntityNode, EntityEdge, ThreatAlert, CoordinatedGroup } from '../types';
 
 const RAW_API_URL = (import.meta.env.VITE_API_URL as string) || 'http://localhost:8000';
@@ -53,7 +54,7 @@ export const prahariApi = {
   async scanText(payload: ScanTextPayload): Promise<InterceptPost> {
     const res = await fetch(`${API_BASE_URL}/scan/text`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...geminiHeaders() },
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error('Text scanning failed');
@@ -66,7 +67,7 @@ export const prahariApi = {
   async scanChannel(payload: ChannelScanPayload): Promise<{ channel: string; scraped_count: number; intercepts: InterceptPost[] }> {
     const res = await fetch(`${API_BASE_URL}/scan/channel`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...geminiHeaders() },
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error(`Channel scan failed (${res.status})`);
@@ -81,6 +82,7 @@ export const prahariApi = {
     formData.append('file', file);
     const res = await fetch(`${API_BASE_URL}/ingest/file`, {
       method: 'POST',
+      headers: geminiHeaders(),
       body: formData,
     });
     if (!res.ok) {
@@ -96,6 +98,20 @@ export const prahariApi = {
     const result = await res.json();
     if (result.error) throw new Error(result.error);
     return result;
+  },
+
+  /** Ask the backend to verify the saved Gemini key (lists models; no usage charged). */
+  async checkGeminiKey(): Promise<{ valid: boolean; reason: string }> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/gemini/check`, {
+        method: 'POST',
+        headers: geminiHeaders(),
+        signal: AbortSignal.timeout(15000),
+      });
+      return await res.json();
+    } catch {
+      return { valid: false, reason: 'Backend unreachable' };
+    }
   },
 
   /**

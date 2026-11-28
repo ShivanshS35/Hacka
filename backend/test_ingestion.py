@@ -169,3 +169,19 @@ class IngestionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_gemini_key_header_parsing():
+    from gemini_key import key_from_header, check_key
+    assert key_from_header(None) is None
+    assert key_from_header("short") is None
+    assert key_from_header("  AIzaFakeKey1234567890  ") == "AIzaFakeKey1234567890"
+    assert check_key(None)["valid"] is False
+
+
+def test_gemini_check_endpoint_never_echoes_key():
+    from fastapi.testclient import TestClient
+    import main
+    r = TestClient(main.app).post("/api/gemini/check", headers={"X-Gemini-Key": "AIzaFakeKey1234567890"})
+    assert r.status_code == 200
+    assert "AIzaFakeKey1234567890" not in r.text
