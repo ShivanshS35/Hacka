@@ -15,8 +15,8 @@ function describeStatus(s?: string): string {
 }
 
 /** Discreet Gemini API key settings. Collapsed by default; sits at the very bottom of the first page. */
-export const ApiKeyConfig: React.FC = () => {
-  const [open, setOpen] = useState(false);
+export const ApiKeyConfig: React.FC<{ defaultOpen?: boolean }> = ({ defaultOpen = false }) => {
+  const [open, setOpen] = useState(defaultOpen);
   const [saved, setSaved] = useState(getGeminiKey());
   const [draft, setDraft] = useState('');
   const [msg, setMsg] = useState('');
