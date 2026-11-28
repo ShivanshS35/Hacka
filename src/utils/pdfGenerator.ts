@@ -395,7 +395,7 @@ export function generateDossierPDF(post: InterceptPost) {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(6.5);
   doc.setTextColor(148, 163, 184);
-  doc.text(`SOURCE: ${sanitizePdfText(post.sourceType || 'DEMO / UNKNOWN')}`, margin + 4, footerBoxY + 10.5);
+  doc.text(`SOURCE: ${sanitizePdfText(post.sourceType || 'DEMO / UNKNOWN')}${post.platform && post.platform !== 'UNKNOWN' ? ' // ' + sanitizePdfText(post.platform) : ''}${post.direction && post.direction !== 'UNKNOWN' ? ' // ' + sanitizePdfText(post.direction.replace('_', ' ')) : ''}`, margin + 4, footerBoxY + 10.5);
   doc.text('HASH: SHA-256 OF UTF-8 RAW TEXT ONLY', margin + 4, footerBoxY + 15);
   doc.text(`CAPTURED BY THIS DEMO: ${sanitizePdfText(post.capturedAt || 'unknown')}`, margin + 4, footerBoxY + 19.5);
   doc.text('NO AUTHENTICITY OR CUSTODY ATTESTATION', margin + 4, footerBoxY + 24);

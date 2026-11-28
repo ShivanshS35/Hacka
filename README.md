@@ -80,6 +80,10 @@ It provides a rules based classifier, entity extraction, graph visualization, CS
   - **Forged Documents**: Flags fake *Aadhaar/PAN* cards, biometric bypasses, forged marksheets, and fake driving licenses.
   - **Mule Accounts**: Detects rented *KYC bank kits*, current accounts with ATM kits, net-banking SIM cards, and USDT crypto arbitrage.
 - **Dialect Support**: Hindi, Hinglish, Marwari/Rajasthani regional slang, Romanized terms, and disguised emoji ciphers.
+- **Context rules, not just keywords**: a single keyword is not enough ("Chitta village fair on Sunday" is not flagged); it needs a sale context (offer, price, contact, quantity) or a second matched term. News, warnings and shop notices ("Police seized 5 kg of ganja", "Beware of fake Aadhaar scams") need an explicit offer to sell. One emoji alone never flags.
+- **Evasion handling**: spaced or spelled-out digits (`9 0 0 0...`, `nine zero...`, `nau shunya...`), Devanagari and full-width digits, zero-width characters, look-alike Cyrillic/Greek letters, leetspeak (`ch1tta`), spaced letters, and UPI IDs written as `name (at) upi` or `name dot user at upi`. The stored text and its SHA-256 are never changed; identifiers are extracted from a normalised copy.
+- **SIM-card trade** (pre-activated / no-KYC / bulk SIMs) is detected under the financial category. Each flagged post also gets a **direction** (selling, buying, rent offered, rent wanted) and a **platform** field.
+- **Shared identifiers are not links**: generic handles (`@admin`, `@support`), placeholder numbers (`9999999999`) and toll-free numbers are reported separately and never create graph links or cross-channel risk. UPI IDs, handles and `0x` wallets are lower-cased before linking, so `Raj.Pay@OKSBI` and `raj.pay@oksbi` are one node.
 
 ### 2. Rajasthan Tactical GIS Surveillance Map
 - **High-Resolution Geo-Mesh**: Interactive MapLibre map of all 41 districts of Rajasthan (bundled boundaries; falls back to a plain dark basemap if map tiles cannot load).
@@ -96,7 +100,7 @@ It provides a rules based classifier, entity extraction, graph visualization, CS
 - **Case-Specific Graphs**: Selecting any case dynamically isolates that entity's first-degree and second-degree nexus with radial and orbital node distributions.
 
 ### 4. Investigative Scrapbook Forensic Dossier
-- **Physical Evidence Collage**: Organizes digital seizures into tangible exhibits with brass paperclips, authenticated Telegram screenshots, and threat tags.
+- **Physical Evidence Collage**: Organizes digital seizures into tangible exhibits with brass paperclips, sample Telegram-style screenshots, and threat tags.
 - **Cryptographic Barcode**: Displays full SHA-256 integrity hash with one-click verification and clipboard copy.
 - **Interactive 3D Red Wax Seal Stamp**: Clicking the wax seal triggers a mechanical audio effect and generates a clearly labeled prototype report.
 - **Archive Volumes Shelf**: 3D embossed leather book interface allowing investigators to browse cases categorized by criminal volume.
@@ -105,6 +109,14 @@ It provides a rules based classifier, entity extraction, graph visualization, CS
 - SHA-256 is computed over the UTF-8 bytes of the displayed raw text.
 - The digest can help detect later text changes. It does not authenticate source data, establish chain of custody, or create a legal certificate.
 - Precision tabular grid with dynamic height adjustment preventing any text overflow.
+
+### 5b. Analyst workflow, audit log and export
+- **Re-verify hash**: the dossier can ask the server to re-hash the text it has stored now and compare it with the digest recorded at capture (detects a changed record; says nothing about who captured it).
+- **Status workflow**: `NEW -> REVIEWING -> ESCALATED / FALSE POSITIVE / CLOSED`, with a note. Status lives in its own table, so working a case never changes the evidence record.
+- **Audit trail**: every ingest, status change, hash re-verification and export is logged in a hash-chained table (each entry stores the hash of the previous one, so editing or deleting an old row is detected by `GET /api/audit/verify`). There are no user accounts: the analyst name is typed in, so the log shows who *said* they acted.
+- **Export**: alerts as CSV or JSON (`GET /api/export`), with spreadsheet-formula neutralisation for untrusted text.
+- **Re-import safe**: the same message (same channel, same exact text, same source timestamp) is never stored twice; the import reports how many were skipped.
+- **Screenshots / images**: OCR runs in the browser (self-hosted tesseract.js, no CDN) or on the server when `tesseract` is installed; the image gets a SHA-256 and a perceptual hash, so the same picture re-posted in another channel (even resized or re-compressed) is linked in the graph and adds to the risk score. The image file itself is not stored.
 
 ### 6. Tactical Web Audio Sound Engine
 - 100% synthesized in real time via the browser's native **Web Audio API** (zero external MP3 dependencies).
@@ -115,7 +127,7 @@ It provides a rules based classifier, entity extraction, graph visualization, CS
 - **Instant Cross-Referencing**: Persistent search bar trigger and global hotkey `Cmd + K` / `Ctrl + K` allowing investigators to query any token across all Rajasthan districts, Telegram channels, and forensic evidence records in milliseconds.
 - **Entity Type Auto-Detection**: Live pill detection for `UPI ID`, `PHONE / WHATSAPP`, `TELEGRAM HANDLE`, `CRYPTO WALLET`, `DISTRICT`, and `KEYWORD`.
 - **Inter-District Record Matches**: Summarizes matching records and channels by district. It does not score threat or establish a real-world syndicate.
-- **Actionable 1-Click Pivots**: Directly plot the multi-district mesh on the GIS map with glowing animated pulse rings and a floating jurisdiction banner, inspect in 3D topology, or open the Section 65B forensic dossier.
+- **Actionable 1-Click Pivots**: Directly plot the multi-district mesh on the GIS map with glowing animated pulse rings and a floating jurisdiction banner, inspect in 3D topology, or open the forensic dossier.
 
 ---
 
@@ -244,7 +256,7 @@ prahari-osint/
 
 ## Evidence and data limitations
 
-PRAHARI's SHA-256 value is computed over raw text only. SQLite is mutable, the graph is reconstructed in memory from recent rows, and the app does not provide a verified acquisition process or chain-of-custody log. Reports do not certify compliance with Section 65B or Section 63. Built-in records, district telemetry, and the animated feed are synthetic demonstrations.
+PRAHARI's SHA-256 value is computed over raw text only. SQLite is mutable, the graph is reconstructed in memory from recent rows, and the app does not provide a verified acquisition process. The audit log is hash-chained, which makes edits to old entries detectable, but it is not a chain of custody: there is no authentication, and anyone who controls the database file could rewrite the whole chain. Image matching uses a 64-bit perceptual hash (distance 10 or less), which finds re-encoded or resized copies of the same picture, not similar-looking different pictures. The free hosting tier has no `tesseract` binary, so server-side OCR is off there; OCR in the browser still works. Reports do not certify compliance with Section 65B or Section 63. Built-in records, district telemetry, and the animated feed are synthetic demonstrations.
 
 ---
 
