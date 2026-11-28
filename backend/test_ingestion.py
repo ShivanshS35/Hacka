@@ -349,3 +349,16 @@ def test_gemini_model_fallback_reports_tried_and_available(monkeypatch):
         assert "gemini-3-flash" in res["tried"] and "gemini-3-flash" in res["available"] and "embed-1" not in res["available"]
     finally:
         srv.shutdown()
+
+
+def test_gemini_reply_parsing_is_tolerant():
+    import gemini_classifier as g
+    inner = '{"category": "DRUGS", "confidence": 0.9, "reason": "r", "slang": ["snow"]}'
+    wrap = lambda *texts, **kw: {"candidates": [{"content": {"parts": [dict(text=t, **kw) for t in texts]}}]}
+    assert g._parse_reply(wrap(inner))["category"] == "DRUGS"
+    assert g._parse_reply(wrap("```json\n" + inner + "\n```"))["category"] == "DRUGS"
+    assert g._parse_reply(wrap('{"category": "DRUGS", ', '"confidence": 0.9}'))["confidence"] == 0.9   # split across parts
+    assert g._parse_reply({"candidates": [{"content": {"parts": [{"text": "thinking...", "thought": True}, {"text": inner}]}}]})["category"] == "DRUGS"
+    import pytest
+    with pytest.raises(ValueError):
+        g._parse_reply(wrap("sorry I cannot help"))
