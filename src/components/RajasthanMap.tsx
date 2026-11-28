@@ -1,36 +1,60 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, ZoomIn, ZoomOut, RefreshCw } from 'lucide-react';
+import * as maplibregl from 'maplibre-gl';
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
+import 'maplibre-gl/dist/maplibre-gl.css';
+
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
 import { geoCentroid } from 'd3-geo';
 import { DistrictIntel, DistrictConnection, CrimeCategory } from '../types';
 import { RAJASTHAN_DISTRICTS } from '../data/mockData';
-import {
-  ComposableMap,
-  Geographies,
-  Geography,
-  Marker,
-  Line,
-  ZoomableGroup,
-} from 'react-simple-maps';
+import { useRajasthanGeoJSON } from '../hooks/useRajasthanGeoJSON';
 import { sound } from '../utils/audio';
 
-const rajasthanGeoUrl = '/rajasthan-districts.json';
-const DEFAULT_CENTER: [number, number] = [73.9, 26.7];
+const DARK_VECTOR_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+// Used when the Carto basemap cannot be fetched (offline / blocked network), so the district layer still works.
+const FALLBACK_STYLE: maplibregl.StyleSpecification = {
+  version: 8,
+  sources: {},
+  layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#04070d' } }],
+};
+const DEFAULT_CENTER: [number, number] = [73.9, 26.6];
+const DEFAULT_ZOOM = 5.45;
 
-// District name normalization map for TopoJSON spellings and variations
+// District name normalization map for GeoJSON spellings and variations (41 districts across 7 divisions)
 export const DISTRICT_NAME_NORMALIZATION: Record<string, string> = {
   ganganagar: 'Sri Ganganagar',
-  jalor: 'Jalore',
-  jhunjhunun: 'Jhunjhunu',
-  chittaurgarh: 'Chittorgarh',
-  dhaulpur: 'Dholpur',
   'sri ganganagar': 'Sri Ganganagar',
+  'sri-ganganagar': 'Sri Ganganagar',
+  jalor: 'Jalore',
   jalore: 'Jalore',
+  jhunjhunun: 'Jhunjhunu',
   jhunjhunu: 'Jhunjhunu',
+  chittaurgarh: 'Chittorgarh',
   chittorgarh: 'Chittorgarh',
+  dhaulpur: 'Dholpur',
   dholpur: 'Dholpur',
   'sawai madhopur': 'Sawai Madhopur',
+  'sawai-madhopur': 'Sawai Madhopur',
   sawaimadhopur: 'Sawai Madhopur',
+  balotra: 'Balotra',
+  beawar: 'Beawar',
+  deeg: 'Deeg',
+  'didwana-kuchaman': 'Didwana-Kuchaman',
+  didwana: 'Didwana-Kuchaman',
+  kuchaman: 'Didwana-Kuchaman',
+  'didwana kuchaman': 'Didwana-Kuchaman',
+  'kotputli-behror': 'Kotputli-Behror',
+  kotputli: 'Kotputli-Behror',
+  behror: 'Kotputli-Behror',
+  'kotputli behror': 'Kotputli-Behror',
+  'khairthal-tijara': 'Khairthal-Tijara',
+  khairthal: 'Khairthal-Tijara',
+  tijara: 'Khairthal-Tijara',
+  'khairthal tijara': 'Khairthal-Tijara',
+  phalodi: 'Phalodi',
+  salumbar: 'Salumbar',
 };
 
 export const normalizeDistrictName = (rawName?: string | null): string => {
@@ -39,45 +63,26 @@ export const normalizeDistrictName = (rawName?: string | null): string => {
   return DISTRICT_NAME_NORMALIZATION[clean] || rawName.trim();
 };
 
-// Static coordinate fallback table for all 33 Rajasthan districts
-const DISTRICT_COORDINATES: Record<string, [number, number]> = {
-  churu: [74.695, 28.3439],
-  jhunjhunu: [75.5499, 28.092],
-  jaisalmer: [70.8995, 27.0748],
-  sikar: [75.2888, 27.6337],
-  alwar: [76.6014, 27.5903],
-  jaipur: [75.7179, 26.9764],
-  jodhpur: [72.7872, 26.7466],
-  bharatpur: [77.2761, 27.2476],
-  nagaur: [74.1748, 27.0661],
-  dausa: [76.5086, 26.8567],
-  karauli: [76.9593, 26.522],
-  dholpur: [77.7006, 26.681],
-  barmer: [71.4742, 25.7348],
-  'sawai madhopur': [76.4612, 26.2177],
-  'sawai-madhopur': [76.4612, 26.2177],
-  tonk: [75.6663, 26.1486],
-  pali: [73.5178, 25.7065],
-  bhilwara: [74.7272, 25.4806],
-  jalore: [72.2099, 25.0989],
-  bundi: [75.7913, 25.4879],
-  kota: [76.1033, 25.1093],
-  sirohi: [72.7765, 24.7618],
-  baran: [76.7477, 24.9949],
-  udaipur: [73.6897, 24.4183],
-  jhalawar: [76.1919, 24.3359],
-  dungarpur: [73.8535, 23.731],
-  banswara: [74.3644, 23.4781],
-  ajmer: [74.7722, 26.2326],
-  rajsamand: [73.8902, 25.2271],
-  chittorgarh: [74.7742, 24.8219],
-  ganganagar: [73.5694, 29.3956],
-  'sri ganganagar': [73.5694, 29.3956],
-  'sri-ganganagar': [73.5694, 29.3956],
-  hanumangarh: [74.5623, 29.266],
-  bikaner: [73.174, 28.177],
-  pratapgarh: [74.6514, 24.029],
-};
+function buildCurvedArc(from: [number, number], to: [number, number], steps = 24): [number, number][] {
+  const [x1, y1] = from;
+  const [x2, y2] = to;
+  const mx = (x1 + x2) / 2;
+  const my = (y1 + y2) / 2;
+  const dist = Math.hypot(x2 - x1, y2 - y1);
+  // Subtle northward bow proportional to distance
+  const cx = mx - (y2 - y1) * 0.14;
+  const cy = my + Math.max(Math.abs(x2 - x1) * 0.14, dist * 0.08);
+
+  const coords: [number, number][] = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const inv = 1 - t;
+    const lng = inv * inv * x1 + 2 * inv * t * cx + t * t * x2;
+    const lat = inv * inv * y1 + 2 * inv * t * cy + t * t * y2;
+    coords.push([lng, lat]);
+  }
+  return coords;
+}
 
 interface RajasthanMapProps {
   districts: DistrictIntel[];
@@ -98,30 +103,44 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
   activeCategory,
   highlightedDistrictIds = [],
 }) => {
+  const { geoJson, isLoading } = useRajasthanGeoJSON();
+
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
+
   const [hoveredDistrict, setHoveredDistrict] = useState<DistrictIntel | null>(null);
   const [showArcs, setShowArcs] = useState(true);
   const [showRadar, setShowRadar] = useState(true);
-  const [zoomLevel, setZoomLevel] = useState<number>(1);
-  const [mapCenter, setMapCenter] = useState<[number, number]>(DEFAULT_CENTER);
 
-  // Filter connections by active category
-  const filteredConnections = connections.filter((conn) => {
-    if (activeCategory === 'ALL') return true;
-    return conn.category === activeCategory;
-  });
+  // Keep latest callbacks/data in refs for MapLibre event handlers
+  const districtsRef = useRef(districts);
+  districtsRef.current = districts;
+  const onSelectDistrictRef = useRef(onSelectDistrict);
+  onSelectDistrictRef.current = onSelectDistrict;
+
+  const filteredConnections = useMemo(
+    () =>
+      connections.filter((conn) => {
+        if (activeCategory === 'ALL') return true;
+        return conn.category === activeCategory;
+      }),
+    [connections, activeCategory]
+  );
 
   const getDistrictById = (id: string) =>
-    districts.find((d) => d.id.toLowerCase() === id.toLowerCase());
+    districtsRef.current.find((d) => d.id.toLowerCase() === id.toLowerCase());
 
   const getDistrictByName = (rawName?: string | null) => {
     if (!rawName) return undefined;
     const normalized = normalizeDistrictName(rawName).toLowerCase();
     const rawClean = rawName.trim().toLowerCase();
 
-    return districts.find((d) => {
+    return districtsRef.current.find((d) => {
       const dNorm = normalizeDistrictName(d.name).toLowerCase();
       const dClean = d.name.trim().toLowerCase();
       const dId = d.id.toLowerCase().replace(/-/g, ' ');
+      const dIdRaw = d.id.toLowerCase();
 
       return (
         dNorm === normalized ||
@@ -129,41 +148,19 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
         dClean === normalized ||
         dNorm === rawClean ||
         dId === normalized ||
-        dId === rawClean
+        dId === rawClean ||
+        dIdRaw === normalized ||
+        dIdRaw === rawClean
       );
     });
-  };
-
-  const getDistrictCoordinates = (
-    d: DistrictIntel,
-    dynamicMap?: Map<string, [number, number]>
-  ): [number, number] | null => {
-    if (d.coordinates && d.coordinates.length === 2) {
-      return d.coordinates;
-    }
-
-    if (dynamicMap) {
-      const norm = normalizeDistrictName(d.name).toLowerCase();
-      if (dynamicMap.has(norm)) return dynamicMap.get(norm)!;
-      if (dynamicMap.has(d.name.toLowerCase())) return dynamicMap.get(d.name.toLowerCase())!;
-      if (dynamicMap.has(d.id.toLowerCase())) return dynamicMap.get(d.id.toLowerCase())!;
-    }
-
-    const idKey = d.id.toLowerCase();
-    if (DISTRICT_COORDINATES[idKey]) return DISTRICT_COORDINATES[idKey];
-    const nameKey = d.name.toLowerCase().trim();
-    if (DISTRICT_COORDINATES[nameKey]) return DISTRICT_COORDINATES[nameKey];
-    const stripped = nameKey.replace(/^sri\s+/, '');
-    if (DISTRICT_COORDINATES[stripped]) return DISTRICT_COORDINATES[stripped];
-
-    return null;
   };
 
   const getConnectionColor = (conn: DistrictConnection) => {
     if (conn.type === 'UPI') return '#22D3EE'; // cyan
     if (conn.type === 'PHONE' || conn.category === 'ARMS') return '#F59E0B'; // amber
     if (conn.type === 'CRYPTO' || conn.category === 'DRUGS') return '#F43F5E'; // rose
-    return '#818CF8';
+    if (conn.type === 'BANK') return '#10B981'; // emerald
+    return '#38BDF8'; // sky/telegram
   };
 
   const getThreatColor = (level: string) => {
@@ -179,430 +176,509 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
     }
   };
 
+  // Enrich GeoJSON features with matched DistrictIntel metadata & compute centroids
+  const { enrichedGeoJson, centroidById } = useMemo(() => {
+    if (!geoJson) {
+      return { enrichedGeoJson: null, centroidById: new Map<string, [number, number]>() };
+    }
+
+    const centroids = new Map<string, [number, number]>();
+    const features = geoJson.features.map((feature) => {
+      const rawName =
+        feature.properties?.district ||
+        feature.properties?.dtname ||
+        feature.properties?.name ||
+        '';
+      const matched = getDistrictByName(rawName);
+      const center = geoCentroid(feature as any) as [number, number];
+      const hasValidCenter =
+        Array.isArray(center) && !Number.isNaN(center[0]) && !Number.isNaN(center[1]);
+
+      if (matched && hasValidCenter) {
+        centroids.set(matched.id.toLowerCase(), center);
+      }
+
+      return {
+        ...feature,
+        properties: {
+          ...feature.properties,
+          districtId: matched?.id || rawName.toLowerCase(),
+          districtName: matched?.name || rawName,
+          threatLevel: matched?.threatLevel || 'MODERATE',
+          threatColor: getThreatColor(matched?.threatLevel || 'MODERATE'),
+          flaggedCount: matched?.flaggedCount || 0,
+        },
+      };
+    });
+
+    return {
+      enrichedGeoJson: {
+        type: 'FeatureCollection' as const,
+        features,
+      },
+      centroidById: centroids,
+    };
+  }, [geoJson, districts]);
+
+  // Build Threat Pins GeoJSON FeatureCollection
+  const pinsGeoJson = useMemo(() => {
+    const features = districts
+      .map((d) => {
+        const coords = centroidById.get(d.id.toLowerCase()) || d.coordinates;
+        if (!coords || coords.length !== 2) return null;
+        const isHotspot = d.threatLevel === 'CRITICAL' || d.threatLevel === 'HIGH';
+        return {
+          type: 'Feature' as const,
+          geometry: {
+            type: 'Point' as const,
+            coordinates: coords,
+          },
+          properties: {
+            districtId: d.id,
+            name: d.name,
+            label: isHotspot && d.flaggedCount > 0 ? `${d.name} (${d.flaggedCount})` : d.name,
+            threatLevel: d.threatLevel,
+            threatColor: getThreatColor(d.threatLevel),
+            flaggedCount: d.flaggedCount,
+            isHotspot: isHotspot ? 1 : 0,
+          },
+        };
+      })
+      .filter(Boolean);
+
+    return {
+      type: 'FeatureCollection' as const,
+      features: features as any[],
+    };
+  }, [districts, centroidById]);
+
+  // Build Syndicate Arcs GeoJSON FeatureCollection (tracks selected district connectivity)
+  const arcsGeoJson = useMemo(() => {
+    const selectedId = selectedDistrict?.id?.toLowerCase() || '';
+    const features = filteredConnections
+      .map((conn) => {
+        const fromDist = getDistrictById(conn.from);
+        const toDist = getDistrictById(conn.to);
+        if (!fromDist || !toDist) return null;
+
+        const fromCoords = centroidById.get(fromDist.id.toLowerCase()) || fromDist.coordinates;
+        const toCoords = centroidById.get(toDist.id.toLowerCase()) || toDist.coordinates;
+        if (!fromCoords || !toCoords) return null;
+
+        const isConnected =
+          !selectedId ||
+          fromDist.id.toLowerCase() === selectedId ||
+          toDist.id.toLowerCase() === selectedId;
+
+        return {
+          type: 'Feature' as const,
+          geometry: {
+            type: 'LineString' as const,
+            coordinates: buildCurvedArc(fromCoords, toCoords),
+          },
+          properties: {
+            id: conn.id,
+            color: getConnectionColor(conn),
+            isConnected: isConnected ? 1 : 0,
+            hasSelection: selectedId ? 1 : 0,
+          },
+        };
+      })
+      .filter(Boolean);
+
+    return {
+      type: 'FeatureCollection' as const,
+      features: features as any[],
+    };
+  }, [filteredConnections, centroidById, districts, selectedDistrict]);
+
+  // 1. Initialize MapLibre GL instance with Carto Dark Matter vector style
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current) return;
+
+    const map = new maplibregl.Map({
+      container: mapContainerRef.current,
+      style: DARK_VECTOR_STYLE,
+      center: DEFAULT_CENTER,
+      zoom: DEFAULT_ZOOM,
+      minZoom: 5,
+      maxZoom: 12,
+      attributionControl: false,
+    });
+
+    let ready = false;
+    const markReady = () => {
+      if (!ready) {
+        ready = true;
+        clearTimeout(fallbackTimer);
+        setMapLoaded(true);
+      }
+    };
+    const useFallbackStyle = () => {
+      if (ready) return;
+      map.setStyle(FALLBACK_STYLE);
+      map.once('styledata', markReady);
+    };
+    const fallbackTimer = setTimeout(useFallbackStyle, 7000);
+    map.on('load', markReady);
+    map.on('error', (e: any) => {
+      // Only a failed style/basemap request should trigger the fallback, not a single missing tile.
+      if (!ready && !e?.tile) useFallbackStyle();
+    });
+
+    mapRef.current = map;
+
+    const resizeObserver = new ResizeObserver(() => {
+      map.resize();
+    });
+    resizeObserver.observe(mapContainerRef.current);
+
+    return () => {
+      clearTimeout(fallbackTimer);
+      resizeObserver.disconnect();
+      map.remove();
+      mapRef.current = null;
+      setMapLoaded(false);
+    };
+  }, []);
+
+  // 2. Mount / update GeoJSON sources & layers once map style is loaded
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded || !enrichedGeoJson) return;
+
+    // Districts Source & Layers
+    const existingDistrictSource = map.getSource('rajasthan-districts') as maplibregl.GeoJSONSource | undefined;
+    if (existingDistrictSource) {
+      existingDistrictSource.setData(enrichedGeoJson as any);
+    } else {
+      map.addSource('rajasthan-districts', {
+        type: 'geojson',
+        data: enrichedGeoJson as any,
+      });
+
+      map.addLayer({
+        id: 'rajasthan-districts-fill',
+        type: 'fill',
+        source: 'rajasthan-districts',
+        paint: {
+          'fill-color': '#00E5FF',
+          'fill-opacity': 0.03,
+        },
+      });
+
+      map.addLayer({
+        id: 'rajasthan-districts-line',
+        type: 'line',
+        source: 'rajasthan-districts',
+        paint: {
+          'line-color': '#00E5FF',
+          'line-width': 1,
+          'line-opacity': 0.45,
+        },
+      });
+
+      // Interactive hover & click handlers on district polygons
+      map.on('mousemove', 'rajasthan-districts-fill', (e: maplibregl.MapLayerMouseEvent) => {
+        map.getCanvas().style.cursor = 'pointer';
+        const props = e.features?.[0]?.properties;
+        const matched =
+          getDistrictById(props?.districtId) || getDistrictByName(props?.districtName);
+        if (matched) {
+          setHoveredDistrict(matched);
+        }
+      });
+
+      map.on('mouseleave', 'rajasthan-districts-fill', () => {
+        map.getCanvas().style.cursor = '';
+        setHoveredDistrict(null);
+      });
+
+      map.on('click', 'rajasthan-districts-fill', (e: maplibregl.MapLayerMouseEvent) => {
+        const props = e.features?.[0]?.properties;
+        const matched =
+          getDistrictById(props?.districtId) || getDistrictByName(props?.districtName);
+        if (matched) {
+          sound.playClick();
+          onSelectDistrictRef.current(matched);
+        }
+      });
+    }
+
+    // Syndicate Arcs Source & Layer
+    const existingArcsSource = map.getSource('syndicate-arcs') as maplibregl.GeoJSONSource | undefined;
+    if (existingArcsSource) {
+      existingArcsSource.setData(arcsGeoJson as any);
+    } else {
+      map.addSource('syndicate-arcs', {
+        type: 'geojson',
+        data: arcsGeoJson as any,
+      });
+
+      map.addLayer({
+        id: 'syndicate-arcs-line',
+        type: 'line',
+        source: 'syndicate-arcs',
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': 1.8,
+          'line-dasharray': [3, 2],
+          'line-opacity': 0.8,
+        },
+      });
+    }
+
+    // Threat Pins Source & Layers
+    const existingPinsSource = map.getSource('threat-pins') as maplibregl.GeoJSONSource | undefined;
+    if (existingPinsSource) {
+      existingPinsSource.setData(pinsGeoJson as any);
+    } else {
+      map.addSource('threat-pins', {
+        type: 'geojson',
+        data: pinsGeoJson as any,
+      });
+
+      map.addLayer({
+        id: 'threat-pins-pulse',
+        type: 'circle',
+        source: 'threat-pins',
+        paint: {
+          'circle-radius': ['case', ['==', ['get', 'threatLevel'], 'CRITICAL'], 10, 7],
+          'circle-color': 'transparent',
+          'circle-stroke-color': ['get', 'threatColor'],
+          'circle-stroke-width': 1.2,
+          'circle-stroke-opacity': 0.55,
+        },
+      });
+
+      map.addLayer({
+        id: 'threat-pins-core',
+        type: 'circle',
+        source: 'threat-pins',
+        paint: {
+          'circle-radius': ['case', ['==', ['get', 'threatLevel'], 'CRITICAL'], 4.5, 3.5],
+          'circle-color': ['get', 'threatColor'],
+          'circle-stroke-color': '#070A10',
+          'circle-stroke-width': 1.2,
+        },
+      });
+
+      map.addLayer({
+        id: 'threat-pins-label',
+        type: 'symbol',
+        source: 'threat-pins',
+        layout: {
+          'text-field': ['get', 'label'],
+          'text-size': 10.5,
+          'text-offset': [0, 1.2],
+          'text-anchor': 'top',
+          'text-allow-overlap': false,
+        },
+        paint: {
+          'text-color': '#E2E8F0',
+          'text-halo-color': '#070A10',
+          'text-halo-width': 1.5,
+        },
+      });
+
+      map.on('click', 'threat-pins-core', (e: maplibregl.MapLayerMouseEvent) => {
+        const props = e.features?.[0]?.properties;
+        const matched = getDistrictById(props?.districtId);
+        if (matched) {
+          sound.playClick();
+          onSelectDistrictRef.current(matched);
+        }
+      });
+    }
+  }, [mapLoaded, enrichedGeoJson, arcsGeoJson, pinsGeoJson]);
+
+  // 3. Synchronize dynamic highlight / hover / selection / arc visibility
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+
+    const selectedId = selectedDistrict?.id || '';
+    const hoveredId = hoveredDistrict?.id || '';
+    const highlighted = highlightedDistrictIds.map((id) => id.toLowerCase());
+
+    if (map.getLayer('rajasthan-districts-fill')) {
+      map.setPaintProperty('rajasthan-districts-fill', 'fill-opacity', [
+        'case',
+        ['==', ['get', 'districtId'], selectedId],
+        0.22,
+        ['in', ['get', 'districtId'], ['literal', highlighted]],
+        0.22,
+        ['==', ['get', 'districtId'], hoveredId],
+        0.16,
+        0.02,
+      ]);
+    }
+
+    if (map.getLayer('rajasthan-districts-line')) {
+      map.setPaintProperty('rajasthan-districts-line', 'line-color', [
+        'case',
+        ['==', ['get', 'districtId'], selectedId],
+        '#22D3EE',
+        ['in', ['get', 'districtId'], ['literal', highlighted]],
+        '#00E5FF',
+        ['==', ['get', 'districtId'], hoveredId],
+        '#38BDF8',
+        '#00E5FF',
+      ]);
+      map.setPaintProperty('rajasthan-districts-line', 'line-width', [
+        'case',
+        ['==', ['get', 'districtId'], selectedId],
+        2.0,
+        ['==', ['get', 'districtId'], hoveredId],
+        1.5,
+        0.85,
+      ]);
+      map.setPaintProperty('rajasthan-districts-line', 'line-opacity', [
+        'case',
+        ['==', ['get', 'districtId'], selectedId],
+        0.95,
+        ['==', ['get', 'districtId'], hoveredId],
+        0.8,
+        0.45,
+      ]);
+    }
+
+    if (map.getLayer('syndicate-arcs-line')) {
+      map.setPaintProperty('syndicate-arcs-line', 'line-opacity',
+        showArcs
+          ? ['case', ['==', ['get', 'hasSelection'], 0], 0.8, ['==', ['get', 'isConnected'], 1], 0.95, 0.14]
+          : 0
+      );
+      map.setPaintProperty('syndicate-arcs-line', 'line-width', [
+        'case',
+        ['==', ['get', 'hasSelection'], 0],
+        1.8,
+        ['==', ['get', 'isConnected'], 1],
+        2.6,
+        1.0,
+      ]);
+    }
+
+    if (map.getLayer('threat-pins-pulse')) {
+      map.setPaintProperty('threat-pins-pulse', 'circle-radius', [
+        'case',
+        ['==', ['get', 'districtId'], selectedId],
+        14,
+        ['in', ['get', 'districtId'], ['literal', highlighted]],
+        14,
+        ['==', ['get', 'threatLevel'], 'CRITICAL'],
+        9.5,
+        6.5,
+      ]);
+    }
+  }, [mapLoaded, selectedDistrict, hoveredDistrict, highlightedDistrictIds, showArcs]);
+
   return (
-    <div className="relative w-full h-full bg-[#070A10] overflow-hidden flex flex-col select-none touch-none">
-      {/* Soft background grid - 5% opacity per Palantir/Mapbox spec */}
-      <div className="absolute inset-0 radar-grid opacity-5 pointer-events-none" />
-
-      {/* Floating Compact Glass Toolbar (Top Center/Right) */}
-      <div className="absolute top-3.5 right-4 z-20 flex items-center gap-2">
-        <div className="bg-[#0C101A]/85 backdrop-blur-md border border-white/[0.08] px-2.5 py-1.5 rounded-xl flex items-center gap-2 shadow-xl">
-          <button
-            onClick={() => {
-              sound.playClick();
-              setShowArcs(!showArcs);
-            }}
-            className={`px-2 py-0.5 rounded text-[11px] font-sans font-medium transition-all ${
-              showArcs
-                ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Syndicate Arcs
-          </button>
-
-          <button
-            onClick={() => {
-              sound.playClick();
-              setShowRadar(!showRadar);
-            }}
-            className={`px-2 py-0.5 rounded text-[11px] font-sans font-medium transition-all ${
-              showRadar
-                ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Radar Pulse
-          </button>
-
-          <div className="h-3.5 w-px bg-white/[0.08] mx-0.5" />
-
-          <button
-            onClick={() => {
-              sound.playClick();
-              setZoomLevel((prev) => Math.min(prev + 0.3, 4));
-            }}
-            className="p-1 text-slate-400 hover:text-white rounded hover:bg-white/[0.05]"
-            title="Zoom In"
-          >
-            <ZoomIn className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => {
-              sound.playClick();
-              setZoomLevel((prev) => Math.max(prev - 0.3, 0.8));
-            }}
-            className="p-1 text-slate-400 hover:text-white rounded hover:bg-white/[0.05]"
-            title="Zoom Out"
-          >
-            <ZoomOut className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => {
-              sound.playClick();
-              setZoomLevel(1);
-              setMapCenter(DEFAULT_CENTER);
-            }}
-            className="p-1 text-slate-400 hover:text-white rounded hover:bg-white/[0.05]"
-            title="Reset View"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
-
-      {/* Main Vector Map Canvas */}
-      <div className="relative flex-1 w-full h-full flex items-center justify-center overflow-hidden touch-none cursor-grab active:cursor-grabbing">
-        {/* Ultra-faint concentric radar sweep rings (border-white/[0.04]) */}
-        {showRadar && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-25">
-            <div className="w-[580px] h-[580px] rounded-full border border-white/[0.04] relative">
-              <div className="absolute inset-16 rounded-full border border-white/[0.03]" />
-              <div className="absolute inset-32 rounded-full border border-white/[0.02]" />
-              <div className="w-full h-full rounded-full bg-gradient-to-tr from-transparent via-transparent to-cyan-500/[0.04] animate-radar-sweep origin-center" />
-            </div>
+    <div className="relative w-full h-full bg-[#070A10] overflow-hidden flex flex-col select-none">
+      {/* Top Map Header Bar: Badge (Left) + Controls (Right) */}
+      <div className="absolute top-3.5 left-4 right-4 z-20 flex flex-wrap items-start justify-between gap-2 pointer-events-none">
+        {/* Floating Administrative Structure Badge */}
+        <div className="hidden md:flex items-center gap-2 pointer-events-auto max-w-full">
+          <div className="bg-[#0C101A]/85 backdrop-blur-md border border-white/[0.08] px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 shadow-xl text-[10px] xl:text-[11px] font-mono whitespace-nowrap">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse shrink-0" />
+            <span className="text-white font-semibold">RAJASTHAN</span>
+            <span className="text-slate-500">|</span>
+            <span className="text-cyan-300 font-bold">41 DISTRICTS · 7 DIVISIONS</span>
           </div>
-        )}
+        </div>
 
-        <div className="w-full h-full flex items-center justify-center touch-none">
-          <ComposableMap
-            projection="geoMercator"
-            projectionConfig={{
-              center: DEFAULT_CENTER,
-              scale: 4200,
-            }}
-            style={{ width: '100%', height: '100%' }}
-          >
-            <ZoomableGroup
-              center={mapCenter}
-              zoom={zoomLevel}
-              minZoom={0.8}
-              maxZoom={4}
-              onMoveEnd={({ coordinates, zoom }) => {
-                if (coordinates) setMapCenter(coordinates);
-                if (typeof zoom === 'number') setZoomLevel(zoom);
+        {/* Floating Compact Glass Toolbar */}
+        <div className="ml-auto flex items-center gap-2 pointer-events-auto max-w-full">
+          <div className="bg-[#0C101A]/85 backdrop-blur-md border border-white/[0.08] px-2.5 py-1.5 rounded-xl flex items-center gap-2 shadow-xl">
+            <button
+              onClick={() => {
+                sound.playClick();
+                setShowArcs(!showArcs);
               }}
+              className={`px-2 py-0.5 rounded text-[11px] font-sans font-medium transition-all ${
+                showArcs
+                  ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
             >
-              <Geographies geography={rajasthanGeoUrl}>
-                {({ geographies, borders, outline }) => {
-                  const dynamicCentroidMap = new Map<string, [number, number]>();
-                  geographies.forEach((geo) => {
-                    const rawName = (geo.properties as Record<string, any> | null)?.district as
-                      | string
-                      | undefined;
-                    if (rawName) {
-                      const centroid = geoCentroid(geo) as [number, number];
-                      dynamicCentroidMap.set(rawName.toLowerCase(), centroid);
-                      dynamicCentroidMap.set(
-                        normalizeDistrictName(rawName).toLowerCase(),
-                        centroid
-                      );
-                    }
-                  });
-
-                  return (
-                    <>
-                      {/* Base Geographic Districts with Mapbox Dark Elevation */}
-                      {geographies.map((geo) => {
-                        const topoName = (geo.properties as Record<string, any> | null)
-                          ?.district as string | undefined;
-                        const matchedDistrict = getDistrictByName(topoName);
-                        const normalizedTopo = normalizeDistrictName(topoName).toLowerCase();
-                        const isSelected = Boolean(
-                          selectedDistrict &&
-                            (selectedDistrict.id === matchedDistrict?.id ||
-                              normalizeDistrictName(selectedDistrict.name).toLowerCase() ===
-                                normalizedTopo)
-                        );
-                        const isHovered = Boolean(
-                          hoveredDistrict &&
-                            (hoveredDistrict.id === matchedDistrict?.id ||
-                              normalizeDistrictName(hoveredDistrict.name).toLowerCase() ===
-                                normalizedTopo)
-                        );
-                        const isHighlighted = Boolean(
-                          highlightedDistrictIds &&
-                            highlightedDistrictIds.length > 0 &&
-                            matchedDistrict &&
-                            highlightedDistrictIds.some(
-                              (hid) =>
-                                hid.toLowerCase() === matchedDistrict.id.toLowerCase() ||
-                                normalizeDistrictName(matchedDistrict.name).toLowerCase() ===
-                                  hid.toLowerCase()
-                            )
-                        );
-
-                        // Mapbox Dark Palette: Subtle obsidian-slate fills with hairline stroke
-                        const strokeColor = isSelected
-                          ? '#22D3EE'
-                          : isHighlighted
-                          ? '#00E5FF'
-                          : isHovered
-                          ? '#38BDF8'
-                          : 'rgba(255, 255, 255, 0.08)';
-
-                        const fillColor = isSelected
-                          ? 'rgba(34, 211, 238, 0.14)'
-                          : isHighlighted
-                          ? 'rgba(0, 229, 255, 0.16)'
-                          : isHovered
-                          ? 'rgba(255, 255, 255, 0.06)'
-                          : '#0B0F19';
-
-                        return (
-                          <Geography
-                            key={geo.rsmKey}
-                            geography={geo}
-                            onMouseEnter={() => {
-                              if (matchedDistrict) setHoveredDistrict(matchedDistrict);
-                            }}
-                            onMouseLeave={() => setHoveredDistrict(null)}
-                            onClick={() => {
-                              if (matchedDistrict) {
-                                sound.playClick();
-                                onSelectDistrict(matchedDistrict);
-                              }
-                            }}
-                            fill={fillColor}
-                            stroke={strokeColor}
-                            strokeWidth={isSelected ? 1.4 : isHovered ? 1.0 : 0.5}
-                            style={{
-                              outline: 'none',
-                              cursor: matchedDistrict ? 'pointer' : 'default',
-                              transition: 'fill 0.15s ease, stroke 0.15s ease',
-                            }}
-                          />
-                        );
-                      })}
-
-                      {/* Subtle Internal District Boundaries */}
-                      {borders?.svgPath && (
-                        <path
-                          d={borders.svgPath}
-                          fill="none"
-                          stroke="rgba(255, 255, 255, 0.05)"
-                          strokeWidth={0.5}
-                          pointerEvents="none"
-                        />
-                      )}
-
-                      {/* State Perimeter Boundary */}
-                      {outline?.svgPath && (
-                        <path
-                          d={outline.svgPath}
-                          fill="none"
-                          stroke="rgba(34, 211, 238, 0.35)"
-                          strokeWidth={1.2}
-                          pointerEvents="none"
-                        />
-                      )}
-
-                      {/* Smooth Curved Syndicate Arcs */}
-                      {showArcs &&
-                        filteredConnections.map((conn) => {
-                          const fromDist = getDistrictById(conn.from);
-                          const toDist = getDistrictById(conn.to);
-                          if (!fromDist || !toDist) return null;
-                          const fromCoords = getDistrictCoordinates(fromDist, dynamicCentroidMap);
-                          const toCoords = getDistrictCoordinates(toDist, dynamicCentroidMap);
-                          if (!fromCoords || !toCoords) return null;
-
-                          const arcColor = getConnectionColor(conn);
-
-                          return (
-                            <Line
-                              key={conn.id}
-                              from={fromCoords}
-                              to={toCoords}
-                              stroke={arcColor}
-                              strokeWidth={1.4}
-                              strokeDasharray="4 3"
-                              strokeOpacity={0.75}
-                              className="animate-pulse"
-                              style={{ pointerEvents: 'none' }}
-                            />
-                          );
-                        })}
-
-                      {/* Decluttered District Markers: Clean glowing dots; labels show for Hovered/Selected or Hotspots */}
-                      {districts.map((district) => {
-                        const coords = getDistrictCoordinates(district, dynamicCentroidMap);
-                        if (!coords) return null;
-
-                        const isSelected =
-                          selectedDistrict?.id === district.id ||
-                          normalizeDistrictName(selectedDistrict?.name).toLowerCase() ===
-                            normalizeDistrictName(district.name).toLowerCase();
-                        const isHovered =
-                          hoveredDistrict?.id === district.id ||
-                          normalizeDistrictName(hoveredDistrict?.name).toLowerCase() ===
-                            normalizeDistrictName(district.name).toLowerCase();
-                        const isHighlighted = Boolean(
-                          highlightedDistrictIds &&
-                            highlightedDistrictIds.length > 0 &&
-                            highlightedDistrictIds.some(
-                              (hid) =>
-                                hid.toLowerCase() === district.id.toLowerCase() ||
-                                normalizeDistrictName(district.name).toLowerCase() ===
-                                  hid.toLowerCase()
-                            )
-                        );
-                        const isHotspot =
-                          district.threatLevel === 'CRITICAL' || district.threatLevel === 'HIGH';
-
-                        // Show label if selected, hovered, or high-threat hotspot to prevent clutter
-                        const showLabel = isSelected || isHovered || isHighlighted || isHotspot;
-                        const threatColor = getThreatColor(district.threatLevel);
-
-                        return (
-                          <Marker
-                            key={district.id}
-                            coordinates={coords}
-                            onClick={() => {
-                              sound.playClick();
-                              onSelectDistrict(district);
-                            }}
-                            onMouseEnter={() => setHoveredDistrict(district)}
-                            onMouseLeave={() => setHoveredDistrict(null)}
-                            style={{ cursor: 'pointer' }}
-                          >
-                            {/* Outer Pulse Ping for Selected or Highlighted Node */}
-                            {(isSelected || isHighlighted) && (
-                              <circle
-                                r={isHighlighted ? 12 : 8}
-                                fill="none"
-                                stroke={isHighlighted ? '#00E5FF' : '#22D3EE'}
-                                strokeWidth={isHighlighted ? 1.6 : 1.2}
-                                className="animate-ping"
-                                opacity={isHighlighted ? 0.8 : 0.6}
-                              />
-                            )}
-
-                            {/* Minimal Glowing District Centroid Dot */}
-                            <circle
-                              r={isSelected ? 3.5 : isHighlighted ? 4 : isHovered ? 3 : 2}
-                              fill={isSelected ? '#22D3EE' : isHighlighted ? '#00E5FF' : isHovered ? '#38BDF8' : threatColor}
-                              stroke="#070A10"
-                              strokeWidth={1}
-                            />
-
-                            {/* Full Label Rendered Decluttered */}
-                            {showLabel && (
-                              <text
-                                textAnchor="middle"
-                                y={10}
-                                fill={isSelected ? '#38BDF8' : isHovered ? '#F1F5F9' : '#94A3B8'}
-                                fontSize={isSelected ? 8 : 6.5}
-                                fontFamily="sans-serif"
-                                fontWeight={isSelected || isHovered ? '600' : '500'}
-                                style={{
-                                  pointerEvents: 'none',
-                                  userSelect: 'none',
-                                  textShadow: '0 1px 3px rgba(0,0,0,0.9)',
-                                }}
-                              >
-                                {district.name}
-                              </text>
-                            )}
-
-                            {/* Minimal Pill Badge for Flagged Count */}
-                            {showLabel && district.flaggedCount > 0 && (
-                              <g transform="translate(6, -7)" style={{ pointerEvents: 'none' }}>
-                                <rect
-                                  x={-2}
-                                  y={-5}
-                                  width={district.flaggedCount > 9 ? 14 : 10}
-                                  height={8}
-                                  rx={2}
-                                  fill="#070A10"
-                                  stroke={threatColor}
-                                  strokeWidth={0.6}
-                                  opacity={0.9}
-                                />
-                                <text
-                                  x={district.flaggedCount > 9 ? 5 : 3}
-                                  y={1}
-                                  textAnchor="middle"
-                                  fill={threatColor}
-                                  fontSize={5.5}
-                                  fontFamily="monospace"
-                                  fontWeight="bold"
-                                >
-                                  {district.flaggedCount}
-                                </text>
-                              </g>
-                            )}
-                          </Marker>
-                        );
-                      })}
-                    </>
-                  );
-                }}
-              </Geographies>
-            </ZoomableGroup>
-          </ComposableMap>
-        </div>
-
-        {/* Bottom row: legend + focused-district card. They wrap onto two lines instead of overlapping. */}
-        <div className="absolute bottom-3.5 left-4 right-4 z-20 flex flex-wrap items-end justify-between gap-2 pointer-events-none">
-        {/* Compact, Translucent Floating Pill Legend (Bottom Left) */}
-        <div className="pointer-events-auto bg-[#0C101A]/85 backdrop-blur-md border border-white/[0.08] px-3.5 py-1.5 rounded-full flex items-center gap-3.5 text-[10px] font-sans text-slate-400 shadow-xl">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.5)]" />
-            <span className="text-slate-300 font-medium">Critical</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-amber-500" />
-            <span className="text-slate-300 font-medium">High</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-cyan-400" />
-            <span className="text-slate-300 font-medium">Elevated</span>
-          </div>
-          <div className="h-3 w-px bg-white/[0.08]" />
-          <div className="flex items-center gap-2 font-mono text-[9px] text-slate-400">
-            <span className="text-cyan-300">● UPI</span>
-            <span className="text-amber-300">● Phone</span>
-            <span className="text-rose-300">● Crypto</span>
-          </div>
-        </div>
-        {/* Selected District Callout (Sleek Mapbox Glass Bar) */}
-        {selectedDistrict && (
-          <div className="pointer-events-auto bg-[#0C101A]/90 backdrop-blur-md border border-white/[0.08] px-3 py-2 rounded-xl flex items-center gap-3.5 shadow-xl text-xs font-sans">
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
-                <MapPin className="w-3.5 h-3.5 text-cyan-400" />
-              </div>
-              <div>
-                <div className="text-white font-medium text-xs flex items-center gap-1.5">
-                  <span>{selectedDistrict.name} Focused</span>
-                  <span className="font-mono text-[10px] text-cyan-400 font-semibold bg-cyan-950/40 px-1.5 py-0.2 rounded border border-cyan-500/20">
-                    {selectedDistrict.flaggedCount} cases
-                  </span>
-                </div>
-                <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                  Top Entity: {selectedDistrict.topIdentifiers[0]}
-                </div>
-              </div>
-            </div>
+              Syndicate Arcs
+            </button>
 
             <button
               onClick={() => {
                 sound.playClick();
-                if (onOpenDossier) {
-                  onOpenDossier(selectedDistrict);
-                } else {
-                  onSelectDistrict(selectedDistrict);
-                }
+                setShowRadar(!showRadar);
               }}
-              className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-500/40 px-3 py-1 rounded-lg text-xs font-medium transition-all shadow-sm active:translate-y-0.5 flex items-center gap-1.5"
+              className={`px-2 py-0.5 rounded text-[11px] font-sans font-medium transition-all ${
+                showRadar
+                  ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
             >
-              <span>View Dossier</span>
-              <span className="text-[10px]">&rarr;</span>
+              Radar Pulse
+            </button>
+
+            <div className="h-3.5 w-px bg-white/[0.08] mx-0.5" />
+
+            <button
+              onClick={() => {
+                sound.playClick();
+                mapRef.current?.zoomIn({ duration: 250 });
+              }}
+              className="p-1 text-slate-400 hover:text-white rounded hover:bg-white/[0.05]"
+              title="Zoom In"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => {
+                sound.playClick();
+                mapRef.current?.zoomOut({ duration: 250 });
+              }}
+              className="p-1 text-slate-400 hover:text-white rounded hover:bg-white/[0.05]"
+              title="Zoom Out"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => {
+                sound.playClick();
+                mapRef.current?.flyTo({
+                  center: DEFAULT_CENTER,
+                  zoom: DEFAULT_ZOOM,
+                  duration: 600,
+                });
+              }}
+              className="p-1 text-slate-400 hover:text-white rounded hover:bg-white/[0.05]"
+              title="Reset View"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
             </button>
           </div>
-        )}
         </div>
+      </div>
+
+      {/* Main MapLibre GL WebGL Vector Map Canvas */}
+      <div className="relative flex-1 w-full h-full">
+        <div ref={mapContainerRef} className="w-full h-full" />
+
+        {/* Ultra-faint concentric radar sweep rings overlay */}
+        {showRadar && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-25 z-10">
+            <div className="w-[540px] h-[540px] rounded-full border border-cyan-500/[0.08] relative">
+              <div className="absolute inset-16 rounded-full border border-cyan-500/[0.06]" />
+              <div className="absolute inset-32 rounded-full border border-cyan-500/[0.04]" />
+              <div className="w-full h-full rounded-full bg-gradient-to-tr from-transparent via-transparent to-cyan-500/[0.05] animate-radar-sweep origin-center" />
+            </div>
+          </div>
+        )}
+
+        {isLoading && !geoJson && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-[#070A10]/70 text-xs font-mono text-cyan-400/80 pointer-events-none">
+            <span className="w-5 h-5 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
+            <span>INITIALIZING MAPLIBRE GIS ENGINE...</span>
+          </div>
+        )}
 
         {/* Floating Minimal HUD Tooltip for Hovered District */}
         <AnimatePresence>
@@ -621,7 +697,11 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
                       ({hoveredDistrict.hindiName})
                     </span>
                   </div>
-                  <div className="text-[10px] text-slate-400 font-sans mt-0.5">District Intelligence</div>
+                  <div className="text-[10px] text-cyan-400 font-mono mt-0.5">
+                    {hoveredDistrict.division
+                      ? `${hoveredDistrict.division.toUpperCase()} DIVISION`
+                      : 'DISTRICT INTELLIGENCE'}
+                  </div>
                 </div>
                 <span
                   className="px-2 py-0.5 rounded text-[9px] font-sans font-semibold"
@@ -637,6 +717,13 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
 
               <div className="mt-2.5 space-y-1.5 text-[11px] font-sans">
                 <div className="flex justify-between items-center">
+                  <span className="text-slate-400">Division:</span>
+                  <span className="text-cyan-300 font-mono font-medium text-[10px]">
+                    {hoveredDistrict.division || 'Rajasthan'} Division
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center">
                   <span className="text-slate-400">Flagged Cases:</span>
                   <span className="text-slate-200 font-mono font-medium">
                     {hoveredDistrict.flaggedCount}
@@ -644,7 +731,7 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
                 </div>
 
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Top Demo Categories:</span>
+                  <span className="text-slate-400">Top Threats:</span>
                   <span className="text-slate-300 text-[10px]">
                     {hoveredDistrict.topCategories.join(', ')}
                   </span>
@@ -661,7 +748,67 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
           )}
         </AnimatePresence>
 
+        {/* Bottom Overlay Bar: Legend (Left) + Selected District Callout (Right) */}
+        <div className="absolute bottom-3.5 left-4 right-4 z-20 flex flex-wrap items-end justify-between gap-2 pointer-events-none">
+          {/* Compact, Translucent Floating Pill Legend */}
+          <div className="pointer-events-auto bg-[#0C101A]/85 backdrop-blur-md border border-white/[0.08] px-3 py-1.5 rounded-full flex items-center gap-3 text-[10px] font-sans text-slate-400 shadow-xl">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.5)]" />
+              <span className="text-slate-300 font-medium">Critical</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              <span className="text-slate-300 font-medium">High</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-cyan-400" />
+              <span className="text-slate-300 font-medium">Elevated</span>
+            </div>
+            <div className="hidden xl:block h-3 w-px bg-white/[0.08]" />
+            <div className="hidden xl:flex items-center gap-2 font-mono text-[9px] text-slate-400">
+              <span className="text-cyan-300">● UPI</span>
+              <span className="text-amber-300">● Phone</span>
+              <span className="text-rose-300">● Crypto</span>
+            </div>
+          </div>
 
+          {/* Selected District Callout (Sleek Mapbox Glass Bar) */}
+          {selectedDistrict && (
+            <div className="pointer-events-auto ml-auto bg-[#0C101A]/90 backdrop-blur-md border border-white/[0.08] px-3 py-2 rounded-xl flex items-center gap-3 shadow-xl text-xs font-sans">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center shrink-0">
+                  <MapPin className="w-3.5 h-3.5 text-cyan-400" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-white font-medium text-xs flex items-center gap-1.5 whitespace-nowrap">
+                    <span>{selectedDistrict.name} Focused</span>
+                    <span className="font-mono text-[10px] text-cyan-400 font-semibold bg-cyan-950/40 px-1.5 py-0.2 rounded border border-cyan-500/20">
+                      {selectedDistrict.flaggedCount} cases
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-mono mt-0.5 truncate max-w-[170px]">
+                    Top Entity: {selectedDistrict.topIdentifiers[0]}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  sound.playClick();
+                  if (onOpenDossier) {
+                    onOpenDossier(selectedDistrict);
+                  } else {
+                    onSelectDistrict(selectedDistrict);
+                  }
+                }}
+                className="shrink-0 whitespace-nowrap bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-500/40 px-3 py-1 rounded-lg text-xs font-medium transition-all shadow-sm active:translate-y-0.5 flex items-center gap-1.5"
+              >
+                <span>View Dossier</span>
+                <span className="text-[10px]">&rarr;</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

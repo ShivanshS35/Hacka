@@ -488,3 +488,20 @@ def test_classifier_handles_extra_whitespace_between_words():
 def test_negative_phrases_apply_to_every_variant():
     assert classify_text("Printer cartridges available, HP and Canon, bulk rates")["categories"] == []
     assert classify_text("Ice cream available at half price today")["categories"] == []
+
+
+def test_new_2023_districts_are_detected():
+    """Deeg, Balotra, Phalodi, Bhiwadi (Khairthal-Tijara), Neemrana (Kotputli-Behror) etc. resolve to their own district."""
+    from extractor import extract_entities
+    cases = {
+        "desi katta available in Deeg, call 9123456780": "deeg",
+        "pickup Balotra side": "balotra",
+        "delivery near Phalodi": "phalodi",
+        "pickup Bhiwadi": "khairthal-tijara",
+        "meet at Neemrana": "kotputli-behror",
+        "Kuchaman city drop": "didwana-kuchaman",
+        "Salumbar handover": "salumbar",
+        "Beawar stock": "beawar",
+    }
+    for text, expected in cases.items():
+        assert extract_entities(text)["district_id"] == expected, text

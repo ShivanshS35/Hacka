@@ -30,7 +30,7 @@ It provides a rules based classifier, entity extraction, graph visualization, CS
 ---
 
 ### 2. Live Surveillance Command Center & GIS Rajasthan Map
-*Geospatial intelligence mesh covering all 33 Rajasthan districts with real-time criminal syndicate arcs, radar sweeps, and live signal telemetry.*
+*Geospatial intelligence mesh covering all 41 Rajasthan districts with real-time criminal syndicate arcs, radar sweeps, and live signal telemetry.*
 ![Command Center](docs/screenshots/02-command-center.png)
 
 ---
@@ -82,7 +82,7 @@ It provides a rules based classifier, entity extraction, graph visualization, CS
 - **Dialect Support**: Hindi, Hinglish, Marwari/Rajasthani regional slang, Romanized terms, and disguised emoji ciphers.
 
 ### 2. Rajasthan Tactical GIS Surveillance Map
-- **High-Resolution Geo-Mesh**: Interactive SVG vector map of all 33 districts of Rajasthan.
+- **High-Resolution Geo-Mesh**: Interactive MapLibre map of all 41 districts of Rajasthan (bundled boundaries; falls back to a plain dark basemap if map tiles cannot load).
 - **Dynamic Threat Coloring**: Categorizes jurisdictions into `CRITICAL`, `HIGH`, `ELEVATED`, and `MODERATE` based on live signal density.
 - **Syndicate Arcs**: Visualizes interstate and inter-district trade corridors (e.g., Mewat-Alwar weapons corridor, Sri Ganganagar border drops, Jaipur-Bikaner narcotics transit).
 - **One-Click Case Dossier Access**: Clicking any district instantly filters intelligence and allows opening its dedicated forensic dossier.
@@ -224,7 +224,7 @@ prahari-osint/
 │   │   ├── ForensicDossier.tsx      # Scrapbook binder with polaroids & wax seal
 │   │   ├── GlobalOsintSearchModal.tsx # Cross-case OSINT search & syndicate matrix (Cmd+K)
 │   │   ├── LiveInterceptFeed.tsx    # Real-time Telegram signal intercept feed
-│   │   ├── RajasthanMap.tsx         # Interactive 33-district GIS surveillance map
+│   │   ├── RajasthanMap.tsx         # Interactive 41-district GIS surveillance map (MapLibre)
 │   │   ├── TacticalCursor.tsx       # Custom illuminated cyber thruster cursor
 │   │   └── WarMonitorLiveApp.tsx    # Core multi-view application shell
 │   ├── data/
@@ -255,7 +255,7 @@ PRAHARI's SHA-256 value is computed over raw text only. SQLite is mutable, the g
 | **Monitoring Volume** | Manual review | One public preview request at a time; not continuous monitoring |
 | **Slang Detection** | Subjective, misses local dialects & emojis | Automated multi-dialect weighted NLP scoring |
 | **Entity Correlation** | Manual Excel lookup (Hours to Days) | Instant 3D graph topology resolution (< 3s) |
-| **Geospatial Mapping** | Static pins or disconnected spreadsheets | Interactive 33-district GIS mesh with criminal arcs |
+| **Geospatial Mapping** | Static pins or disconnected spreadsheets | Interactive 41-district GIS mesh with criminal arcs |
 | **Evidence integrity** | Manual handling | Raw text digest shown in a prototype report; no legal certification |
 
 ---
