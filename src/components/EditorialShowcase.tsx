@@ -265,8 +265,8 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
             01 // THREAT ASYMMETRY
           </div>
           <h2 className="text-3xl sm:text-5xl font-black font-display tracking-tight text-white mb-6">
-            THE CRIMINALS HAVE SCALED. <br />
-            <span className="text-slate-400">INVESTIGATORS HAVEN'T.</span>
+            PUBLIC ADS ARE EASY TO FIND. <br />
+            <span className="text-slate-400">LINKING THEM IS THE HARD PART.</span>
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 my-10">
@@ -276,39 +276,39 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
                 <Radio className="w-24 h-24 text-red-500" />
               </div>
               <div className="text-xs font-mono text-red-400 uppercase tracking-wider mb-2">
-                ILLICIT SURFACE
+                DETECTION LEXICON
               </div>
               <div className="text-4xl sm:text-5xl font-mono font-black text-white mb-2">
-                1,000s
+                189
               </div>
               <p className="text-slate-400 text-sm leading-relaxed">
-                Public Telegram channels and social forums active daily broadcasting narcotics drops, illicit arms consignments, and mule accounts.
+                Curated slang, emoji and Hinglish terms across drugs, arms, documents and financial-account ads (measured from the lexicon file).
               </p>
             </div>
 
             {/* Card 2 */}
             <div className="bg-[#0f1520] border border-slate-800 p-6 rounded-2xl relative overflow-hidden">
               <div className="text-xs font-mono text-slate-400 uppercase tracking-wider mb-2">
-                MANUAL CAPACITY
+                IMPORT SPEED
               </div>
               <div className="text-4xl sm:text-5xl font-mono font-black text-slate-300 mb-2">
-                5–10
+                1.5 s
               </div>
               <p className="text-slate-400 text-sm leading-relaxed">
-                Channels an individual cyber-crime officer can realistically monitor manually, leading to massive intelligence blind spots.
+                To import and score 500 posts on the demo backend (measured). Rules alone take under a millisecond per post.
               </p>
             </div>
 
             {/* Card 3 */}
             <div className="bg-[#0f1520] border border-cyan-500/40 p-6 rounded-2xl relative overflow-hidden shadow-[0_0_30px_rgba(0,229,255,0.1)]">
               <div className="text-xs font-mono text-cyan-400 uppercase tracking-wider mb-2">
-                NETWORK VISIBILITY
+                DISTRICT COVERAGE
               </div>
               <div className="text-4xl sm:text-5xl font-mono font-black text-cyan-400 mb-2">
-                ZERO
+                41
               </div>
               <p className="text-slate-400 text-sm leading-relaxed">
-                Automated cross-channel linking exists in legacy manual workflows. Isolated posts remain untracked as part of a single syndicated cartel.
+                Rajasthan districts on the map. Posts are placed by district names found in the text; unlocated posts are counted separately.
               </p>
             </div>
           </div>
@@ -316,10 +316,10 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
           {/* Callout Quote */}
           <div className="bg-gradient-to-r from-red-950/40 via-[#101722] to-cyan-950/40 border-l-4 border-cyan-400 p-6 sm:p-8 rounded-r-2xl font-mono">
             <p className="text-base sm:text-xl font-semibold text-slate-200 leading-snug">
-              "THE SAME UPI ID APPEARS IN A NARCOTICS AD IN JAIPUR AND A MULE-ACCOUNT AD IN JODHPUR. NOBODY CONNECTS THEM. PRAHARI DOES."
+              "THE SAME UPI ID CAN APPEAR IN A NARCOTICS AD AND A MULE-ACCOUNT AD. IT IS EASY TO MISS BY HAND. PRAHARI LINKS THEM."
             </p>
             <div className="mt-3 text-xs text-cyan-400 tracking-wider">
-              — PRAHARI AUTONOMOUS CROSS-CHANNEL ENTITY CORRELATOR
+              — PRAHARI CROSS-CHANNEL IDENTIFIER LINKING (SYNTHETIC EXAMPLE)
             </div>
           </div>
         </div>
@@ -427,7 +427,7 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
             04 // NETWORK TOPOLOGY
           </div>
           <h2 className="text-3xl sm:text-5xl font-black font-display tracking-tight text-white mb-4">
-            SAME CRIMINAL. TWO CRIMES. ONE GRAPH.
+            SAME IDENTIFIER. TWO POSTS. ONE LINK.
           </h2>
           <p className="text-slate-400 text-sm max-w-2xl mb-10">
             How PRAHARI breaks information silos by exposing the central nexus identifier connecting seemingly unrelated cases:
@@ -680,14 +680,14 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
         </div>
       </section>
 
-      {/* SECTION 07 // OPERATIONAL IMPACT & R4C RUBRIC */}
+      {/* SECTION 07 // WHAT CHANGES FOR THE ANALYST */}
       <section className="py-20 px-4 sm:px-8 border-b border-slate-800 bg-[#090C10]">
         <div className="max-w-6xl mx-auto">
           <div className="text-xs font-mono text-cyan-400 uppercase tracking-widest mb-2">
-            07 // OPERATIONAL IMPACT & R4C RUBRIC
+            07 // WHAT CHANGES FOR THE ANALYST
           </div>
           <h2 className="text-3xl sm:text-5xl font-black font-display tracking-tight text-white mb-4">
-            SAME INVESTIGATOR. 100X THE REACH.
+            SAME INVESTIGATOR. LESS MANUAL WORK.
           </h2>
 
           <div className="mt-10 overflow-x-auto">
@@ -702,28 +702,28 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
               <tbody className="divide-y divide-slate-800/80 bg-[#0a0e14]">
                 <tr>
                   <td className="p-4 text-slate-400 font-medium">Channel Monitoring Volume</td>
-                  <td className="p-4 text-slate-400">5 – 10 channels / day</td>
-                  <td className="p-4 text-cyan-300 font-bold">1,000s concurrently</td>
+                  <td className="p-4 text-slate-400">One channel at a time</td>
+                  <td className="p-4 text-cyan-300 font-bold">Bulk import + on-demand public scan</td>
                 </tr>
                 <tr>
                   <td className="p-4 text-slate-400 font-medium">Slang / Coded Emoji Detection</td>
                   <td className="p-4 text-slate-400">Subjective & misses dialects</td>
-                  <td className="p-4 text-cyan-300 font-bold">Automated multi-dialect weighted NLP</td>
+                  <td className="p-4 text-cyan-300 font-bold">Lexicon rules for Hindi, Hinglish, English and emoji</td>
                 </tr>
                 <tr>
                   <td className="p-4 text-slate-400 font-medium">Cross-Channel Entity Correlation</td>
-                  <td className="p-4 text-slate-400">Manual Excel lookup (Hours/Days)</td>
-                  <td className="p-4 text-cyan-300 font-bold">Instant graph topology (&lt; 3s)</td>
+                  <td className="p-4 text-slate-400">Copy identifiers into a spreadsheet by hand</td>
+                  <td className="p-4 text-cyan-300 font-bold">Cross-channel identifier graph</td>
                 </tr>
                 <tr>
                   <td className="p-4 text-slate-400 font-medium">Source / Evidence provenance</td>
-                  <td className="p-4 text-slate-400">Loose screenshots (Contestable)</td>
+                  <td className="p-4 text-slate-400">Loose screenshots</td>
                   <td className="p-4 text-cyan-300 font-bold">Text digest + prototype report; no certification</td>
                 </tr>
                 <tr>
                   <td className="p-4 text-slate-400 font-medium">Geospatial Intelligence</td>
                   <td className="p-4 text-slate-400">None / Static pins</td>
-                  <td className="p-4 text-cyan-300 font-bold">Interactive Rajasthan District mesh with criminal arcs</td>
+                  <td className="p-4 text-cyan-300 font-bold">Interactive Rajasthan district map (arcs are demo connections)</td>
                 </tr>
               </tbody>
             </table>
@@ -732,10 +732,10 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
           {/* Final CTA Banner */}
           <div className="mt-14 bg-gradient-to-r from-[#0d1624] via-[#122238] to-[#0d1624] border border-cyan-500/40 p-8 sm:p-12 rounded-3xl text-center shadow-[0_0_50px_rgba(0,229,255,0.2)]">
             <h3 className="text-2xl sm:text-4xl font-black font-display text-white mb-3">
-              READY TO COMMENCE TACTICAL SURVEILLANCE?
+              READY TO SEE THE PROTOTYPE?
             </h3>
             <p className="text-slate-400 text-sm sm:text-base max-w-xl mx-auto mb-6 font-sans">
-              Access the live intelligence command center, inspect Rajasthan district hot-spots, and generate forensic dossiers.
+              Access the live intelligence command center, inspect Rajasthan district hot-spots, and export evidence dossiers (content digest, not a legal certificate).
             </p>
             <button
               onClick={() => {

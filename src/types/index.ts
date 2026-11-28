@@ -35,8 +35,8 @@ export interface InterceptPost {
   sourceReference?: string | null;
   capturedAtUtc?: string;
   sha256Scope?: string;
-  section65B?: { certified: false; status: string; hashAlgorithm: string; hashScope: string; packetHash: string; timestampUtc: string };
-  status: 'PENDING' | 'FLAGGED' | 'INVESTIGATING' | 'SEALED' | 'UNCLASSIFIED';
+  evidenceDigest?: { note?: string; certified: false; status: string; hashAlgorithm: string; hashScope: string; packetHash: string; timestampUtc: string };
+  status: 'PENDING' | 'FLAGGED' | 'INVESTIGATING' | 'DIGESTED' | 'UNCLASSIFIED';
 }
 
 export interface DistrictIntel {

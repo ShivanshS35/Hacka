@@ -42,7 +42,7 @@ It provides a rules based classifier, entity extraction, graph visualization, CS
 ---
 
 ### 4. Skeuomorphic Forensic Dossier (Evidence Scrapbook Binder)
-*Investigative case binder laid out across a detective's desk with tilted polaroids, brass paperclips, Section 65B transcript, and interactive 3D Red Wax Seal.*
+*Investigative case binder laid out across a detective's desk with tilted polaroids, brass paperclips, raw-text transcript, and interactive 3D Red Wax Seal.*
 ![Forensic Dossier](docs/screenshots/04-forensic-dossier.png)
 
 ---
@@ -55,7 +55,7 @@ It provides a rules based classifier, entity extraction, graph visualization, CS
 
 ### 6. Prototype Report Export
 *Demonstration report with the source label and raw text SHA-256 digest. It is not a legal certificate.*
-![Section 65B PDF](docs/screenshots/06-sec65b-court-pdf.png)
+![Prototype report PDF](docs/screenshots/06-prototype-report-pdf.png)
 
 ---
 

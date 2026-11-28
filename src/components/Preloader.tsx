@@ -60,7 +60,7 @@ export const Preloader: React.FC<PreloaderProps> = ({ onComplete }) => {
         } else if (prev >= 35 && prev <= 42) {
           increment = 1; // pause for dialect loading
         } else if (prev >= 78 && prev <= 84) {
-          increment = 1; // pause for 65B vault verification
+          increment = 1; // pause for integrity-check animation
         } else {
           increment = Math.floor(Math.random() * 3) + 1; // 1-3%
         }
