@@ -3,6 +3,7 @@ import { ShieldCheck } from 'lucide-react';
 import { prahariApi } from '../services/api';
 import { VerifyResult } from '../types';
 import { sound } from '../utils/audio';
+import { chainOk, describeChain, NO_TIMESTAMP_NOTE } from '../utils/evidenceChain';
 
 type State = { s: 'busy' } | { s: 'ok'; r: VerifyResult } | { s: 'missing' } | { s: 'offline' } | null;
 
@@ -32,7 +33,7 @@ export const VerifyHashInline: React.FC<{ postId: string }> = ({ postId }) => {
       {state && state.s !== 'busy' && (
         <div
           className={`p-2 rounded-lg border text-[10px] leading-snug ${
-            state.s === 'ok' && state.r.match
+            state.s === 'ok' && state.r.match && chainOk(state.r)
               ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
               : state.s === 'ok'
               ? 'bg-rose-500/10 border-rose-500/40 text-rose-200'
@@ -43,6 +44,10 @@ export const VerifyHashInline: React.FC<{ postId: string }> = ({ postId }) => {
             <>MATCH: the stored text still hashes to the recorded digest. It was not changed since capture; this does not show who captured it or when.</>
           )}
           {state.s === 'ok' && !state.r.match && <>MISMATCH: the stored text no longer hashes to the recorded digest. Treat this record as altered.</>}
+          {state.s === 'ok' && describeChain(state.r) && (
+            <span className="mt-1 block">{describeChain(state.r)}</span>
+          )}
+          {state.s === 'ok' && state.r.evidenceChain?.chained && <span className="mt-1 block opacity-70">{NO_TIMESTAMP_NOTE}</span>}
           {state.s === 'missing' && <>Not on the server: a local sample record has no stored copy to check.</>}
           {state.s === 'offline' && <>Backend not reachable (a free instance can take about a minute to wake up). Try again.</>}
         </div>
