@@ -12,9 +12,9 @@ import { RAJASTHAN_DISTRICTS } from '../data/mockData';
 import { useRajasthanGeoJSON } from '../hooks/useRajasthanGeoJSON';
 import { sound } from '../utils/audio';
 
-const DARK_VECTOR_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
-// Used when the Carto basemap cannot be fetched (offline / blocked network), so the district layer still works.
-const FALLBACK_STYLE: maplibregl.StyleSpecification = {
+// No third-party world basemap: it would draw other countries' de-facto borders and labels around India.
+// Only the bundled Rajasthan district boundaries are drawn, on a plain dark background.
+const MAP_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {},
   layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#04070d' } }],
@@ -298,7 +298,8 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
 
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: DARK_VECTOR_STYLE,
+      style: MAP_STYLE,
+      maxBounds: [[67.0, 21.0], [81.0, 32.0]],
       center: DEFAULT_CENTER,
       zoom: DEFAULT_ZOOM,
       minZoom: 5,
@@ -306,25 +307,7 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
       attributionControl: false,
     });
 
-    let ready = false;
-    const markReady = () => {
-      if (!ready) {
-        ready = true;
-        clearTimeout(fallbackTimer);
-        setMapLoaded(true);
-      }
-    };
-    const useFallbackStyle = () => {
-      if (ready) return;
-      map.setStyle(FALLBACK_STYLE);
-      map.once('styledata', markReady);
-    };
-    const fallbackTimer = setTimeout(useFallbackStyle, 7000);
-    map.on('load', markReady);
-    map.on('error', (e: any) => {
-      // Only a failed style/basemap request should trigger the fallback, not a single missing tile.
-      if (!ready && !e?.tile) useFallbackStyle();
-    });
+    map.on('load', () => setMapLoaded(true));
 
     mapRef.current = map;
 
@@ -334,7 +317,6 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
     resizeObserver.observe(mapContainerRef.current);
 
     return () => {
-      clearTimeout(fallbackTimer);
       resizeObserver.disconnect();
       map.remove();
       mapRef.current = null;
