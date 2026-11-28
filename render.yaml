@@ -11,7 +11,7 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.9
       - key: PRAHARI_CORS_ORIGINS
-        value: http://localhost:5173,https://prahari-osint.vercel.app
+        value: http://localhost:5173,https://hacka-xi.vercel.app,https://prahari-osint.vercel.app
       # Shared API token; Render generates a random value. Copy it from the dashboard and give it to analysts.
       - key: PRAHARI_API_TOKEN
         generateValue: true

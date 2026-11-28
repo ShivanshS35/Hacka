@@ -2,12 +2,15 @@
 ### Cross-Channel OSINT & Illicit Trade Intelligence Platform
 **Concept demonstration for hackathon review | R4C Hackathon 2026**
 
+### 🔗 Live demo: **[hacka-xi.vercel.app](https://hacka-xi.vercel.app/)**
+
 > **Prototype notice:** The built-in intercepts and background activity are synthetic demonstrations. A Telegram scan includes only content actually returned by a public preview. SHA-256 is calculated over raw text and does not authenticate a source, prove collection time or custody, or certify legal admissibility. Exported reports are demonstrations, not Section 65B / Section 63 certificates. The project is not an operational law-enforcement system.
 
 [![React](https://img.shields.io/badge/Frontend-React_18_%2B_Vite_%2B_TypeScript-00E5FF?style=for-the-badge&logo=react)](https://react.dev/)
 [![FastAPI](https://img.shields.io/badge/Backend-Python_FastAPI_%2B_SQLite-10B981?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
 [![Audio Synthesizer](https://img.shields.io/badge/Sound_Engine-Web_Audio_API-F59E0B?style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-hacka--xi.vercel.app-000000?style=for-the-badge&logo=vercel)](https://hacka-xi.vercel.app/)
 
 ---
 
