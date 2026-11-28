@@ -2,6 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { prahariApi } from '../services/api';
 import { getGeminiKey, setGeminiKey, clearGeminiKey, maskKey, subscribeGeminiKey } from '../services/geminiKey';
 
+function describeStatus(s?: string): string {
+  if (!s) return 'unknown error';
+  if (s === 'http_429') return 'rate limit or quota reached — wait a minute';
+  if (s === 'http_403' || s === 'http_401') return 'key not allowed to use this model';
+  if (s === 'http_404') return 'no usable model found for this key';
+  if (s === 'network') return 'network error';
+  if (s === 'budget') return 'call limit reached';
+  if (s === 'bad_reply') return 'unreadable reply';
+  return s;
+}
+
 /** Discreet Gemini API key settings. Collapsed by default; sits at the very bottom of the first page. */
 export const ApiKeyConfig: React.FC = () => {
   const [open, setOpen] = useState(false);
@@ -25,7 +36,10 @@ export const ApiKeyConfig: React.FC = () => {
     setBusy(true);
     setMsg('Checking…');
     const r = await prahariApi.checkGeminiKey();
-    setMsg(r.valid ? 'Key works.' : r.reason);
+    if (!r.valid) setMsg(r.reason);
+    else if (!r.generation) setMsg('Key accepted, but the backend is an older version (redeploy needed).');
+    else if (r.generation.ok) setMsg(`Key works. AI classified the test post as ${r.generation.sample} (${r.generation.model}).`);
+    else setMsg(`Key accepted but the AI call failed (${describeStatus(r.generation.status)}).`);
     setBusy(false);
   };
 

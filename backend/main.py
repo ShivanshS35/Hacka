@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from classifier import classify_text
-from gemini_classifier import hybrid_classify
+from gemini_classifier import hybrid_classify, self_test as gemini_self_test
 from extractor import extract_entities, generate_sha256
 from graph_engine import DynamicEntityGraph
 from gemini_key import key_from_header, check_key
@@ -199,6 +199,7 @@ def process_and_store_post(channel: str, raw_text: str, district_hint: str = "",
         "aiAssisted": bool(classification["ai"].get("assisted")),
         "aiReason": classification["ai"].get("reason"),
         "aiModel": classification["ai"].get("model"),
+        "aiStatus": classification["ai"].get("status"),
         "entities": {
             "phones": entities["phones"],
             "upis": entities["upis"],
@@ -589,7 +590,12 @@ def get_entity_graph():
 @app.post("/api/gemini/check")
 async def gemini_check(x_gemini_key: Optional[str] = Header(default=None)):
     """Verify a user-supplied key. The key is used for this call only and is never stored or logged."""
-    return await asyncio.to_thread(check_key, key_from_header(x_gemini_key))
+    key = key_from_header(x_gemini_key)
+    result = await asyncio.to_thread(check_key, key)
+    if result.get("valid"):
+        # One real classification call: proves the whole Gemini path, not just the key.
+        result["generation"] = await asyncio.to_thread(gemini_self_test, key)
+    return result
 
 
 @app.get("/api/alerts")

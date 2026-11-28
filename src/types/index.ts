@@ -23,6 +23,7 @@ export interface InterceptPost {
   aiAssisted?: boolean;
   aiReason?: string | null;
   aiModel?: string | null;
+  aiStatus?: string | null;
   entities: ExtractedEntities;
   districtId: string;
   districtName: string;

@@ -87,7 +87,8 @@ def _discover_model(key: str) -> Optional[str]:
     return None
 
 
-def _call(text: str, key: str) -> Optional[Dict[str, Any]]:
+def _call(text: str, key: str):
+    """Returns (parsed_json | None, error_code | None). Error codes never contain the key."""
     global _resolved_model
     body = {
         "contents": [{"parts": [{"text": PROMPT + text[:MAX_TEXT_CHARS]}]}],
@@ -98,17 +99,19 @@ def _call(text: str, key: str) -> Optional[Dict[str, Any]]:
         try:
             out = _post(f"{API_ROOT}/models/{model}:generateContent", key, body)
             raw = out["candidates"][0]["content"]["parts"][0]["text"]
-            return json.loads(raw)
+            return json.loads(raw), None
         except urllib.error.HTTPError as e:
             if e.code == 404 and attempt == 0:
                 found = _discover_model(key)
                 if found and found != model:
                     model = found
                     continue
-            return None
+            return None, f"http_{e.code}"
+        except (KeyError, IndexError, ValueError):
+            return None, "bad_reply"
         except Exception:
-            return None
-    return None
+            return None, "network"
+    return None, "http_404"
 
 
 def _clean(parsed: Any) -> Optional[Dict[str, Any]]:
@@ -125,36 +128,59 @@ def _clean(parsed: Any) -> Optional[Dict[str, Any]]:
     return {"category": cat, "confidence": conf, "reason": str(parsed.get("reason", ""))[:200], "slang": slang}
 
 
-def ai_opinion(text: str, key: str) -> Optional[Dict[str, Any]]:
+def ai_opinion(text: str, key: str, use_cache: bool = True):
+    """Returns (opinion | None, status). status: ok | cached | budget | http_<code> | network | bad_reply."""
     digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
-    with _lock:
-        if digest in _cache:
-            _cache.move_to_end(digest)
-            return _cache[digest]
-    if not _budget_ok():
-        return None
-    result = _clean(_call(text, key))
-    if result is not None:
+    if use_cache:
         with _lock:
-            _cache[digest] = result
-            while len(_cache) > 500:
-                _cache.popitem(last=False)
-    return result
+            if digest in _cache:
+                _cache.move_to_end(digest)
+                return _cache[digest], "cached"
+    if not _budget_ok():
+        return None, "budget"
+    parsed, err = _call(text, key)
+    if err:
+        return None, err
+    result = _clean(parsed)
+    if result is None:
+        return None, "bad_reply"
+    with _lock:
+        _cache[digest] = result
+        while len(_cache) > 500:
+            _cache.popitem(last=False)
+    return result, "ok"
+
+
+def self_test(key: str) -> Dict[str, Any]:
+    """One real classification call so the Test button proves the whole path works."""
+    op, status = ai_opinion("snow milega kya, ek gram ke liye", key, use_cache=False)
+    model = _resolved_model or DEFAULT_MODEL
+    if op:
+        return {"ok": True, "model": model, "sample": op["category"], "confidence": op["confidence"]}
+    return {"ok": False, "model": model, "status": status}
 
 
 def hybrid_classify(text: str, key: Optional[str]) -> Dict[str, Any]:
     """Lexicon first; Gemini only for unsure/empty results. Always returns a classify_text-shaped dict."""
     base = classify_text(text)
-    base["ai"] = {"assisted": False}
-    if not (ENABLED and key) or (base["categories"] and base["confidence"] >= LEXICON_CONFIDENT):
+    base["ai"] = {"assisted": False, "status": "no_key"}
+    if not (ENABLED and key):
         return base
-    op = ai_opinion(text, key)
-    if not op or op["category"] == "NONE" or op["confidence"] < MIN_AI_CONFIDENCE:
+    if base["categories"] and base["confidence"] >= LEXICON_CONFIDENT:
+        base["ai"]["status"] = "lexicon_confident"
+        return base
+    op, status = ai_opinion(text, key)
+    if not op:
+        base["ai"]["status"] = status
+        return base
+    if op["category"] == "NONE" or op["confidence"] < MIN_AI_CONFIDENCE:
+        base["ai"]["status"] = "ai_says_none" if op["category"] == "NONE" else "ai_low_confidence"
+        base["ai"]["reason"] = op["reason"]
         return base
     return {
         "categories": [op["category"]],
         "primary_category": op["category"],
         "confidence": round(min(op["confidence"], 0.95), 2),
         "matched_slang": op["slang"] or base.get("matched_slang", []),
-        "ai": {"assisted": True, "reason": op["reason"], "model": _resolved_model or DEFAULT_MODEL},
+        "ai": {"assisted": True, "status": "ok", "reason": op["reason"], "model": _resolved_model or DEFAULT_MODEL},
     }
