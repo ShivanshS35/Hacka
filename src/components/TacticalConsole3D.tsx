@@ -289,7 +289,7 @@ export const TacticalConsole3D: React.FC<TacticalConsole3DProps> = ({
 
         {/* Bottom Hardware Bevel & Parallax Label */}
         <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono text-slate-500">
-          <span>SECURE HARDWARE ENCLAVE</span>
+          <span>DEMO ENVIRONMENT</span>
           <span className="text-cyan-400/80 tracking-widest">PRAHARI DEMO PROTOTYPE</span>
           <span>CH-01..32</span>
         </div>

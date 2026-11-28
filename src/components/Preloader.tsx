@@ -9,12 +9,12 @@ interface PreloaderProps {
 export const Preloader: React.FC<PreloaderProps> = ({ onComplete }) => {
   const [percent, setPercent] = useState(0);
   const [isFinishing, setIsFinishing] = useState(false);
-  const [currentStatus, setCurrentStatus] = useState('[01/05] INITIALIZING TELETHON PACKET CAPTURE MATRIX...');
+  const [currentStatus, setCurrentStatus] = useState('[01/05] LOADING PUBLIC-POST COLLECTORS...');
 
   const getStatusText = (val: number) => {
-    if (val < 18) return '[01/05] INITIALIZING TELETHON PACKET CAPTURE MATRIX...';
-    if (val < 38) return '[02/05] CONNECTING TO RAJASTHAN TELECOM & UPI ESCROW GATEWAYS...';
-    if (val < 62) return '[03/05] PARSING HINGLISH ILLICIT TRADE DIALECTS (4,280 TOKENS)...';
+    if (val < 18) return '[01/05] LOADING PUBLIC-POST COLLECTORS...';
+    if (val < 38) return '[02/05] LOADING RAJASTHAN DISTRICT MAP...';
+    if (val < 62) return '[03/05] PARSING HINGLISH ILLICIT TRADE DIALECTS (151 TERMS)...';
     if (val < 84) return '[04/05] SYNCHRONIZING CROSS-CHANNEL CRIME SYNDICATE TOPOLOGY...';
     if (val < 100) return '[05/05] VERIFYING DEMO CONTENT DIGEST LABELS...';
     return '[OK] ALL INTELLIGENCE VECTORS SYNCHRONIZED. READY.';

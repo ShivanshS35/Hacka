@@ -185,3 +185,12 @@ def test_gemini_check_endpoint_never_echoes_key():
     r = TestClient(main.app).post("/api/gemini/check", headers={"X-Gemini-Key": "AIzaFakeKey1234567890"})
     assert r.status_code == 200
     assert "AIzaFakeKey1234567890" not in r.text
+
+
+def test_classifier_eval_numbers_match_site_claims():
+    """The landing page quotes ~97% precision / ~65% recall on the synthetic set; keep that honest."""
+    from eval_classifier import evaluate
+    r = evaluate()
+    assert r["n"] == 60
+    assert round(r["precision"] * 100, 1) == 96.9
+    assert round(r["recall"] * 100, 1) == 64.6

@@ -51,13 +51,13 @@ export const ClassifierPlayground: React.FC = () => {
           </div>
           <span className="text-xs text-slate-400 font-semibold ml-2 flex items-center gap-1.5">
             <Terminal className="w-3.5 h-3.5 text-cyan-400" />
-            prahari — classify.py (TF-IDF + REGEX NLP ENGINE)
+            prahari — classify.py (KEYWORD LEXICON + REGEX)
           </span>
         </div>
 
         <div className="flex items-center gap-2">
           <span className="text-[10px] bg-cyan-950/80 text-cyan-400 border border-cyan-800/60 px-2 py-0.5 rounded">
-            PYTHON 3.11 // SCIKIT-LEARN
+            RULE-BASED // NOT A TRAINED MODEL
           </span>
           <button
             onClick={handleCopy}
@@ -112,7 +112,7 @@ export const ClassifierPlayground: React.FC = () => {
         {/* Output Evaluation Block */}
         <div className="bg-[#05070a] rounded-lg p-4 border border-slate-800 space-y-2">
           <div className="text-slate-500 text-[11px] font-mono">
-            # NLP EVALUATION STREAM // INFERENCE TIME: 3.2ms
+            # RULE-MATCH RESULT // SCORE IS A RULE WEIGHT, NOT A PROBABILITY
           </div>
 
           <div className="text-slate-200">
