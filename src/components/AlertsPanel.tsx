@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { BellRing, Copy, Check, Link2, RefreshCw, ShieldAlert, Download, ScrollText, Image as ImageIcon } from 'lucide-react';
 import { prahariApi, getAnalystName, setAnalystName } from '../services/api';
-import { AnalystStatus, AuditChainStatus, AuditEntry, CoordinatedGroup, InterceptPost, ThreatAlert } from '../types';
+import { AnalystStatus, AuditChainStatus, AuditEntry, ComplaintSummary, CoordinatedGroup, InterceptPost, ThreatAlert } from '../types';
 import { DirectionBadge, PlatformBadge, STATUSES, STATUS_LABEL } from './MetaBadges';
 
 interface AlertsPanelProps {
@@ -30,15 +30,18 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({ posts, refreshKey, onO
   const [analyst, setAnalyst] = useState(getAnalystName());
   const [audit, setAudit] = useState<AuditEntry[] | null>(null);
   const [chain, setChain] = useState<AuditChainStatus | null>(null);
+  const [complaintSummary, setComplaintSummary] = useState<ComplaintSummary | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [a, g, au, ch] = await Promise.all([
+    const [a, g, au, ch, cs] = await Promise.all([
       prahariApi.getAlerts(),
       prahariApi.getCoordinated(),
       prahariApi.getAudit(6),
       prahariApi.verifyAuditChain(),
+      prahariApi.getComplaintSummary(),
     ]);
+    setComplaintSummary(cs);
     setOffline(a === null);
     setAlerts(a);
     setGroups(g);
@@ -154,6 +157,14 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({ posts, refreshKey, onO
                     <ImageIcon className="w-3 h-3" />IMAGE
                   </span>
                 )}
+                {!!a.complaintCount && (
+                  <span
+                    title="An identifier in this post also appears in uploaded cybercrime complaints"
+                    className="px-1.5 py-0.5 rounded border border-rose-500/40 bg-rose-500/15 text-rose-200 text-[9px] font-semibold"
+                  >
+                    IN {a.complaintCount} COMPLAINT{a.complaintCount > 1 ? 'S' : ''}
+                  </span>
+                )}
                 <span className="ml-auto text-slate-400">{Math.round(a.confidence * 100)}% match</span>
               </div>
               <p className="mt-2 text-[13px] leading-snug text-slate-200 break-words">{a.evidence.text}</p>
@@ -173,6 +184,16 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({ posts, refreshKey, onO
                 <p className="mt-2 text-[11px] text-slate-500">
                   Why: {a.riskReasons.join(' · ')}
                 </p>
+              )}
+              {!!a.complaintMatches?.length && (
+                <ul className="mt-1.5 space-y-0.5 text-[10px] font-mono text-rose-200/80">
+                  {a.complaintMatches.map((m) => (
+                    <li key={m.ackNo}>
+                      Complaint {m.ackNo} · {m.districtId} · {m.subCategory || m.category} · {m.reportedOn.slice(0, 10)}
+                      <span className="text-slate-500"> (matched {m.matchedOn.replace(/^\w+:/, '')})</span>
+                    </li>
+                  ))}
+                </ul>
               )}
               <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] font-mono">
                 <span className="text-slate-500">STATUS</span>
@@ -234,6 +255,26 @@ export const AlertsPanel: React.FC<AlertsPanelProps> = ({ posts, refreshKey, onO
           <span className="text-[11px] font-mono text-slate-500">{groups?.length ?? 0} groups</span>
         </header>
         <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2.5">
+          {complaintSummary && complaintSummary.complaints > 0 && (
+            <div className="rounded-lg border border-rose-500/25 bg-rose-500/[0.06] p-3 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-3.5 h-3.5 text-rose-300" />
+                <h3 className="text-xs font-semibold text-rose-100">Complaint cross-check</h3>
+                <span className="ml-auto text-[10px] font-mono text-slate-400">{complaintSummary.complaints} complaints</span>
+              </div>
+              <p className="text-[11px] text-slate-300 leading-snug">
+                <b className="text-white">{complaintSummary.postsMatched ?? 0}</b> of {complaintSummary.postsChecked ?? 0} posts share an
+                identifier with a complaint. {complaintSummary.repeatIdentifierCount} suspect identifiers appear in 2+ complaints.
+              </p>
+              <p className="text-[10px] font-mono text-slate-400 leading-snug">
+                Mentions: {Object.entries(complaintSummary.topics).map(([k, v]) => `${k.replace('_', ' ')} ${v}`).join(' · ')}
+              </p>
+              <p className="text-[10px] font-mono text-slate-400 leading-snug">
+                Top districts: {Object.entries(complaintSummary.byDistrict).filter(([k]) => k !== 'unknown').slice(0, 4).map(([k, v]) => `${k} ${v}`).join(' · ')}
+              </p>
+              <p className="text-[9px] text-slate-500 leading-snug">{complaintSummary.note}</p>
+            </div>
+          )}
           <p className="text-[11px] text-slate-500 leading-snug">
             Posts whose wording is almost identical (character n-gram TF-IDF similarity), even when the spelling
             varies. Cross-channel groups are the strongest signal of one operator posting in several places.

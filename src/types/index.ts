@@ -149,6 +149,37 @@ export interface ThreatAlert {
   riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
   riskScore: number;
   riskReasons: string[];
+  /** Set only when complaint data has been uploaded and an identifier matches. */
+  complaintCount?: number;
+  complaintMatches?: ComplaintMatch[];
+  complaintMatchedOn?: string[];
+}
+
+export interface ComplaintMatch {
+  ackNo: string;
+  districtId: string;
+  policeStation: string;
+  category: string;
+  subCategory: string;
+  reportedOn: string;
+  platform: string;
+  matchedOn: string;
+}
+
+export interface ComplaintSummary {
+  complaints: number;
+  loadedAt: string | null;
+  identifiers: number;
+  identifierTypes: Record<string, number>;
+  byDistrict: Record<string, number>;
+  byCategory: Record<string, number>;
+  bySubCategory: Record<string, number>;
+  topics: Record<string, number>;
+  repeatIdentifiers: { key: string; type: string; complaints: number }[];
+  repeatIdentifierCount: number;
+  postsMatched?: number;
+  postsChecked?: number;
+  note: string;
 }
 
 export interface CoordinatedGroup {

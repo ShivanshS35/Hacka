@@ -34,3 +34,8 @@ __pycache__
 
 # Copied from node_modules by scripts/copy-ocr-assets.mjs
 public/tesseract
+
+# Real complaint exports and the PS02 dataset are never committed (repo is public)
+*Suspect_Repository*
+PS02_demo_data/
+*_masked.csv

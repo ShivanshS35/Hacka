@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from classifier import classify_text, detect_direction
 import casework
+import complaints
 import images
 from gemini_classifier import hybrid_classify, self_test as gemini_self_test
 from extractor import extract_entities, generate_sha256
@@ -77,6 +78,7 @@ def init_db():
         """)
         conn.commit()
     casework.init_tables(DB_PATH)
+    complaints.init_tables(DB_PATH)
 
 def save_to_db(post: Dict[str, Any]):
     try:
@@ -777,7 +779,8 @@ def get_district_telemetry():
 def get_dossier(post_id: str):
     for post in INTERCEPTS_STORE:
         if post["id"] == post_id:
-            return _decorate(post)
+            rec = _decorate(post)
+            return _attach_complaints([rec], {post_id: post}, rescore=False)[0]
     raise HTTPException(status_code=404, detail=f"Dossier not found: {post_id}")
 
 
@@ -799,9 +802,47 @@ def _decorate(post: Dict[str, Any], statuses: Optional[Dict[str, Dict[str, Any]]
     return {**post, **statuses.get(post["id"], default)}
 
 
+def _complaint_keys(post: Dict[str, Any]) -> List[str]:
+    keys = [k for _, k in complaints.keys_for_entities(post.get("entities") or {})]
+    for name in (post.get("channel"), post.get("author")):
+        if isinstance(name, str) and name.startswith("@") and " " not in name:
+            keys.append(complaints.handle_key(name))
+    return keys
+
+
+def _attach_complaints(items: List[Dict[str, Any]], posts_by_id: Dict[str, Dict[str, Any]], rescore: bool) -> List[Dict[str, Any]]:
+    """Cross-check each item's identifiers against loaded cybercrime complaints (if any were uploaded)."""
+    if not items or complaints.count(DB_PATH) == 0:
+        return items
+    keys_by_item = {i: _complaint_keys(posts_by_id.get(it.get("postId") or it.get("id"), it)) for i, it in enumerate(items)}
+    found = complaints.lookup(DB_PATH, [k for ks in keys_by_item.values() for k in ks])
+    for i, it in enumerate(items):
+        acks: Dict[str, Dict[str, Any]] = {}
+        matched_keys = []
+        for k in keys_by_item[i]:
+            if k in found:
+                matched_keys.append(k)
+                for m in found[k]:
+                    acks.setdefault(m["ackNo"], {**m, "matchedOn": k})
+        if not acks:
+            continue
+        it["complaintCount"] = len(acks)
+        it["complaintMatches"] = list(acks.values())[:5]
+        it["complaintMatchedOn"] = matched_keys
+        if rescore:
+            it["riskScore"] = it.get("riskScore", 0) + 2
+            it["riskReasons"] = [*it.get("riskReasons", []), f"identifier found in {len(acks)} cybercrime complaint{'s' if len(acks) > 1 else ''}"]
+            it["riskLevel"] = "HIGH" if it["riskScore"] >= 5 else "MEDIUM" if it["riskScore"] >= 3 else "LOW"
+    if rescore:
+        order = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}
+        items.sort(key=lambda a: (order[a["riskLevel"]], -a["riskScore"]))
+    return items
+
+
 def _alerts_with_status(risk: Optional[str] = None, status: Optional[str] = None) -> List[Dict[str, Any]]:
     statuses = casework.all_statuses(DB_PATH)
     alerts = [_decorate_alert(a, statuses) for a in build_alerts(INTERCEPTS_STORE)]
+    alerts = _attach_complaints(alerts, {p["id"]: p for p in INTERCEPTS_STORE}, rescore=True)
     if risk:
         alerts = [a for a in alerts if a["riskLevel"] == risk.upper()]
     if status:
@@ -812,6 +853,58 @@ def _alerts_with_status(risk: Optional[str] = None, status: Optional[str] = None
 def _decorate_alert(alert: Dict[str, Any], statuses: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
     default = {"analystStatus": "NEW", "analystNote": "", "statusActor": None, "statusUpdatedAt": None}
     return {**alert, **statuses.get(alert["postId"], default)}
+
+
+def _check_admin(token: Optional[str]) -> None:
+    """Complaint data is real and sensitive. If PRAHARI_ADMIN_TOKEN is set on the server, uploads and deletes need it."""
+    expected = os.environ.get("PRAHARI_ADMIN_TOKEN", "")
+    if expected and (token or "") != expected:
+        raise HTTPException(status_code=403, detail="Admin token required to load or clear complaint data")
+
+
+@app.post("/api/complaints/upload")
+async def upload_complaints(files: List[UploadFile] = File(...), analyst: str = Form("analyst"),
+                            x_admin_token: Optional[str] = Header(default=None)):
+    _check_admin(_str(x_admin_token) or None)
+    analyst = _str(analyst, "analyst") or "analyst"
+    totals = {"files": 0, "rows": 0, "identifiersAdded": 0}
+    errors = []
+    for f in files:
+        content = await f.read()
+        if len(content) > 20 * 1024 * 1024:
+            errors.append(f"{f.filename}: larger than 20 MB")
+            continue
+        try:
+            res = await asyncio.to_thread(complaints.load_csv, DB_PATH, content.decode("utf-8-sig"))
+        except (UnicodeDecodeError, ValueError) as exc:
+            errors.append(f"{f.filename}: {exc}")
+            continue
+        totals["files"] += 1
+        totals["rows"] += res["rows"]
+        totals["identifiersAdded"] += res["identifiersAdded"]
+    if not totals["files"]:
+        raise HTTPException(status_code=400, detail="; ".join(errors) or "No complaint files")
+    # Audit: counts only, never content.
+    await asyncio.to_thread(casework.log_event, DB_PATH, "COMPLAINTS_LOADED", None, analyst, {**totals, "errors": len(errors)})
+    return {**totals, "errors": errors, "summary": complaints.summary(DB_PATH)}
+
+
+@app.get("/api/complaints/summary")
+def complaints_summary():
+    s = complaints.summary(DB_PATH)
+    if s["complaints"]:
+        matched = _attach_complaints([dict(p) for p in INTERCEPTS_STORE], {p["id"]: p for p in INTERCEPTS_STORE}, rescore=False)
+        s["postsMatched"] = sum(1 for p in matched if p.get("complaintCount"))
+        s["postsChecked"] = len(matched)
+    return s
+
+
+@app.delete("/api/complaints")
+def clear_complaints(analyst: str = "analyst", x_admin_token: Optional[str] = Header(default=None)):
+    _check_admin(_str(x_admin_token) or None)
+    complaints.clear(DB_PATH)
+    casework.log_event(DB_PATH, "COMPLAINTS_CLEARED", None, analyst or "analyst", {})
+    return {"cleared": True}
 
 
 @app.post("/api/posts/{post_id}/status")

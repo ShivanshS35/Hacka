@@ -1,5 +1,6 @@
 import { geminiHeaders } from './geminiKey';
 import {
+  ComplaintSummary,
   InterceptPost, DistrictIntel, CrimeCategory, EntityNode, EntityEdge, ThreatAlert, CoordinatedGroup,
   AnalystStatus, VerifyResult, AuditEntry, AuditChainStatus, Platform,
 } from '../types';
@@ -247,6 +248,47 @@ export const prahariApi = {
       return res.ok ? await res.json() : null;
     } catch {
       return null;
+    }
+  },
+
+  /** Upload cybercrime complaint exports (Suspect Repository CSVs). Kept on the server only; never in the site. */
+  async uploadComplaints(files: File[], adminToken?: string): Promise<{ files: number; rows: number; errors: string[]; summary: ComplaintSummary }> {
+    const form = new FormData();
+    files.forEach((f) => form.append('files', f));
+    form.append('analyst', getAnalystName());
+    const headers: Record<string, string> = {};
+    if (adminToken) headers['X-Admin-Token'] = adminToken;
+    const res = await fetch(`${API_BASE_URL}/complaints/upload`, { method: 'POST', headers, body: form });
+    if (!res.ok) {
+      let message = `Upload failed (${res.status})`;
+      try {
+        const err = await res.json();
+        if (err.detail) message = String(err.detail);
+      } catch {
+        /* keep status message */
+      }
+      throw new Error(message);
+    }
+    return res.json();
+  },
+
+  async getComplaintSummary(): Promise<ComplaintSummary | null> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/complaints/summary`);
+      return res.ok ? await res.json() : null;
+    } catch {
+      return null;
+    }
+  },
+
+  async clearComplaints(adminToken?: string): Promise<boolean> {
+    try {
+      const headers: Record<string, string> = {};
+      if (adminToken) headers['X-Admin-Token'] = adminToken;
+      const res = await fetch(`${API_BASE_URL}/complaints?analyst=${encodeURIComponent(getAnalystName())}`, { method: 'DELETE', headers });
+      return res.ok;
+    } catch {
+      return false;
     }
   },
 

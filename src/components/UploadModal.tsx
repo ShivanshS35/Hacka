@@ -12,6 +12,7 @@ import {
   Cpu,
   Layers,
   Image as ImageIcon,
+  ShieldAlert,
 } from 'lucide-react';
 import { InterceptPost, Platform } from '../types';
 import { PLATFORMS } from './MetaBadges';
@@ -25,7 +26,7 @@ interface UploadModalProps {
   onIngestPosts: (newPosts: InterceptPost[]) => void;
 }
 
-type IngestMode = 'CHANNEL' | 'TEXT' | 'FILE' | 'IMAGE' | 'BENCHMARK';
+type IngestMode = 'CHANNEL' | 'TEXT' | 'FILE' | 'IMAGE' | 'COMPLAINTS' | 'BENCHMARK';
 
 /** Read the text in an image in the browser (tesseract.js is loaded only when this is used). */
 async function ocrInBrowser(file: File, onProgress: (pct: number) => void): Promise<string> {
@@ -54,6 +55,13 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   onIngestPosts,
 }) => {
   const [activeMode, setActiveMode] = useState<IngestMode>('CHANNEL');
+  const [adminToken, setAdminToken] = useState(() => {
+    try {
+      return sessionStorage.getItem('prahari_admin_token') || '';
+    } catch {
+      return '';
+    }
+  });
   const [channelInput, setChannelInput] = useState('delhi_highs');
   const [rawTextInput, setRawTextInput] = useState('');
   const [dragActive, setDragActive] = useState(false);
@@ -291,6 +299,41 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     e.target.value = '';
   };
 
+  // Complaint exports (Suspect Repository). Real data: kept on the server only; the page shows counts.
+  const handleComplaintFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const csvs = Array.from(e.target.files || []).filter((f) => /\.csv$/i.test(f.name));
+    const path = (f: File) => ((f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name).toLowerCase();
+    // From a whole dataset folder, take only the complaint exports.
+    const suspect = csvs.filter((f) => /suspect|complaint|ncrp/.test(path(f)));
+    const files = suspect.length ? suspect : csvs;
+    e.target.value = '';
+    if (!files.length) {
+      setStatusMessage('Choose the complaint CSV files (Suspect_Repository...csv).');
+      return;
+    }
+    try {
+      sessionStorage.setItem('prahari_admin_token', adminToken);
+    } catch {
+      /* storage unavailable */
+    }
+    setIsProcessing(true);
+    setStatusMessage(`Loading ${files.length} complaint file${files.length > 1 ? 's' : ''}...`);
+    try {
+      const res = await prahariApi.uploadComplaints(files, adminToken || undefined);
+      sound.playSuccessChime();
+      const s = res.summary;
+      setStatusMessage(
+        `Loaded ${s.complaints} complaints, ${s.identifiers} suspect identifiers. ${s.repeatIdentifierCount} appear in 2+ complaints.` +
+          (res.errors.length ? ` Skipped: ${res.errors.slice(0, 2).join('; ')}` : '') +
+          ' Matches show in the Alerts tab.'
+      );
+    } catch (err) {
+      setStatusMessage(err instanceof Error ? err.message : 'Complaint upload failed.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   // 4. One-Click R4C Benchmark Dataset
   const handleLoadBenchmark = async () => {
     setIsProcessing(true);
@@ -397,6 +440,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             { key: 'TEXT', label: 'Raw Slang Scanner', icon: Send },
             { key: 'FILE', label: 'CSV / JSON Export', icon: Upload },
             { key: 'IMAGE', label: 'Screenshot / Image', icon: ImageIcon },
+            { key: 'COMPLAINTS', label: 'Complaints (NCRP)', icon: ShieldAlert },
             { key: 'BENCHMARK', label: 'R4C Benchmark', icon: Sparkles },
           ].map((tab) => {
             const Icon = tab.icon;
@@ -572,6 +616,50 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                   <p className="text-slate-600 text-[10px] mt-3">
                     From a folder, only post files are imported (result.json, posts.csv). Lexicon, reference and complaint files are skipped.
                   </p>
+                </div>
+              )}
+
+              {/* COMPLAINT EXPORTS (SUSPECT REPOSITORY) */}
+              {activeMode === 'COMPLAINTS' && (
+                <div className="space-y-3">
+                  <div className="p-3 bg-rose-500/[0.05] border border-rose-500/20 rounded-xl space-y-1.5">
+                    <div className="text-white font-medium">Cross-check against cybercrime complaints</div>
+                    <p className="text-slate-400 text-[11px] leading-relaxed">
+                      Load the Suspect Repository CSV exports. Each suspect identifier (profile, handle, UPI, bank account) is
+                      matched against the identifiers in monitored posts; a match adds a risk reason and shows the complaint
+                      acknowledgement number.
+                    </p>
+                    <p className="text-rose-200/80 text-[10px] leading-relaxed">
+                      Real complaint data: only the acknowledgement no., district, police station, category, date and suspect
+                      identifiers are kept, on the server. Complaint text and names are not stored. Never commit these files.
+                    </p>
+                  </div>
+                  <label className="flex items-center gap-2 text-[11px] text-slate-400">
+                    Admin token (only if the server sets one)
+                    <input
+                      type="password"
+                      value={adminToken}
+                      onChange={(e) => setAdminToken(e.target.value)}
+                      autoComplete="off"
+                      className="flex-1 bg-[#070A10] border border-white/10 rounded-lg px-2 py-1 text-slate-200 focus:outline-none focus:border-cyan-500/40"
+                    />
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    <label className="inline-block bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] text-white px-4 py-2 rounded-xl font-medium cursor-pointer transition-all text-sm">
+                      <span>Choose complaint CSVs</span>
+                      <input type="file" multiple accept=".csv" onChange={handleComplaintFiles} className="hidden" />
+                    </label>
+                    <label className="inline-block bg-rose-500/10 hover:bg-rose-500/20 border border-rose-400/30 text-rose-100 px-4 py-2 rounded-xl font-medium cursor-pointer transition-all text-sm">
+                      <span>Choose folder</span>
+                      <input
+                        type="file"
+                        multiple
+                        onChange={handleComplaintFiles}
+                        className="hidden"
+                        {...({ webkitdirectory: '', directory: '' } as Record<string, string>)}
+                      />
+                    </label>
+                  </div>
                 </div>
               )}
 

@@ -425,3 +425,40 @@ def test_leetspeak_words_are_not_upi_ids_and_native_digits_are_phones():
     e = extract_entities("g@nja / ch@ras / sm@ck / Aadh@ar, pay test.pay@oksbi, call ९००००००१०४")
     assert e["upis"] == ["test.pay@oksbi"]
     assert e["phones"] == ["9000000104"]
+
+
+# ----------------------------------------------------------------------------------- complaint cross-check
+COMPLAINT_CSV = (
+    "Acknowledgement No,crime aditional information,State,District,Police Station,Id Number,ID Name,Category,Sub Category,Suspect Name,Date\n"
+    "90000000000001,Paid on UPI test.mule@oksbi for a job task,RAJASTHAN,JAIPUR CITY (EAST),Test PS,https://www.instagram.com/test_seller_ig,Social Media Profile URL,Online Financial Fraud,UPI Related Frauds,Test Name,01/11/2026 10:00:00\n"
+    "90000000000002,Telegram group asked for deposit,RAJASTHAN,GANGA NAGAR,Test PS 2,abXXXX@gmail.com,Email,Online Financial Fraud,Online Job Fraud,Other Name,02/11/2026 11:00:00\n"
+)
+
+
+def test_complaints_are_matched_without_storing_text_or_names():
+    import io as _io
+    r = client.post("/api/complaints/upload", files=[("files", ("s.csv", _io.BytesIO(COMPLAINT_CSV.encode()), "text/csv"))])
+    assert r.status_code == 200, r.text
+    s = r.json()["summary"]
+    assert s["complaints"] == 2
+    assert s["topics"].get("telegram") == 1 and s["byDistrict"].get("sri-ganganagar") == 1
+    # masked email is not an identifier; the UPI in the text and the Instagram profile are
+    assert s["identifierTypes"] == {"profile": 1, "upi": 1}
+    client.post("/api/scan/text", json={"text": "Current account rent pe milega, UPI test.mule@oksbi, DM @test_seller_ig", "channel": "@cx_test"})
+    alerts = client.get("/api/alerts").json()
+    hit = next(a for a in alerts if "test.mule@oksbi" in a["entities"]["upis"])
+    assert hit["complaintCount"] == 1 and hit["complaintMatches"][0]["ackNo"] == "90000000000001"
+    assert any("cybercrime complaint" in r for r in hit["riskReasons"])
+    # nothing of the narrative or the names is stored
+    import sqlite3, main
+    con = sqlite3.connect(main.DB_PATH)
+    dump = "\n".join(str(row) for t in ("complaints", "complaint_ids") for row in con.execute(f"SELECT * FROM {t}"))
+    assert "Test Name" not in dump and "job task" not in dump and "deposit" not in dump
+    assert client.delete("/api/complaints").status_code == 200
+    assert client.get("/api/complaints/summary").json()["complaints"] == 0
+
+
+def test_rejects_non_complaint_csv():
+    import io as _io
+    r = client.post("/api/complaints/upload", files=[("files", ("p.csv", _io.BytesIO(b"text,channel\nhello,@x\n"), "text/csv"))])
+    assert r.status_code == 400
