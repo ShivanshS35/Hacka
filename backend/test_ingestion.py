@@ -477,3 +477,14 @@ def test_channel_names_cannot_carry_spreadsheet_formulas():
     assert main._clean_channel("=cmd|' /C calc'!A0") == "@cmd C calcA0"
     assert main._clean_channel("@delhi_highs") == "@delhi_highs"
     assert main._clean_channel("!!!") == "@unknown"
+
+
+def test_classifier_handles_extra_whitespace_between_words():
+    for text in ["m u l e   a c c o u n t  available", "k a t t a   a v a i l a b l e", "f a k e   p a n  available",
+                 "mule      account for sale", "chitta\n\n\tdelivery  ready"]:
+        assert classify_text(text)["categories"], text
+
+
+def test_negative_phrases_apply_to_every_variant():
+    assert classify_text("Printer cartridges available, HP and Canon, bulk rates")["categories"] == []
+    assert classify_text("Ice cream available at half price today")["categories"] == []
