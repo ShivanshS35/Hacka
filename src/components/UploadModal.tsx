@@ -218,27 +218,60 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     }
   };
 
-  const processFile = async (file: File) => {
-    setIsProcessing(true);
-    setStatusMessage(`Uploading and processing ${file.name} in backend...`);
+  // Which files in a chosen folder are post exports. Telegram Desktop exports are "result.json"; social posts are posts.csv
+  // (posts.json is the same data, so it is skipped when posts.csv is also present). Lexicon, reference and complaint
+  // files are not posts and are left out.
+  const pickPostFiles = (files: File[]): File[] => {
+    const rel = (f: File) => ((f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name).toLowerCase();
+    const dataFiles = files.filter((f) => /\.(json|csv|txt)$/i.test(f.name));
+    const fromFolder = files.some((f) => (f as File & { webkitRelativePath?: string }).webkitRelativePath);
+    if (!fromFolder) return dataFiles;
+    const posts = dataFiles.filter((f) => {
+      const r = rel(f);
+      if (/suspect_repository|lexicon|reference|answer_key|images_index/.test(r)) return false;
+      return /(^|\/)result\.json$/.test(r) || /(^|\/)posts\.(csv|json)$/.test(r) || /messages?\d*\.(json|csv)$/.test(r);
+    });
+    const csvDirs = new Set(posts.filter((f) => /posts\.csv$/.test(rel(f))).map((f) => rel(f).replace(/posts\.csv$/, '')));
+    return posts.filter((f) => !(/posts\.json$/.test(rel(f)) && csvDirs.has(rel(f).replace(/posts\.json$/, ''))));
+  };
 
-    try {
-      sound.playClick();
-      const res = await prahariApi.ingestFile(file, platform);
-      const skipped = res?.duplicates_skipped ?? 0;
-      if (res && res.records && res.records.length > 0) {
-        sound.playSuccessChime();
-        onIngestPosts(res.records);
-        finish(res.records.length, skipped > 0 ? `${skipped} message${skipped > 1 ? 's were' : ' was'} already stored and skipped.` : undefined);
-      } else if (skipped > 0) {
-        finish(0, `All ${skipped} messages in this file were already stored, so nothing new was added.`);
-      } else {
-        throw new Error('No valid records parsed');
+  const processFiles = async (input: File[]) => {
+    const files = pickPostFiles(input);
+    if (files.length === 0) {
+      setStatusMessage('No post files found. Choose Telegram result.json exports or a posts CSV / JSON.');
+      return;
+    }
+    setIsProcessing(true);
+    sound.playClick();
+    let added = 0, skipped = 0, imageOnly = 0;
+    const failed: string[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const label = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
+      setStatusMessage(`Importing ${i + 1} / ${files.length}: ${label}`);
+      try {
+        const res = await prahariApi.ingestFile(file, platform);
+        skipped += res?.duplicates_skipped ?? 0;
+        imageOnly += res?.image_only_skipped ?? 0;
+        if (res?.records?.length) {
+          added += res.records.length;
+          onIngestPosts(res.records);
+        }
+      } catch (err) {
+        failed.push(`${label} (${err instanceof Error ? err.message : 'failed'})`);
       }
-    } catch (err) {
-      setStatusMessage(err instanceof Error ? err.message : 'Dataset upload failed. Check the backend connection and file format, then retry.');
-    } finally {
-      setIsProcessing(false);
+    }
+    setIsProcessing(false);
+    const notes = [
+      skipped ? `${skipped} already stored and skipped` : '',
+      imageOnly ? `${imageOnly} picture-only posts need the Screenshot / Image tab` : '',
+      failed.length ? `${failed.length} file${failed.length > 1 ? 's' : ''} not imported: ${failed.slice(0, 3).join('; ')}${failed.length > 3 ? '...' : ''}` : '',
+    ].filter(Boolean).join('. ');
+    if (added > 0) {
+      sound.playSuccessChime();
+      finish(added, `${files.length} file${files.length > 1 ? 's' : ''}. ${notes}`.trim());
+    } else {
+      setStatusMessage(notes || 'Nothing new was imported.');
     }
   };
 
@@ -246,15 +279,16 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      processFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files && e.dataTransfer.files.length) {
+      processFiles(Array.from(e.dataTransfer.files));
     }
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      processFile(e.target.files[0]);
+    if (e.target.files && e.target.files.length) {
+      processFiles(Array.from(e.target.files));
     }
+    e.target.value = '';
   };
 
   // 4. One-Click R4C Benchmark Dataset
@@ -514,20 +548,30 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 >
                   <FileText className="w-10 h-10 text-cyan-400/80 mx-auto mb-2" />
                   <p className="text-slate-200 font-semibold mb-1">
-                    Drag & Drop Telegram CSV or JSON Chat Export
+                    Drag & Drop Telegram exports or social-media CSV / JSON
                   </p>
                   <p className="text-slate-500 text-[11px] mb-4">
-                    Supports desktop chat exports, WhatsApp text exports, or custom tabular files
+                    Telegram Desktop result.json, posts.csv / posts.json, or custom tables. Several files at once, or a whole dataset folder.
                   </p>
-                  <label className="inline-block bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] text-white px-4 py-2 rounded-xl font-medium cursor-pointer transition-all">
-                    <span>Browse Local File</span>
-                    <input
-                      type="file"
-                      accept=".json,.csv,.txt"
-                      onChange={handleFileInput}
-                      className="hidden"
-                    />
-                  </label>
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <label className="inline-block bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] text-white px-4 py-2 rounded-xl font-medium cursor-pointer transition-all">
+                      <span>Choose files</span>
+                      <input type="file" multiple accept=".json,.csv,.txt" onChange={handleFileInput} className="hidden" />
+                    </label>
+                    <label className="inline-block bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-400/30 text-cyan-200 px-4 py-2 rounded-xl font-medium cursor-pointer transition-all">
+                      <span>Choose dataset folder</span>
+                      <input
+                        type="file"
+                        multiple
+                        onChange={handleFileInput}
+                        className="hidden"
+                        {...({ webkitdirectory: '', directory: '' } as Record<string, string>)}
+                      />
+                    </label>
+                  </div>
+                  <p className="text-slate-600 text-[10px] mt-3">
+                    From a folder, only post files are imported (result.json, posts.csv). Lexicon, reference and complaint files are skipped.
+                  </p>
                 </div>
               )}
 

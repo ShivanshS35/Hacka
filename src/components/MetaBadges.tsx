@@ -3,10 +3,10 @@ import { AnalystStatus, Direction, Platform } from '../types';
 
 const PLATFORM_LABEL: Record<Platform, string> = {
   TELEGRAM: 'Telegram', WHATSAPP: 'WhatsApp', INSTAGRAM: 'Instagram', FACEBOOK: 'Facebook',
-  X: 'X', OLX: 'OLX', QUIKR: 'Quikr', OTHER: 'Other', UNKNOWN: 'Platform ?',
+  X: 'X', YOUTUBE: 'YouTube', SHARECHAT: 'ShareChat', OLX: 'OLX', QUIKR: 'Quikr', OTHER: 'Other', UNKNOWN: 'Platform ?',
 };
 
-export const PLATFORMS: Platform[] = ['UNKNOWN', 'TELEGRAM', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'X', 'OLX', 'QUIKR', 'OTHER'];
+export const PLATFORMS: Platform[] = ['UNKNOWN', 'TELEGRAM', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'X', 'YOUTUBE', 'SHARECHAT', 'OLX', 'QUIKR', 'OTHER'];
 
 const DIRECTION_LABEL: Record<Direction, { text: string; cls: string; title: string }> = {
   SELL: { text: 'SELLING', cls: 'text-rose-300 bg-rose-500/10 border-rose-500/25', title: 'The post reads like an offer to sell or supply' },

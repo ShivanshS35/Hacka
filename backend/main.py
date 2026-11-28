@@ -47,7 +47,8 @@ app.add_middleware(
 )
 
 # In-memory intelligence repository
-MAX_STORED_POSTS = 300   # newest posts kept in memory (all are still saved to SQLite)
+MAX_STORED_POSTS = int(os.environ.get("PRAHARI_MAX_POSTS", "5000"))   # newest posts kept in memory (all are saved to SQLite)
+MAX_IMPORT_RECORDS = 3000   # per uploaded file (the PS02 Telegram exports are up to ~240 messages each)
 INTERCEPTS_STORE: List[Dict[str, Any]] = []
 DEDUP_INDEX: Dict[tuple, str] = {}   # (channel, sha256, sourceTimestamp) -> post id; filled after init_db()
 ENTITY_GRAPH = DynamicEntityGraph()
@@ -103,7 +104,7 @@ def save_to_db(post: Dict[str, Any]):
 def load_from_db() -> List[Dict[str, Any]]:
     with closing(sqlite3.connect(DB_PATH)) as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, data_json FROM intercepts ORDER BY created_at DESC LIMIT 300")
+        cursor.execute("SELECT id, data_json FROM intercepts ORDER BY created_at DESC LIMIT ?", (MAX_STORED_POSTS,))
         rows = cursor.fetchall()
         posts = []
         for post_id, raw_json in rows:
@@ -179,8 +180,9 @@ def _str(value: Any, default: str = "") -> str:
     """Form()/Header() defaults are objects when an endpoint function is called directly (as the tests do)."""
     return value if isinstance(value, str) else default
 
-PLATFORMS = {"TELEGRAM", "WHATSAPP", "INSTAGRAM", "FACEBOOK", "X", "OLX", "QUIKR", "OTHER", "UNKNOWN"}
-_PLATFORM_ALIASES = {"TWITTER": "X", "WA": "WHATSAPP", "IG": "INSTAGRAM", "FB": "FACEBOOK", "TG": "TELEGRAM"}
+PLATFORMS = {"TELEGRAM", "WHATSAPP", "INSTAGRAM", "FACEBOOK", "X", "OLX", "QUIKR", "YOUTUBE", "SHARECHAT", "OTHER", "UNKNOWN"}
+_PLATFORM_ALIASES = {"TWITTER": "X", "WA": "WHATSAPP", "IG": "INSTAGRAM", "FB": "FACEBOOK", "TG": "TELEGRAM",
+                     "YOUTUBECOMMENT": "YOUTUBE", "YT": "YOUTUBE", "YOUTUBECOMMENTS": "YOUTUBE"}
 
 def normalize_platform(value: Any) -> str:
     v = re.sub(r"[^A-Z]", "", str(value or "").upper())
@@ -200,7 +202,7 @@ def link_similar_images(post: Dict[str, Any], others: List[Dict[str, Any]]) -> L
         ENTITY_GRAPH.add_edge(post["id"], m["postId"], f"SIMILAR IMAGE (d={m['distance']})", cat)
     return matches
 
-def process_and_store_post(channel: str, raw_text: str, district_hint: str = "", views: str = "0", source_type: str = "ANALYST_SUBMISSION", source_timestamp: Optional[str] = None, source_reference: Optional[str] = None, classification: Optional[Dict[str, Any]] = None, entities: Optional[Dict[str, Any]] = None, platform: str = "UNKNOWN", image: Optional[Dict[str, Any]] = None, actor: str = "analyst", log: bool = True) -> Dict[str, Any]:
+def process_and_store_post(channel: str, raw_text: str, district_hint: str = "", views: str = "0", source_type: str = "ANALYST_SUBMISSION", source_timestamp: Optional[str] = None, source_reference: Optional[str] = None, classification: Optional[Dict[str, Any]] = None, entities: Optional[Dict[str, Any]] = None, platform: str = "UNKNOWN", image: Optional[Dict[str, Any]] = None, actor: str = "analyst", log: bool = True, meta: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     # `classification` may be precomputed off the event loop (Gemini calls are slow network I/O).
     classification = classification or hybrid_classify(raw_text, None)
     entities = entities or extract_entities(raw_text)
@@ -286,6 +288,10 @@ def process_and_store_post(channel: str, raw_text: str, district_hint: str = "",
 
     if image:
         post_record["image"] = image
+    # Optional source metadata from imports: author inside a group, forwarded-from channel, attached image name, location tag.
+    for k, v in (meta or {}).items():
+        if v not in (None, ""):
+            post_record[k] = v
 
     # Persist first; a failed write must not leave an API-visible record.
     save_to_db(post_record)
@@ -618,6 +624,13 @@ async def scan_telegram_channel(req: ChannelScanRequest, x_gemini_key: Optional[
         "intercepts": processed_records
     }
 
+def _first_str(row: Dict[str, Any], keys) -> Optional[str]:
+    for k in keys:
+        v = row.get(k)
+        if isinstance(v, (str, int, float)) and str(v).strip():
+            return str(v).strip()
+    return None
+
 def _flatten_text(value: Any) -> Optional[str]:
     """Telegram exports store formatted text as a list of strings and {"type", "text"} entities."""
     if isinstance(value, str):
@@ -632,8 +645,8 @@ async def ingest_dataset_file(file: UploadFile = File(...), platform: str = Form
     gkey = key_from_header(x_gemini_key)
     platform, analyst = _str(platform), _str(analyst, "analyst") or "analyst"
     content = await file.read()
-    if len(content) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="File exceeds 10 MB limit")
+    if len(content) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File exceeds 20 MB limit")
     try:
         raw_str = content.decode("utf-8-sig")
     except UnicodeDecodeError:
@@ -670,19 +683,37 @@ async def ingest_dataset_file(file: UploadFile = File(...), platform: str = Form
             raise HTTPException(status_code=400, detail="CSV header must include a text, message, rawText, or raw_text column")
         rows = list(reader)
 
-    if len(rows) > 500:
-        raise HTTPException(status_code=413, detail="Import exceeds the 500 record limit")
+    if len(rows) > MAX_IMPORT_RECORDS:
+        raise HTTPException(status_code=413, detail=f"Import exceeds the {MAX_IMPORT_RECORDS} record limit")
+    image_only = 0
 
     for item in rows:
         if not isinstance(item, dict):
             continue
         normalized = {str(k).strip().lower(): v for k, v in item.items() if k is not None}
-        text = next((t for t in (_flatten_text(normalized.get(k)) for k in ("text", "message", "rawtext", "raw_text")) if t and t.strip()), None)
-        if not text:
+        if normalized.get("type") == "service":      # Telegram "channel created" etc.
             continue
-        channel = normalized.get("channel") or export_name or "uploaded_dataset"
+        text = next((t for t in (_flatten_text(normalized.get(k)) for k in ("text", "message", "rawtext", "raw_text", "caption")) if t and t.strip()), None)
+        image_ref = _first_str(normalized, ("photo", "image_file", "image", "file"))
+        if not text:
+            if image_ref:
+                image_only += 1    # picture without caption: needs OCR (Import Intel > Screenshot / Image)
+            continue
+        author = _first_str(normalized, ("from", "author", "username", "account", "page", "user"))
+        # Telegram exports: the export name is the channel; a CSV row names its own account/page.
+        channel = normalized.get("channel") or export_name or author or "uploaded_dataset"
         row_platform = normalized.get("platform") or platform or ("TELEGRAM" if export_name else "")
-        rec = process_and_store_post(channel=str(channel), raw_text=text.strip(), views=str(normalized.get("views", "0")), source_type="UPLOADED_DATASET", source_timestamp=normalized.get("timestamp") or normalized.get("date"), source_reference=str(normalized.get("source") or file.filename or "uploaded file"), classification=await asyncio.to_thread(hybrid_classify, text.strip(), gkey), entities=await asyncio.to_thread(extract_entities, text.strip()), platform=str(row_platform), actor=analyst, log=False)
+        location = _first_str(normalized, ("location_tag", "location", "city", "district"))
+        district_hint = extract_entities(location)["district_id"] if location else ""
+        meta = {
+            "author": author if author and author != channel else None,
+            "forwardedFrom": _first_str(normalized, ("forwarded_from",)),
+            "imageRef": image_ref,
+            "locationTag": location,
+            "sourceMessageId": str(normalized["id"]) if normalized.get("id") not in (None, "") else None,
+        }
+        source_ts = _first_str(normalized, ("timestamp", "date", "posted_at", "posted_at_ist", "created_at", "time"))
+        rec = process_and_store_post(channel=str(channel), raw_text=text.strip(), district_hint=district_hint if district_hint != "unknown" else "", views=str(normalized.get("views") or normalized.get("likes") or "0"), source_type="UPLOADED_DATASET", source_timestamp=source_ts, source_reference=str(normalized.get("source") or file.filename or "uploaded file"), classification=await asyncio.to_thread(hybrid_classify, text.strip(), gkey), entities=await asyncio.to_thread(extract_entities, text.strip()), platform=str(row_platform), actor=analyst, log=False, meta=meta)
         if rec.get("duplicate"):
             duplicates += 1
             continue
@@ -690,17 +721,18 @@ async def ingest_dataset_file(file: UploadFile = File(...), platform: str = Form
         await broadcast_new_intercept(rec)
 
     if not new_records and not duplicates:
-        raise HTTPException(status_code=422, detail="No rows with a non-empty text, message, or rawText field were found")
+        raise HTTPException(status_code=422, detail="No rows with a non-empty text, message, or rawText field were found" + (f" ({image_only} picture-only posts need the Screenshot / Image tab)" if image_only else ""))
 
     # One audit entry per import (not per row) keeps a 500-row import fast.
     await asyncio.to_thread(casework.log_event, DB_PATH, "INGEST_BATCH", None, analyst, {
-        "filename": file.filename, "ingested": len(new_records), "duplicatesSkipped": duplicates,
+        "filename": file.filename, "ingested": len(new_records), "duplicatesSkipped": duplicates, "imageOnlySkipped": image_only,
         "firstId": new_records[0]["id"] if new_records else None, "lastId": new_records[-1]["id"] if new_records else None})
 
     return {
         "filename": file.filename,
         "ingested_count": len(new_records),
         "duplicates_skipped": duplicates,
+        "image_only_skipped": image_only,
         "records": new_records
     }
 

@@ -91,7 +91,8 @@ def build_alerts(posts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 def find_coordinated(posts: List[Dict[str, Any]], threshold: float = SIMILARITY_THRESHOLD) -> List[Dict[str, Any]]:
     """Group near-duplicate ads (char n-gram TF-IDF cosine; robust to Hinglish spelling variants)."""
-    docs = [p for p in posts if p.get("rawText")]
+    # Only flagged posts: grouping ordinary chatter is noise, and it keeps the similarity matrix small.
+    docs = [p for p in posts if p.get("rawText") and p.get("categories", True)]
     if len(docs) < 2:
         return []
     vec = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5), lowercase=True)

@@ -104,7 +104,7 @@ export const prahariApi = {
   async ingestFile(
     file: File,
     platform?: Platform
-  ): Promise<{ filename: string; ingested_count: number; duplicates_skipped?: number; records: InterceptPost[] }> {
+  ): Promise<{ filename: string; ingested_count: number; duplicates_skipped?: number; image_only_skipped?: number; records: InterceptPost[] }> {
     const formData = new FormData();
     formData.append('file', file);
     if (platform && platform !== 'UNKNOWN') formData.append('platform', platform);

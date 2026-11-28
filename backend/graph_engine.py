@@ -54,6 +54,13 @@ class DynamicEntityGraph:
             channel=channel
         )
 
+        # Forwarded post: link it to the channel it was forwarded from (resellers forward other sellers' ads).
+        origin = post_data.get("forwardedFrom")
+        if origin:
+            origin_id = f"fwd:{str(origin).strip().lower()}"
+            self.add_node(origin_id, str(origin), "telegram", primary_cat, channel=str(origin))
+            self.add_edge(post_id, origin_id, "FORWARDED FROM", primary_cat)
+
         # 1. Add UPI Nodes & Edges
         for upi in entities.get("upis", []):
             self.add_node(

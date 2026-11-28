@@ -9,7 +9,7 @@ export interface ExtractedEntities {
   ifscCodes?: string[];
 }
 
-export type Platform = 'TELEGRAM' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK' | 'X' | 'OLX' | 'QUIKR' | 'OTHER' | 'UNKNOWN';
+export type Platform = 'TELEGRAM' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK' | 'X' | 'YOUTUBE' | 'SHARECHAT' | 'OLX' | 'QUIKR' | 'OTHER' | 'UNKNOWN';
 export type Direction = 'SELL' | 'BUY' | 'RENT_OFFER' | 'RENT_WANTED' | 'UNKNOWN';
 export type AnalystStatus = 'NEW' | 'REVIEWING' | 'ESCALATED' | 'FALSE_POSITIVE' | 'CLOSED';
 
