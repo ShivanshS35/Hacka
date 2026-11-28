@@ -228,7 +228,7 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
       </div>
 
       {/* Intercepts List Container (Linear/Palantir clean cards) */}
-      <div className="flex-1 overflow-y-auto p-3 pb-[calc(var(--dock-clearance,0px)+12px)] space-y-2.5">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 pb-[calc(var(--dock-clearance,0px)+12px)] space-y-2.5">
         {filteredPosts.length === 0 ? (
           <div className="py-16 text-center text-slate-500">
             <AlertCircle className="w-6 h-6 mx-auto mb-2 opacity-40 text-slate-400" />
@@ -244,19 +244,19 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
                   sound.playClick();
                   onSelectPost(post);
                 }}
-                className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+                className={`p-3.5 rounded-xl border transition-all cursor-pointer min-w-0 overflow-hidden ${
                   isSelected
                     ? 'bg-white/[0.05] border-cyan-500/40 shadow-lg shadow-cyan-950/20'
                     : 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04] hover:border-white/[0.12]'
                 }`}
               >
                 {/* Post Header: Channel, Category Indicator, Confidence */}
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-mono font-medium text-xs text-slate-200">
+                <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 mb-2 min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                    <span className="font-mono font-medium text-xs text-slate-200 truncate max-w-full">
                       {post.channel}
                     </span>
-                    <span className="text-[10px] text-slate-500">
+                    <span className="text-[10px] text-slate-500 whitespace-nowrap">
                       · {post.districtName}
                     </span>
                     <PlatformBadge platform={post.platform} />
@@ -264,7 +264,7 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
                     <StatusBadge status={post.analystStatus} />
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0 ml-auto">
                     {post.categories.length === 0 && (
                       <span className="text-[10px] text-slate-500" title={post.aiReason || undefined}>
                         Unclassified{aiNote(post.aiStatus)}
@@ -329,8 +329,8 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
                 </div>
 
                 {/* Footer Telemetry */}
-                <div className="flex items-center justify-between text-[10px] text-slate-500 pt-2 border-t border-white/[0.04] font-mono">
-                  <span className="flex items-center gap-1">
+                <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 text-[10px] text-slate-500 pt-2 border-t border-white/[0.04] font-mono min-w-0">
+                  <span className="flex items-center gap-1 shrink-0">
                     <Clock className="w-3 h-3 text-slate-600" />
                     <span className="whitespace-nowrap">{formatIST(post.timestamp, false)}</span>
                   </span>
@@ -342,7 +342,7 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
                         sound.playClick();
                         onExploreTopology(post);
                       }}
-                      className="flex items-center gap-1 text-[10px] font-mono text-cyan-400 hover:text-cyan-300 hover:bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-500/30 transition-all shadow-[0_0_8px_rgba(0,229,255,0.15)]"
+                      className="flex items-center gap-1 shrink-0 whitespace-nowrap text-[10px] font-mono text-cyan-400 hover:text-cyan-300 hover:bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-500/30 transition-all shadow-[0_0_8px_rgba(0,229,255,0.15)]"
                       title="Inspect 3D Entity Topology for this case"
                     >
                       <Network className="w-2.5 h-2.5 text-cyan-400" />
@@ -350,7 +350,10 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
                     </button>
                   )}
 
-                  <span className="text-slate-400 font-sans text-[10px]">
+                  <span
+                    className="basis-full min-w-0 truncate text-slate-400 font-sans text-[10px]"
+                    title={`${sourceLabel(post.sourceType)}${post.sourceReference ? ` · ${post.sourceReference}` : ''}`}
+                  >
                     {sourceLabel(post.sourceType)}{post.sourceReference ? ` · ${post.sourceReference.slice(0, 32)}` : ''} · SHA-256 text digest
                   </span>
                 </div>
