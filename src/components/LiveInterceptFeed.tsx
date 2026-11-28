@@ -262,6 +262,14 @@ export const LiveInterceptFeed: React.FC<LiveInterceptFeedProps> = ({
                         <span>{c === 'DOCUMENTS' ? 'Docs' : c.charAt(0) + c.slice(1).toLowerCase()}</span>
                       </span>
                     ))}
+                    {post.aiAssisted && (
+                      <span
+                        title={post.aiReason ? `AI-assisted: ${post.aiReason}` : 'AI-assisted classification'}
+                        className="font-mono text-[9px] text-violet-300 bg-violet-950/40 border border-violet-500/30 px-1.5 rounded"
+                      >
+                        AI
+                      </span>
+                    )}
                     <span className="font-mono text-[10px] text-cyan-400/90 font-semibold bg-cyan-950/40 border border-cyan-500/20 px-1.5 py-0.2 rounded">
                       {(post.confidence * 100).toFixed(0)}%
                     </span>

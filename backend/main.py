@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from classifier import classify_text
+from gemini_classifier import hybrid_classify
 from extractor import extract_entities, generate_sha256
 from graph_engine import DynamicEntityGraph
 from gemini_key import key_from_header, check_key
@@ -158,8 +159,9 @@ SEED_INTERCEPTS = [
     }
 ]
 
-def process_and_store_post(channel: str, raw_text: str, district_hint: str = "", views: str = "0", source_type: str = "ANALYST_SUBMISSION", source_timestamp: Optional[str] = None, source_reference: Optional[str] = None) -> Dict[str, Any]:
-    classification = classify_text(raw_text)
+def process_and_store_post(channel: str, raw_text: str, district_hint: str = "", views: str = "0", source_type: str = "ANALYST_SUBMISSION", source_timestamp: Optional[str] = None, source_reference: Optional[str] = None, classification: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    # `classification` may be precomputed off the event loop (Gemini calls are slow network I/O).
+    classification = classification or hybrid_classify(raw_text, None)
     entities = extract_entities(raw_text)
 
     aliases = {"bundli": "bundi", "sawaimadhopur": "sawai-madhopur", "sawai madhopur": "sawai-madhopur"}
@@ -194,6 +196,9 @@ def process_and_store_post(channel: str, raw_text: str, district_hint: str = "",
         "categories": classification["categories"],
         "confidence": classification["confidence"],
         "matchedSlang": classification["matched_slang"],
+        "aiAssisted": bool(classification["ai"].get("assisted")),
+        "aiReason": classification["ai"].get("reason"),
+        "aiModel": classification["ai"].get("model"),
         "entities": {
             "phones": entities["phones"],
             "upis": entities["upis"],
@@ -479,18 +484,21 @@ def get_intercept_feed(limit: int = 50, category: Optional[str] = None):
     return results[:limit]
 
 @app.post("/api/scan/text")
-async def scan_raw_text(req: TextScanRequest):
+async def scan_raw_text(req: TextScanRequest, x_gemini_key: Optional[str] = Header(default=None)):
+    classification = await asyncio.to_thread(hybrid_classify, req.text, key_from_header(x_gemini_key))
     record = process_and_store_post(
         channel=req.channel or "@manual_ingest",
         raw_text=req.text,
-        district_hint=req.districtId or ""
+        district_hint=req.districtId or "",
+        classification=classification,
     )
     # Broadcast to active WebSockets
     await broadcast_new_intercept(record)
     return record
 
 @app.post("/api/scan/channel")
-async def scan_telegram_channel(req: ChannelScanRequest):
+async def scan_telegram_channel(req: ChannelScanRequest, x_gemini_key: Optional[str] = Header(default=None)):
+    gkey = key_from_header(x_gemini_key)
     try:
         scraped_posts = await scrape_public_telegram_channel(req.channel, limit=max(1, min(req.limit or 8, 50)))
     except TelegramPreviewError as exc:
@@ -503,7 +511,8 @@ async def scan_telegram_channel(req: ChannelScanRequest):
             raw_text=item["raw_text"],
             views=item.get("views", "500"),
             source_type=item.get("source", "LIVE_TELEGRAM_PREVIEW"),
-            source_timestamp=item.get("timestamp")
+            source_timestamp=item.get("timestamp"),
+            classification=await asyncio.to_thread(hybrid_classify, item["raw_text"], gkey),
         )
         processed_records.append(rec)
         await broadcast_new_intercept(rec)
@@ -515,7 +524,8 @@ async def scan_telegram_channel(req: ChannelScanRequest):
     }
 
 @app.post("/api/ingest/file")
-async def ingest_dataset_file(file: UploadFile = File(...)):
+async def ingest_dataset_file(file: UploadFile = File(...), x_gemini_key: Optional[str] = Header(default=None)):
+    gkey = key_from_header(x_gemini_key)
     content = await file.read()
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File exceeds 10 MB limit")
@@ -559,7 +569,7 @@ async def ingest_dataset_file(file: UploadFile = File(...)):
         if not isinstance(text, str) or not text.strip():
             continue
         channel = normalized.get("channel") or "uploaded_dataset"
-        rec = process_and_store_post(channel=str(channel), raw_text=text.strip(), views=str(normalized.get("views", "0")), source_type="UPLOADED_DATASET", source_timestamp=normalized.get("timestamp") or normalized.get("date"), source_reference=str(normalized.get("source") or file.filename or "uploaded file"))
+        rec = process_and_store_post(channel=str(channel), raw_text=text.strip(), views=str(normalized.get("views", "0")), source_type="UPLOADED_DATASET", source_timestamp=normalized.get("timestamp") or normalized.get("date"), source_reference=str(normalized.get("source") or file.filename or "uploaded file"), classification=await asyncio.to_thread(hybrid_classify, text.strip(), gkey))
         new_records.append(rec)
         await broadcast_new_intercept(rec)
 
