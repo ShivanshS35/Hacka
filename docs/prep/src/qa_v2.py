@@ -177,6 +177,14 @@ OVERRIDES = {
  "Next: evaluation on the R4C labelled set; a trained classifier next to the rules; user logins and a signed audit trail; scheduled scans of a watch-list of public channels; Hindi OCR; multiple districts per post. Done since the first version: dedup, identifier normalisation, shared-number suppression, status workflow, audit log, re-verify, SIM and direction detection, image intake and similarity.",
  "Slide 'Today vs Next'.",
  "Which is first and why?", "The evaluation, because everything else is tuned against it."),
+"How did your team split the work?": ("Judge panel", "Easy",
+ "Team Squirtle: Atharv Singh (team leader), Sanskaar Tiwari and Shivansh Singh (lead developer). Say who did what truthfully for your own team: backend and data, frontend and map, evidence and documentation, testing. I will not invent roles here.",
+ "Prepare a one-line role each; the Team page (/team) lists the members once PR #23 is merged.",
+ "Which part is yours?", "Answer with a specific file or screen you wrote and can explain."),
+"What happens when you click 'Import Intel'?": ("Police officer", "Easy",
+ "A dialog with five tabs: Telegram Scraper (public channel handle), Raw Slang Scanner (paste text), CSV / JSON Export (upload a file), Screenshot / Image (text read in the browser) and R4C Benchmark (4 synthetic sample posts). Results appear in the feed.",
+ "Open the dialog and walk the five tabs.",
+ "What is the R4C Benchmark tab?", "Four synthetic sample posts sent through the backend so the demo has data; it is not the official R4C dataset."),
 }
 
 # Renamed question (old wording quoted an old number).

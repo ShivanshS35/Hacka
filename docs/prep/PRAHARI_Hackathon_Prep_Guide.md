@@ -1,5 +1,5 @@
 # PRAHARI Hackathon Prep Guide (version 2)
-Prepared 28 November 2026. R4C Hackathon 2026, PS02, Team V3S. Read-only audit of the repository; nothing here claims an unbuilt feature.
+Prepared 28 November 2026. R4C Hackathon 2026, PS02, Team Squirtle. Read-only audit of the repository; nothing here claims an unbuilt feature.
 
 See the PDF for the formatted version with screenshots and diagrams (images in `img/`).
 
@@ -769,9 +769,9 @@ See the PDF for the formatted version with screenshots and diagrams (images in `
 - Trap: Does the animation hide limitations? -> No. Limits are stated on the dossier and PDF.
 
 **J5. What happens when you click 'Import Intel'?** (asked by Police officer; Easy)
-- Say: A dialog with four tabs: Telegram Scraper (public channel handle), Raw Slang Scanner (paste text), CSV / JSON Export (upload a file) and R4C Benchmark (loads a small set of sample ads). Results appear in the feed.
-- Show this: Open the dialog and walk the four tabs.
-- Trap: What is the R4C Benchmark tab? -> A set of synthetic sample ads sent through the backend so the demo has data; it is not the official R4C dataset.
+- Say: A dialog with five tabs: Telegram Scraper (public channel handle), Raw Slang Scanner (paste text), CSV / JSON Export (upload a file), Screenshot / Image (text read in the browser) and R4C Benchmark (4 synthetic sample posts). Results appear in the feed.
+- Show this: Open the dialog and walk the five tabs.
+- Trap: What is the R4C Benchmark tab? -> Four synthetic sample posts sent through the backend so the demo has data; it is not the official R4C dataset.
 
 **J6. What is the Simulation Live toggle?** (asked by Police officer; Easy)
 - Say: It generates synthetic demo posts every few seconds so the dashboard is not empty. When real data arrives, it pauses so it does not bury it. It can be switched back on.
@@ -779,8 +779,8 @@ See the PDF for the formatted version with screenshots and diagrams (images in `
 - Trap: Are those posts counted as detections? -> They are labelled synthetic and should never be quoted as findings.
 
 **J7. How did your team split the work?** (asked by Judge panel; Easy)
-- Say: Team V3S, led by Shivansh, a first-year B.Tech student at KIET. Say who did what truthfully for your own team: backend and data, frontend and map, evidence and documentation, testing. I will not invent roles here.
-- Show this: Prepare a one-line role each.
+- Say: Team Squirtle: Atharv Singh (team leader), Sanskaar Tiwari and Shivansh Singh (lead developer). Say who did what truthfully for your own team: backend and data, frontend and map, evidence and documentation, testing. I will not invent roles here.
+- Show this: Prepare a one-line role each; the Team page (/team) lists the members once PR #23 is merged.
 - Trap: Which part is yours? -> Answer with a specific file or screen you wrote and can explain.
 
 **J8. What did you learn while building it?** (asked by Judge panel; Easy)
