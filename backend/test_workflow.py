@@ -22,7 +22,8 @@ import main
 from classifier import classify_text, detect_direction
 from extractor import extract_entities, normalize_for_extraction
 
-client = TestClient(main.app)
+AUTH = {"Authorization": "Bearer " + os.environ["PRAHARI_API_TOKEN"]}
+client = TestClient(main.app, headers=AUTH)
 ZW = "​"
 
 
@@ -238,12 +239,21 @@ def test_verify_hash_detects_a_changed_stored_text():
     r = client.post("/api/scan/text", json={"text": "verify me: chitta available 5g dm", "channel": "@vh_chan"}).json()
     good = client.post(f"/api/dossier/{r['id']}/verify").json()
     assert good["match"] is True and good["recomputed"] == r["sha256"]
+    assert good["evidenceChain"]["signatureValid"] is True and good["evidenceChain"]["recordHashValid"] is True
+    # The app itself cannot edit a stored record (append-only triggers)...
+    with pytest.raises(sqlite3.IntegrityError):
+        with sqlite3.connect(main.DB_PATH) as conn:
+            conn.execute("UPDATE intercepts SET raw_text = 'edited after capture' WHERE id = ?", (r["id"],))
+    # ...so simulate someone with the database file who drops the trigger first.
     with sqlite3.connect(main.DB_PATH) as conn:
+        conn.execute("DROP TRIGGER intercepts_no_update")
         conn.execute("UPDATE intercepts SET raw_text = 'edited after capture' WHERE id = ?", (r["id"],))
     bad = client.post(f"/api/dossier/{r['id']}/verify").json()
     assert bad["match"] is False and bad["recomputed"] != r["sha256"]
+    assert bad["evidenceChain"]["recordHashValid"] is False
     with sqlite3.connect(main.DB_PATH) as conn:
         conn.execute("UPDATE intercepts SET raw_text = ? WHERE id = ?", (r["rawText"], r["id"]))
+    main.evidence.init_tables(main.DB_PATH)   # put the trigger back
     assert client.post(f"/api/dossier/{r['id']}/verify").json()["match"] is True
     assert client.post("/api/dossier/nope/verify").status_code == 404
 
@@ -350,7 +360,7 @@ def test_startup_rebuilds_similar_image_edges(tmp_path):
         def png(shade):
             im = Image.new("RGB", (200, 120), (shade, 60, 90)); ImageDraw.Draw(im).ellipse([20, 20, 120, 100], fill=(240, 240, 240))
             b = io.BytesIO(); im.save(b, "PNG"); return b.getvalue()
-        c = TestClient(main.app)
+        c = TestClient(main.app, headers={{"Authorization": "Bearer " + os.environ["PRAHARI_API_TOKEN"]}})
         c.post("/api/ingest/image", files={{"file": ("a.png", png(30), "image/png")}}, data={{"channel": "@r1", "ocrText": "sim kit ready bulk supply"}})
         c.post("/api/ingest/image", files={{"file": ("b.png", png(31), "image/png")}}, data={{"channel": "@r2", "ocrText": "sim kit ready bulk supply today"}})
     """)

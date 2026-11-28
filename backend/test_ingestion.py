@@ -183,7 +183,7 @@ def test_gemini_key_header_parsing():
 def test_gemini_check_endpoint_never_echoes_key():
     from fastapi.testclient import TestClient
     import main
-    r = TestClient(main.app).post("/api/gemini/check", headers={"X-Gemini-Key": "AIzaFakeKey1234567890"})
+    r = TestClient(main.app, headers={"Authorization": "Bearer " + os.environ["PRAHARI_API_TOKEN"]}).post("/api/gemini/check", headers={"X-Gemini-Key": "AIzaFakeKey1234567890"})
     assert r.status_code == 200
     assert "AIzaFakeKey1234567890" not in r.text
 
@@ -249,7 +249,7 @@ def test_scan_endpoint_marks_ai_assisted(monkeypatch):
     from fastapi.testclient import TestClient
     import main
     g = _fake_gemini(monkeypatch, {"category": "DRUGS", "confidence": 0.9, "reason": "coded", "slang": ["snow"]}, [])
-    c = TestClient(main.app)
+    c = TestClient(main.app, headers={"Authorization": "Bearer " + os.environ["PRAHARI_API_TOKEN"]})
     r = c.post("/api/scan/text", json={"text": "snow milega kya zzq"}, headers={"X-Gemini-Key": "AIzaFakeKey1234567890"}).json()
     assert r["aiAssisted"] is True and r["categories"] == ["DRUGS"] and "AIza" not in str(r)
     r2 = c.post("/api/scan/text", json={"text": "snow milega kya zzr"}).json()
@@ -308,7 +308,7 @@ def test_gemini_check_runs_real_generation(monkeypatch):
     import main, gemini_key
     g = _fake_gemini(monkeypatch, {"category": "DRUGS", "confidence": 0.9, "reason": "r", "slang": ["snow"]}, [])
     monkeypatch.setattr(main, "check_key", lambda k: {"valid": True, "reason": "ok"})
-    r = TestClient(main.app).post("/api/gemini/check", headers={"X-Gemini-Key": "AIzaFakeKey1234567890"}).json()
+    r = TestClient(main.app, headers={"Authorization": "Bearer " + os.environ["PRAHARI_API_TOKEN"]}).post("/api/gemini/check", headers={"X-Gemini-Key": "AIzaFakeKey1234567890"}).json()
     assert r["generation"]["ok"] is True and r["generation"]["sample"] == "DRUGS"
     assert "AIza" not in str(r)
 
@@ -460,7 +460,7 @@ def test_ai_cannot_clear_a_confident_keyword_flag(monkeypatch):
 def test_blank_text_rejected_and_telegram_export_accepted():
     from fastapi.testclient import TestClient
     import main
-    c = TestClient(main.app)
+    c = TestClient(main.app, headers={"Authorization": "Bearer " + os.environ["PRAHARI_API_TOKEN"]})
     assert c.post("/api/scan/text", json={"channel": "@t", "text": "   \n\t"}).status_code == 422
     export = {"name": "Demo Channel", "messages": [
         {"id": 1, "type": "service", "text": ""},

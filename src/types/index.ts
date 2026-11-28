@@ -73,6 +73,17 @@ export interface InterceptPost {
   capturedAtUtc?: string;
   sha256Scope?: string;
   evidenceDigest?: { note?: string; certified: false; status: string; hashAlgorithm: string; hashScope: string; packetHash: string; timestampUtc: string };
+  /** Signed append-only chain link (records captured before the chain existed have none). */
+  evidenceChain?: {
+    sequence: number;
+    recordSha256: string;
+    prevHash: string;
+    chainHash: string;
+    createdAt: string;
+    stationSignature: { algorithm: 'Ed25519'; keyId: string; signature: string; signedFields: string[]; canonicalization: string };
+    rfc3161Timestamp: { notImplemented: true; note: string };
+    linkScheme: string;
+  };
   status: 'PENDING' | 'FLAGGED' | 'INVESTIGATING' | 'DIGESTED' | 'UNCLASSIFIED';
 }
 
@@ -200,6 +211,17 @@ export interface VerifyResult {
   scope: string;
   checkedAtUtc: string;
   note: string;
+  /** Evidence-chain link + Ed25519 signature check (absent on older backends). */
+  evidenceChain?: {
+    chained: boolean;
+    sequence?: number;
+    keyId?: string;
+    recordHashValid?: boolean;
+    chainLinkValid?: boolean;
+    signatureValid?: boolean;
+    reason?: string | null;
+    note?: string;
+  };
 }
 
 export interface AuditEntry {

@@ -11,15 +11,18 @@ from pathlib import Path
 from contextlib import closing
 from zoneinfo import ZoneInfo
 from typing import List, Dict, Any, Optional
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, WebSocket, WebSocketDisconnect, Header
-from fastapi.responses import HTMLResponse, Response
+from fastapi import APIRouter, Depends, FastAPI, UploadFile, File, Form, HTTPException, WebSocket, WebSocketDisconnect, Header
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
+from auth import require_token, token_matches
 from classifier import classify_text, detect_direction
 import casework
 import complaints
+import evidence
 import images
+from sign import StationSigner
 from gemini_classifier import hybrid_classify, self_test as gemini_self_test
 from extractor import extract_entities, generate_sha256
 from graph_engine import DynamicEntityGraph
@@ -27,24 +30,61 @@ from gemini_key import key_from_header, check_key
 from analytics import build_alerts, find_coordinated
 from telegram_scraper import TelegramPreviewError, scrape_public_telegram_channel
 
+# PRAHARI_DISABLE_DOCS=1 removes /docs, /redoc and /openapi.json (e.g. for a public deployment).
+_DOCS_OFF = os.environ.get("PRAHARI_DISABLE_DOCS", "").strip().lower() in ("1", "true", "yes")
+
 app = FastAPI(
     title="PRAHARI OSINT Backend Engine",
-    description="Hackathon prototype for cross-channel OSINT data analysis; not an operational agency system",
-    version="1.0.0"
+    description="Hackathon prototype for cross-channel OSINT data analysis; not an operational agency system. "
+                "All /api/* routes except /api/health and /api/pubkey need 'Authorization: Bearer <PRAHARI_API_TOKEN>' "
+                "(use the Authorize button).",
+    version="1.0.0",
+    docs_url=None if _DOCS_OFF else "/docs",
+    redoc_url=None if _DOCS_OFF else "/redoc",
+    openapi_url=None if _DOCS_OFF else "/openapi.json",
 )
 
-_allowed_origins = [origin.strip() for origin in os.environ.get(
-    "PRAHARI_CORS_ORIGINS",
-    "http://localhost:5173,http://127.0.0.1:5173,https://prahari-osint.vercel.app"
-).split(",") if origin.strip()]
+# Every /api/* route is registered on this router, which requires the bearer token (health and pubkey stay on `app`).
+protected = APIRouter(dependencies=[Depends(require_token)])
+
+MAX_DATASET_BYTES = 20 * 1024 * 1024         # /api/ingest/file (PS02 exports need up to 20 MB)
+MAX_MULTIPART_OVERHEAD = 64 * 1024           # form fields + multipart boundaries around the file
+_UPLOAD_LIMITS = {"/api/ingest/file": MAX_DATASET_BYTES, "/api/ingest/image": images.MAX_IMAGE_BYTES,
+                  "/api/complaints/upload": 5 * MAX_DATASET_BYTES}   # several complaint CSVs per request
+
+
+# Reject oversized uploads from the Content-Length header, before any of the body is read or spooled.
+@app.middleware("http")
+async def limit_upload_size(request, call_next):
+    limit = _UPLOAD_LIMITS.get(request.url.path)
+    if limit is not None and request.method == "POST":
+        length = request.headers.get("content-length")
+        if length is None or not length.isdigit():
+            return JSONResponse({"detail": "Content-Length header is required for uploads"}, status_code=411)
+        if int(length) > limit + MAX_MULTIPART_OVERHEAD:
+            return JSONResponse({"detail": f"Upload exceeds the {limit // (1024 * 1024)} MB limit"}, status_code=413)
+    return await call_next(request)
+
+
+# Explicit list of allowed browser origins; "*" is refused. Added after the size check so CORS wraps its 411/413 too.
+def _cors_origins() -> List[str]:
+    raw = os.environ.get("PRAHARI_CORS_ORIGINS", "http://localhost:5173")
+    origins = [o.strip().rstrip("/") for o in raw.split(",") if o.strip()]
+    if "*" in origins:
+        raise RuntimeError("PRAHARI_CORS_ORIGINS must list explicit origins; '*' is not allowed")
+    return origins or ["http://localhost:5173"]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_allowed_origins,
-    # Vercel preview deployments get random subdomains; set PRAHARI_CORS_REGEX="" to disable.
-    allow_origin_regex=os.environ.get("PRAHARI_CORS_REGEX", r"https://.*\.vercel\.app") or None,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_cors_origins(),
+    # Optional, for Vercel preview URLs: set a regex that matches ONLY your project's previews, e.g.
+    # ^https://prahari-osint-[a-z0-9-]+-<your-team>\.vercel\.app$  (a bare *.vercel.app would trust anyone's app).
+    allow_origin_regex=os.environ.get("PRAHARI_CORS_REGEX") or None,
+    allow_credentials=False,   # auth is a bearer header, not cookies
+    allow_methods=["GET", "POST", "HEAD", "DELETE"],
+    allow_headers=["Authorization", "Content-Type", "X-Gemini-Key", "X-Admin-Token"],
+    expose_headers=["Content-Disposition"],
 )
 
 # In-memory intelligence repository
@@ -79,61 +119,50 @@ def init_db():
         conn.commit()
     casework.init_tables(DB_PATH)
     complaints.init_tables(DB_PATH)
+    evidence.init_tables(DB_PATH)
 
-def save_to_db(post: Dict[str, Any]):
+# Station Ed25519 key (loaded from PRAHARI_SIGNING_KEY or the key file; created on first start).
+SIGNER = StationSigner()
+
+# Write a new record and its signed evidence-chain link in one transaction; returns the link.
+def save_to_db(post: Dict[str, Any]) -> Dict[str, Any]:
     try:
-        with closing(sqlite3.connect(DB_PATH)) as conn:
-            conn.execute("""
-            INSERT OR REPLACE INTO intercepts 
-            (id, channel, raw_text, categories, confidence, district_id, district_name, sha256, views, data_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                post["id"],
-                post["channel"],
-                post["rawText"],
-                json.dumps(post["categories"]),
-                post["confidence"],
-                post["districtId"],
-                post["districtName"],
-                post["sha256"],
-                post.get("views", 0),
-                json.dumps(post)
-            ))
-            conn.commit()
+        return evidence.append_record(DB_PATH, SIGNER, post)
+    except sqlite3.IntegrityError:
+        raise   # duplicate id: the caller retries with a fresh id
     except Exception as e:
         raise RuntimeError(f"Could not persist intercept to {DB_PATH}") from e
 
+# Load the newest records for the in-memory feed. Old-format records are relabelled in memory only;
+# the stored rows are never rewritten (intercepts is append-only).
 def load_from_db() -> List[Dict[str, Any]]:
     with closing(sqlite3.connect(DB_PATH)) as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, data_json FROM intercepts ORDER BY created_at DESC LIMIT ?", (MAX_STORED_POSTS,))
-        rows = cursor.fetchall()
-        posts = []
-        for post_id, raw_json in rows:
-            post = json.loads(raw_json)
-            previous_evidence = post.get("evidenceDigest") or post.get("section65B") or {}
-            if "sourceType" not in post or post.get("verified") or previous_evidence.get("certified"):
-                post["sourceType"] = "LEGACY_UNKNOWN"
-                post["verified"] = False
-                if isinstance(post.get("rawText"), str):
-                    post["sha256"] = generate_sha256(post["rawText"])
-                    post["sha256Scope"] = "UTF-8 rawText bytes"
-                post["evidenceDigest"] = {
-                    "note": "Content digest of rawText; not a legal certificate",
-                    "certified": False,
-                    "status": "NOT_CERTIFIED",
-                    "hashAlgorithm": "SHA-256",
-                    "hashScope": post.get("sha256Scope", "unknown"),
-                    "packetHash": post.get("sha256", ""),
-                    "timestampUtc": post.get("capturedAtUtc", "")
-                }
-                cursor.execute("UPDATE intercepts SET data_json = ?, sha256 = ? WHERE id = ?", (json.dumps(post), post.get("sha256", ""), post_id))
-            post.setdefault("platform", "UNKNOWN")
-            post.setdefault("direction", "UNKNOWN")
-            post.setdefault("sharedIdentifiers", [])
-            posts.append(post)
-        conn.commit()
-        return posts
+        rows = conn.execute("SELECT id, data_json FROM intercepts ORDER BY created_at DESC LIMIT ?", (MAX_STORED_POSTS,)).fetchall()
+    posts = []
+    for _post_id, raw_json in rows:
+        post = json.loads(raw_json)
+        previous_evidence = post.get("evidenceDigest") or post.get("section65B") or {}
+        if "sourceType" not in post or post.get("verified") or previous_evidence.get("certified"):
+            post["sourceType"] = "LEGACY_UNKNOWN"
+            post["verified"] = False
+            if isinstance(post.get("rawText"), str):
+                post["sha256"] = generate_sha256(post["rawText"])
+                post["sha256Scope"] = "UTF-8 rawText bytes"
+            post["evidenceDigest"] = {
+                "note": "Content digest of rawText; not a legal certificate",
+                "certified": False,
+                "status": "NOT_CERTIFIED",
+                "hashAlgorithm": "SHA-256",
+                "hashScope": post.get("sha256Scope", "unknown"),
+                "packetHash": post.get("sha256", ""),
+                "timestampUtc": post.get("capturedAtUtc", "")
+            }
+            post.pop("section65B", None)
+        post.setdefault("platform", "UNKNOWN")
+        post.setdefault("direction", "UNKNOWN")
+        post.setdefault("sharedIdentifiers", [])
+        posts.append(post)
+    return posts
 
 # Counts are derived from persisted records and include synthetic demo seeds.
 DISTRICT_COUNTS: Dict[str, int] = {}
@@ -295,8 +324,17 @@ def process_and_store_post(channel: str, raw_text: str, district_hint: str = "",
         if v not in (None, ""):
             post_record[k] = v
 
-    # Persist first; a failed write must not leave an API-visible record.
-    save_to_db(post_record)
+    # Persist first (record + signed chain link); a failed write must not leave an API-visible record.
+    for _attempt in range(5):
+        try:
+            link = save_to_db(post_record)
+            break
+        except sqlite3.IntegrityError:
+            post_id = post_record["id"] = f"post_{uuid.uuid4().hex[:6]}"   # 6-hex id collided; pick another
+    else:
+        raise RuntimeError("Could not allocate a unique record id")
+    # Attached after hashing, so it is part of API responses but not of the stored, chained record.
+    post_record["evidenceChain"] = link
     DEDUP_INDEX[dedup_key] = post_id
     if log:
         casework.log_event(DB_PATH, "INGEST", post_id, actor, {"channel": clean_channel, "sourceType": source_type, "sha256": sha256_hash})
@@ -567,16 +605,34 @@ def health_check():
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
 
-@app.get("/api/feed")
+# Public: the station's Ed25519 public key, so anyone can check signatures without trusting this server later.
+@app.get("/api/pubkey")
+def public_key():
+    return {**SIGNER.public_info(), "allKeys": evidence.known_keys(DB_PATH),
+            "note": "Record this key off the server. A signature proves this server produced the entry; it does not "
+                    "identify the officer or prove the time of capture."}
+
+# Walk the evidence chain from the first record and report the first broken link, if any.
+@protected.get("/api/chain/verify")
+def chain_verify():
+    return evidence.verify_chain(DB_PATH)
+
+# Latest chain hash; write it down outside the server (daily) so a rebuilt chain would be noticed.
+@protected.get("/api/chain/head")
+def chain_head():
+    return evidence.chain_head(DB_PATH)
+
+@protected.get("/api/feed")
 def get_intercept_feed(limit: int = 50, category: Optional[str] = None):
     limit = max(1, min(limit, 500))
     results = INTERCEPTS_STORE
     if category and category != "ALL":
         results = [p for p in results if category in p["categories"]]
     statuses = casework.all_statuses(DB_PATH)
-    return [_decorate(p, statuses) for p in results[:limit]]
+    links = evidence.links_by_record(DB_PATH)
+    return [_decorate(p, statuses, links) for p in results[:limit]]
 
-@app.post("/api/scan/text")
+@protected.post("/api/scan/text")
 async def scan_raw_text(req: TextScanRequest, x_gemini_key: Optional[str] = Header(default=None)):
     classification = await asyncio.to_thread(hybrid_classify, req.text, key_from_header(x_gemini_key))
     record = process_and_store_post(
@@ -592,7 +648,7 @@ async def scan_raw_text(req: TextScanRequest, x_gemini_key: Optional[str] = Head
         await broadcast_new_intercept(record)
     return _decorate(record)
 
-@app.post("/api/scan/channel")
+@protected.post("/api/scan/channel")
 async def scan_telegram_channel(req: ChannelScanRequest, x_gemini_key: Optional[str] = Header(default=None)):
     gkey = key_from_header(x_gemini_key)
     try:
@@ -642,13 +698,18 @@ def _flatten_text(value: Any) -> Optional[str]:
         return "".join(parts)
     return None
 
-@app.post("/api/ingest/file")
+@protected.post("/api/ingest/file")
 async def ingest_dataset_file(file: UploadFile = File(...), platform: str = Form(""), analyst: str = Form("analyst"), x_gemini_key: Optional[str] = Header(default=None)):
     gkey = key_from_header(x_gemini_key)
     platform, analyst = _str(platform), _str(analyst, "analyst") or "analyst"
-    content = await file.read()
-    if len(content) > 20 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="File exceeds 20 MB limit")
+    # Read in chunks and stop as soon as the limit is passed (the middleware already checked Content-Length).
+    chunks, size = [], 0
+    while chunk := await file.read(64 * 1024):
+        size += len(chunk)
+        if size > MAX_DATASET_BYTES:
+            raise HTTPException(status_code=413, detail=f"File exceeds the {MAX_DATASET_BYTES // (1024 * 1024)} MB limit")
+        chunks.append(chunk)
+    content = b"".join(chunks)
     try:
         raw_str = content.decode("utf-8-sig")
     except UnicodeDecodeError:
@@ -738,11 +799,11 @@ async def ingest_dataset_file(file: UploadFile = File(...), platform: str = Form
         "records": new_records
     }
 
-@app.get("/api/graph")
+@protected.get("/api/graph")
 def get_entity_graph():
     return ENTITY_GRAPH.to_dict()
 
-@app.post("/api/gemini/check")
+@protected.post("/api/gemini/check")
 async def gemini_check(x_gemini_key: Optional[str] = Header(default=None)):
     """Verify a user-supplied key. The key is used for this call only and is never stored or logged."""
     key = key_from_header(x_gemini_key)
@@ -753,17 +814,17 @@ async def gemini_check(x_gemini_key: Optional[str] = Header(default=None)):
     return result
 
 
-@app.get("/api/alerts")
+@protected.get("/api/alerts")
 def get_alerts(limit: int = 50, risk: Optional[str] = None, status: Optional[str] = None):
     return _alerts_with_status(risk, status)[: max(1, min(limit, 200))]
 
 
-@app.get("/api/coordinated")
+@protected.get("/api/coordinated")
 def get_coordinated_ads(threshold: float = 0.65):
     return find_coordinated(INTERCEPTS_STORE, max(0.3, min(threshold, 0.95)))
 
 
-@app.get("/api/districts")
+@protected.get("/api/districts")
 def get_district_telemetry():
     return [
         {
@@ -775,7 +836,7 @@ def get_district_telemetry():
         for dist_id, count in DISTRICT_COUNTS.items()
     ]
 
-@app.get("/api/dossier/{post_id}")
+@protected.get("/api/dossier/{post_id}")
 def get_dossier(post_id: str):
     for post in INTERCEPTS_STORE:
         if post["id"] == post_id:
@@ -784,22 +845,31 @@ def get_dossier(post_id: str):
     raise HTTPException(status_code=404, detail=f"Dossier not found: {post_id}")
 
 
-@app.post("/api/dossier/{post_id}/verify")
+@protected.post("/api/dossier/{post_id}/verify")
 def verify_dossier_hash(post_id: str, analyst: str = "analyst"):
     """Re-hash the text as stored in the database right now and compare it with the digest recorded at capture."""
     result = casework.verify_hash(DB_PATH, post_id, analyst)
     if result is None:
         raise HTTPException(status_code=404, detail=f"Dossier not found: {post_id}")
+    # Also check the record's evidence-chain link and its Ed25519 signature.
+    result["evidenceChain"] = evidence.verify_record(DB_PATH, post_id)
     return result
 
 
 # -----------------
 # Analyst workflow, audit log, export
 # -----------------
-def _decorate(post: Dict[str, Any], statuses: Optional[Dict[str, Dict[str, Any]]] = None) -> Dict[str, Any]:
+# Add the analyst status and the evidence-chain link (when the record has one) to a record for the API.
+def _decorate(post: Dict[str, Any], statuses: Optional[Dict[str, Dict[str, Any]]] = None,
+              links: Optional[Dict[str, Dict[str, Any]]] = None) -> Dict[str, Any]:
     statuses = statuses if statuses is not None else casework.all_statuses(DB_PATH)
     default = {"analystStatus": "NEW", "analystNote": "", "statusActor": None, "statusUpdatedAt": None}
-    return {**post, **statuses.get(post["id"], default)}
+    out = {**post, **statuses.get(post["id"], default)}
+    if "evidenceChain" not in out:
+        link = (links if links is not None else evidence.links_by_record(DB_PATH)).get(post["id"])
+        if link:
+            out["evidenceChain"] = link
+    return out
 
 
 def _complaint_keys(post: Dict[str, Any]) -> List[str]:
@@ -862,7 +932,7 @@ def _check_admin(token: Optional[str]) -> None:
         raise HTTPException(status_code=403, detail="Admin token required to load or clear complaint data")
 
 
-@app.post("/api/complaints/upload")
+@protected.post("/api/complaints/upload")
 async def upload_complaints(files: List[UploadFile] = File(...), analyst: str = Form("analyst"),
                             x_admin_token: Optional[str] = Header(default=None)):
     _check_admin(_str(x_admin_token) or None)
@@ -889,7 +959,7 @@ async def upload_complaints(files: List[UploadFile] = File(...), analyst: str = 
     return {**totals, "errors": errors, "summary": complaints.summary(DB_PATH)}
 
 
-@app.get("/api/complaints/summary")
+@protected.get("/api/complaints/summary")
 def complaints_summary():
     s = complaints.summary(DB_PATH)
     if s["complaints"]:
@@ -899,7 +969,7 @@ def complaints_summary():
     return s
 
 
-@app.delete("/api/complaints")
+@protected.delete("/api/complaints")
 def clear_complaints(analyst: str = "analyst", x_admin_token: Optional[str] = Header(default=None)):
     _check_admin(_str(x_admin_token) or None)
     complaints.clear(DB_PATH)
@@ -907,7 +977,7 @@ def clear_complaints(analyst: str = "analyst", x_admin_token: Optional[str] = He
     return {"cleared": True}
 
 
-@app.post("/api/posts/{post_id}/status")
+@protected.post("/api/posts/{post_id}/status")
 def set_post_status(post_id: str, req: StatusRequest):
     if not any(p["id"] == post_id for p in INTERCEPTS_STORE) and casework.stored_post(DB_PATH, post_id) is None:
         raise HTTPException(status_code=404, detail=f"Post not found: {post_id}")
@@ -917,17 +987,17 @@ def set_post_status(post_id: str, req: StatusRequest):
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@app.get("/api/posts/{post_id}/history")
+@protected.get("/api/posts/{post_id}/history")
 def post_history(post_id: str):
     return casework.audit_entries(DB_PATH, post_id=post_id, limit=200)
 
 
-@app.get("/api/audit")
+@protected.get("/api/audit")
 def audit_log(limit: int = 100):
     return casework.audit_entries(DB_PATH, limit=limit)
 
 
-@app.get("/api/audit/verify")
+@protected.get("/api/audit/verify")
 def audit_verify():
     return casework.verify_chain(DB_PATH)
 
@@ -957,7 +1027,7 @@ def _export_row(a: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-@app.get("/api/export")
+@protected.get("/api/export")
 def export_alerts(format: str = "csv", risk: Optional[str] = None, status: Optional[str] = None, analyst: str = "analyst"):
     rows = [_export_row(a) for a in _alerts_with_status(risk, status)]
     casework.log_event(DB_PATH, "EXPORT", None, analyst, {"format": format, "risk": risk, "status": status, "rows": len(rows)})
@@ -978,7 +1048,7 @@ def export_alerts(format: str = "csv", risk: Optional[str] = None, status: Optio
 # -----------------
 # Image intake (OCR + perceptual hash)
 # -----------------
-@app.post("/api/ingest/image")
+@protected.post("/api/ingest/image")
 async def ingest_image(file: UploadFile = File(...), channel: str = Form("@image_upload"), platform: str = Form("UNKNOWN"),
                        districtId: str = Form(""), ocrText: str = Form(""), analyst: str = Form("analyst"),
                        sourceTimestamp: str = Form(""), x_gemini_key: Optional[str] = Header(default=None)):
@@ -1013,7 +1083,7 @@ async def ingest_image(file: UploadFile = File(...), channel: str = Form("@image
     return _decorate(rec)
 
 
-@app.get("/api/image-matches")
+@protected.get("/api/image-matches")
 def image_matches(max_distance: int = 10):
     """Groups of posts whose images are near-identical (perceptual-hash distance), nearest pairs first."""
     max_distance = max(0, min(max_distance, 20))
@@ -1048,9 +1118,26 @@ def image_matches(max_distance: int = 10):
 # -----------------
 # WebSocket Real-time Stream
 # -----------------
+WS_AUTH_TIMEOUT_SECONDS = 10
+
+# Browsers cannot set an Authorization header on a WebSocket, so the first message must be
+# {"type": "auth", "token": "<PRAHARI_API_TOKEN>"}. Anything else closes the socket with 1008 (policy violation).
 @app.websocket("/ws/stream")
 async def websocket_stream(websocket: WebSocket):
     await websocket.accept()
+    try:
+        first = await asyncio.wait_for(websocket.receive_text(), timeout=WS_AUTH_TIMEOUT_SECONDS)
+        msg = json.loads(first)
+        token = msg.get("token") if isinstance(msg, dict) and msg.get("type") == "auth" else None
+    except (asyncio.TimeoutError, ValueError, WebSocketDisconnect):
+        token = None
+    if not token_matches(token if isinstance(token, str) else None):
+        try:
+            await websocket.close(code=1008, reason="Missing or invalid access token")
+        except RuntimeError:
+            pass   # client already went away
+        return
+    await websocket.send_text(json.dumps({"type": "AUTH_OK"}))
     ACTIVE_WEBSOCKETS.append(websocket)
     try:
         while True:
@@ -1073,6 +1160,9 @@ async def broadcast_new_intercept(record: Dict[str, Any]):
     for ws in dead_sockets:
         if ws in ACTIVE_WEBSOCKETS:
             ACTIVE_WEBSOCKETS.remove(ws)
+
+# Register the token-protected /api/* routes (must come after they are all defined above).
+app.include_router(protected)
 
 if __name__ == "__main__":
     import uvicorn

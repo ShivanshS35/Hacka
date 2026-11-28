@@ -211,14 +211,20 @@ source venv/bin/activate    # On Windows: venv\Scripts\activate
 # Install backend requirements
 pip install -r requirements.txt
 
+# Required: a random access token for the API (the server refuses to start without one)
+export PRAHARI_API_TOKEN=$(python -c 'import secrets; print(secrets.token_urlsafe(32))')
+echo "$PRAHARI_API_TOKEN"   # paste this into the token bar in the web UI
+
 # Launch FastAPI server with Uvicorn
 python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
-The FastAPI documentation will be accessible at **`http://localhost:8000/docs`**.
+The FastAPI documentation will be accessible at **`http://localhost:8000/docs`** (use the **Authorize** button with the token).
+
+On first start the backend creates its Ed25519 signing key at `backend/keys/station_ed25519.key` (permissions `0600`, git-ignored) and prints a warning to back it up.
 
 ### Hosted frontend/backend connection
 
-For a hosted frontend, set Vercel's `VITE_API_URL` to the deployed FastAPI HTTPS origin and `VITE_WS_URL` to its secure WebSocket endpoint (`wss://…/ws/stream`). Set the backend's `PRAHARI_CORS_ORIGINS` to the exact deployed frontend origin. The Vite API defaults point to `localhost`, so these variables are required for a hosted frontend to reach a hosted backend. See [backend deployment and SQLite persistence notes](backend/README.md#persistence-and-deployment).
+For a hosted frontend, set Vercel's `VITE_API_URL` to the deployed FastAPI HTTPS origin and `VITE_WS_URL` to its secure WebSocket endpoint (`wss://…/ws/stream`). Set the backend's `PRAHARI_CORS_ORIGINS` to the exact deployed frontend origin (`*` is refused; Vercel preview URLs need an explicit `PRAHARI_CORS_REGEX` that matches only your project). Set `PRAHARI_API_TOKEN` on the backend and give it to analysts, who enter it once in the web UI; it is stored in their browser and never built into the frontend. The Vite API defaults point to `localhost`, so these variables are required for a hosted frontend to reach a hosted backend. See [backend deployment and SQLite persistence notes](backend/README.md#persistence-and-deployment).
 
 > **Note on Standalone Mode**: When running without the Python backend, PRAHARI automatically operates in autonomous simulation mode using authentic cryptographic digests and mock telemetry so all features (GIS map, 3D topology, and PDF export) remain fully functional for evaluators.
 
@@ -230,7 +236,10 @@ For a hosted frontend, set Vercel's `VITE_API_URL` to the deployed FastAPI HTTPS
 prahari-osint/
 ├── backend/
 │   ├── main.py              # FastAPI server, SQLite DB, WebSockets & REST endpoints
-│   ├── requirements.txt     # Python dependencies (fastapi, uvicorn, pydantic)
+│   ├── auth.py              # Bearer-token check for /api/* and the WebSocket
+│   ├── sign.py              # Ed25519 station key (PyNaCl): load/create, sign, verify
+│   ├── evidence.py          # Append-only records + signed hash chain, chain verification
+│   ├── requirements.txt     # Python dependencies (fastapi, uvicorn, pydantic, pynacl)
 │   └── prahari.db           # Persistent SQLite database for evidence and hashes
 ├── docs/
 │   └── screenshots/         # High-resolution platform screenshots
@@ -260,9 +269,28 @@ prahari-osint/
 
 ---
 
+## Legal & evidentiary framework
+
+Electronic records in Indian courts are governed by **Section 63 of the Bharatiya Sakshya Adhiniyam, 2023 (BSA)**, in force since 1 July 2024, which replaced Section 65B of the Indian Evidence Act, 1872 (65B still applies to older proceedings). Admissibility depends on the certificate in the BSA Schedule, signed by the person in charge of the device and, where required, an expert. **PRAHARI is not "compliant" with Section 63 and does not issue that certificate.** It produces data that can support preparing one: a per-record SHA-256 hash and a signed, verifiable integrity trail. Have the police legal cell confirm any evidentiary use.
+
+| Control | Status | Details |
+|---|---|---|
+| SHA-256 content hash | Implemented | Over the UTF-8 bytes of `rawText`, recorded at capture; re-checked by `POST /api/dossier/{id}/verify` |
+| Ed25519 station signature | Implemented | Real signature (PyNaCl / libsodium) over each chain link's canonical JSON; public key at `GET /api/pubkey` |
+| Append-only evidence chain | Implemented | `evidence_chain` table in SQLite: `chain_hash = sha256(sequence\|prevHash\|recordSha256\|createdAt)`, written in the same transaction as the record; `GET /api/chain/verify`, `GET /api/chain/head` |
+| Append-only records | Implemented | SQLite triggers reject UPDATE/DELETE on records, chain links and keys |
+| Hash-chained audit log | Implemented | Status changes, verifications, exports; `GET /api/audit/verify` |
+| API authentication | Implemented (shared token) | One bearer token for the deployment; not per-user accounts. The `analyst` name in the audit log is self-declared |
+| RFC 3161 trusted timestamp | **Not implemented** | Needs an external Time Stamping Authority. `createdAt` is the server clock and is not independently attested; records say `"notImplemented": true` |
+| External WORM / write-once storage | **Not implemented** | Records live in an ordinary SQLite file |
+| Hardware key storage (HSM) | **Not implemented** | The private key is a file (or env var) on the server |
+| Per-officer identity in signatures | **Not implemented** | The signature identifies the server, not the person who collected the content |
+
+**Known limitation:** someone with full control of the server holds both the database and the private key, and could rebuild and re-sign the entire chain. Record the output of `GET /api/chain/head` and `GET /api/pubkey` somewhere off the server (printout, e-mail, case file) at least daily so a rebuilt chain would be noticed. Records captured before this chain was added are reported as `unchainedRecords` and are not covered.
+
 ## Evidence and data limitations
 
-PRAHARI's SHA-256 value is computed over raw text only. SQLite is mutable, the graph is reconstructed in memory from recent rows, and the app does not provide a verified acquisition process. The audit log is hash-chained, which makes edits to old entries detectable, but it is not a chain of custody: there is no authentication, and anyone who controls the database file could rewrite the whole chain. Image matching uses a 64-bit perceptual hash (distance 10 or less), which finds re-encoded or resized copies of the same picture, not similar-looking different pictures. The free hosting tier has no `tesseract` binary, so server-side OCR is off there; OCR in the browser still works (set `PRAHARI_SERVER_OCR=0` to test that path locally). Reports do not certify compliance with Section 65B or Section 63. Built-in records, district telemetry, and the animated feed are synthetic demonstrations.
+PRAHARI's SHA-256 value is computed over raw text only. The graph is reconstructed in memory from recent rows, and the app does not provide a verified acquisition process. The record store, evidence chain and audit log are tamper-evident (edits are detectable), but they are not a chain of custody, and someone who controls the server could rewrite them (see the limitation above). Image matching uses a 64-bit perceptual hash (distance 10 or less), which finds re-encoded or resized copies of the same picture, not similar-looking different pictures. The free hosting tier has no `tesseract` binary, so server-side OCR is off there; OCR in the browser still works (set `PRAHARI_SERVER_OCR=0` to test that path locally). Reports do not certify compliance with Section 65B or Section 63. Built-in records, district telemetry, and the animated feed are synthetic demonstrations.
 
 ---
 

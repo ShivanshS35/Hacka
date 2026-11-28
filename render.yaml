@@ -12,3 +12,10 @@ services:
         value: 3.11.9
       - key: PRAHARI_CORS_ORIGINS
         value: http://localhost:5173,https://prahari-osint.vercel.app
+      # Shared API token; Render generates a random value. Copy it from the dashboard and give it to analysts.
+      - key: PRAHARI_API_TOKEN
+        generateValue: true
+      # Ed25519 seed (base64). Set it in the dashboard: the free plan has no persistent disk,
+      # so without it a new signing key is created on every deploy. See backend/README.md.
+      - key: PRAHARI_SIGNING_KEY
+        sync: false

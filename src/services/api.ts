@@ -1,4 +1,5 @@
 import { geminiHeaders } from './geminiKey';
+import { authHeaders, getAccessToken, markTokenRejected } from './accessToken';
 import {
   ComplaintSummary,
   InterceptPost, DistrictIntel, CrimeCategory, EntityNode, EntityEdge, ThreatAlert, CoordinatedGroup,
@@ -25,6 +26,16 @@ export interface ChannelScanPayload {
 }
 
 const ANALYST_KEY = 'prahari.analyst';
+
+/** fetch() for protected /api routes: adds the bearer token and tells the UI when the backend answers 401. */
+async function apiFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const res = await fetch(url, {
+    ...init,
+    headers: { ...((init.headers as Record<string, string> | undefined) || {}), ...authHeaders() },
+  });
+  if (res.status === 401) markTokenRejected();
+  return res;
+}
 
 /** Free-text name recorded in the audit log. There are no accounts in this prototype, so it is not authenticated. */
 export function getAnalystName(): string {
@@ -64,7 +75,7 @@ export const prahariApi = {
       const url = category && category !== 'ALL'
         ? `${API_BASE_URL}/feed?category=${category}&limit=300`
         : `${API_BASE_URL}/feed?limit=300`;
-      const res = await fetch(url);
+      const res = await apiFetch(url);
       if (!res.ok) throw new Error('Failed to fetch feed');
       return await res.json();
     } catch (e) {
@@ -77,7 +88,7 @@ export const prahariApi = {
    * Scan arbitrary raw text with Python Hinglish/Slang detection engine
    */
   async scanText(payload: ScanTextPayload): Promise<InterceptPost> {
-    const res = await fetch(`${API_BASE_URL}/scan/text`, {
+    const res = await apiFetch(`${API_BASE_URL}/scan/text`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...geminiHeaders() },
       body: JSON.stringify({ analyst: getAnalystName(), ...payload }),
@@ -90,7 +101,7 @@ export const prahariApi = {
    * Scrape and scan real Telegram public broadcast channel via web preview
    */
   async scanChannel(payload: ChannelScanPayload): Promise<{ channel: string; scraped_count: number; intercepts: InterceptPost[] }> {
-    const res = await fetch(`${API_BASE_URL}/scan/channel`, {
+    const res = await apiFetch(`${API_BASE_URL}/scan/channel`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...geminiHeaders() },
       body: JSON.stringify(payload),
@@ -110,7 +121,7 @@ export const prahariApi = {
     formData.append('file', file);
     if (platform && platform !== 'UNKNOWN') formData.append('platform', platform);
     formData.append('analyst', getAnalystName());
-    const res = await fetch(`${API_BASE_URL}/ingest/file`, {
+    const res = await apiFetch(`${API_BASE_URL}/ingest/file`, {
       method: 'POST',
       headers: geminiHeaders(),
       body: formData,
@@ -143,7 +154,7 @@ export const prahariApi = {
     if (opts.districtId) formData.append('districtId', opts.districtId);
     if (opts.sourceTimestamp) formData.append('sourceTimestamp', opts.sourceTimestamp);
     formData.append('analyst', getAnalystName());
-    const res = await fetch(`${API_BASE_URL}/ingest/image`, { method: 'POST', headers: geminiHeaders(), body: formData });
+    const res = await apiFetch(`${API_BASE_URL}/ingest/image`, { method: 'POST', headers: geminiHeaders(), body: formData });
     if (!res.ok) {
       let message = `Image upload failed (${res.status})`;
       try {
@@ -160,7 +171,7 @@ export const prahariApi = {
   /** Re-hash the stored text on the backend and compare with the digest recorded at capture. */
   async verifyHash(postId: string): Promise<{ result?: VerifyResult; status: 'ok' | 'not_found' | 'offline' }> {
     try {
-      const res = await fetch(`${API_BASE_URL}/dossier/${encodeURIComponent(postId)}/verify?analyst=${encodeURIComponent(getAnalystName())}`, {
+      const res = await apiFetch(`${API_BASE_URL}/dossier/${encodeURIComponent(postId)}/verify?analyst=${encodeURIComponent(getAnalystName())}`, {
         method: 'POST',
         signal: AbortSignal.timeout(20000),
       });
@@ -174,7 +185,7 @@ export const prahariApi = {
 
   async setStatus(postId: string, status: AnalystStatus, note: string): Promise<boolean> {
     try {
-      const res = await fetch(`${API_BASE_URL}/posts/${encodeURIComponent(postId)}/status`, {
+      const res = await apiFetch(`${API_BASE_URL}/posts/${encodeURIComponent(postId)}/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status, note, analyst: getAnalystName() }),
@@ -187,7 +198,7 @@ export const prahariApi = {
 
   async getAudit(limit = 8): Promise<AuditEntry[] | null> {
     try {
-      const res = await fetch(`${API_BASE_URL}/audit?limit=${limit}`);
+      const res = await apiFetch(`${API_BASE_URL}/audit?limit=${limit}`);
       return res.ok ? await res.json() : null;
     } catch {
       return null;
@@ -196,19 +207,38 @@ export const prahariApi = {
 
   async verifyAuditChain(): Promise<AuditChainStatus | null> {
     try {
-      const res = await fetch(`${API_BASE_URL}/audit/verify`);
+      const res = await apiFetch(`${API_BASE_URL}/audit/verify`);
       return res.ok ? await res.json() : null;
     } catch {
       return null;
     }
   },
 
-  /** URL the browser can open to download the alerts as CSV or JSON (the server sets the file name). */
-  exportUrl(format: 'csv' | 'json', filters: { risk?: string; status?: string } = {}): string {
+  /**
+   * Download the alerts as CSV or JSON. A plain link cannot send the access token, so the file is fetched
+   * with the Authorization header and handed to the browser as a download (the server sets the file name).
+   */
+  async downloadExport(format: 'csv' | 'json', filters: { risk?: string; status?: string } = {}): Promise<boolean> {
     const q = new URLSearchParams({ format, analyst: getAnalystName() });
     if (filters.risk && filters.risk !== 'ALL') q.set('risk', filters.risk);
     if (filters.status && filters.status !== 'ALL') q.set('status', filters.status);
-    return `${API_BASE_URL}/export?${q.toString()}`;
+    try {
+      const res = await apiFetch(`${API_BASE_URL}/export?${q.toString()}`);
+      if (!res.ok) return false;
+      const disposition = res.headers.get('Content-Disposition') || '';
+      const name = /filename="([^"]+)"/.exec(disposition)?.[1] || `prahari_alerts.${format}`;
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return true;
+    } catch {
+      return false;
+    }
   },
 
   /** Ask the backend to verify the saved Gemini key (lists models; no usage charged). */
@@ -218,7 +248,7 @@ export const prahariApi = {
     generation?: { ok: boolean; model?: string; sample?: string; confidence?: number; status?: string; tried?: string[]; available?: string[] };
   }> {
     try {
-      const res = await fetch(`${API_BASE_URL}/gemini/check`, {
+      const res = await apiFetch(`${API_BASE_URL}/gemini/check`, {
         method: 'POST',
         headers: geminiHeaders(),
         signal: AbortSignal.timeout(75000),
@@ -234,7 +264,7 @@ export const prahariApi = {
    */
   async getGraph(): Promise<{ nodes: EntityNode[]; edges: EntityEdge[] } | null> {
     try {
-      const res = await fetch(`${API_BASE_URL}/graph`);
+      const res = await apiFetch(`${API_BASE_URL}/graph`);
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -245,7 +275,7 @@ export const prahariApi = {
   /** Risk-scored alerts with evidence seal. Returns null when the backend is unreachable. */
   async getAlerts(): Promise<ThreatAlert[] | null> {
     try {
-      const res = await fetch(`${API_BASE_URL}/alerts?limit=100`);
+      const res = await apiFetch(`${API_BASE_URL}/alerts?limit=100`);
       return res.ok ? await res.json() : null;
     } catch {
       return null;
@@ -259,7 +289,7 @@ export const prahariApi = {
     form.append('analyst', getAnalystName());
     const headers: Record<string, string> = {};
     if (adminToken) headers['X-Admin-Token'] = adminToken;
-    const res = await fetch(`${API_BASE_URL}/complaints/upload`, { method: 'POST', headers, body: form });
+    const res = await apiFetch(`${API_BASE_URL}/complaints/upload`, { method: 'POST', headers, body: form });
     if (!res.ok) {
       let message = `Upload failed (${res.status})`;
       try {
@@ -275,7 +305,7 @@ export const prahariApi = {
 
   async getComplaintSummary(): Promise<ComplaintSummary | null> {
     try {
-      const res = await fetch(`${API_BASE_URL}/complaints/summary`);
+      const res = await apiFetch(`${API_BASE_URL}/complaints/summary`);
       return res.ok ? await res.json() : null;
     } catch {
       return null;
@@ -286,7 +316,7 @@ export const prahariApi = {
     try {
       const headers: Record<string, string> = {};
       if (adminToken) headers['X-Admin-Token'] = adminToken;
-      const res = await fetch(`${API_BASE_URL}/complaints?analyst=${encodeURIComponent(getAnalystName())}`, { method: 'DELETE', headers });
+      const res = await apiFetch(`${API_BASE_URL}/complaints?analyst=${encodeURIComponent(getAnalystName())}`, { method: 'DELETE', headers });
       return res.ok;
     } catch {
       return false;
@@ -296,7 +326,7 @@ export const prahariApi = {
   /** Near-duplicate / coordinated ad groups. Returns null when the backend is unreachable. */
   async getCoordinated(): Promise<CoordinatedGroup[] | null> {
     try {
-      const res = await fetch(`${API_BASE_URL}/coordinated`);
+      const res = await apiFetch(`${API_BASE_URL}/coordinated`);
       return res.ok ? await res.json() : null;
     } catch {
       return null;
@@ -315,6 +345,8 @@ export const prahariApi = {
         ws = new WebSocket(WS_URL);
 
         ws.onopen = () => {
+          // Browsers cannot send an Authorization header on a WebSocket, so the token is the first message.
+          ws?.send(JSON.stringify({ type: 'auth', token: getAccessToken() }));
           console.log('[Prahari Stream] Connected to live OSINT WebSocket');
         };
 
@@ -329,7 +361,12 @@ export const prahariApi = {
           }
         };
 
-        ws.onclose = () => {
+        ws.onclose = (event) => {
+          if (event.code === 1008) {
+            // Token missing or rejected: stop retrying; the token bar reloads the page once a new one is saved.
+            markTokenRejected();
+            return;
+          }
           if (!isClosed) {
             setTimeout(connect, 3000);
           }

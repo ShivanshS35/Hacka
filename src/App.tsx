@@ -5,6 +5,7 @@ import { Preloader } from './components/Preloader';
 import { EditorialShowcase } from './components/EditorialShowcase';
 import { WarMonitorLiveApp, type WarMonitorNavTab } from './components/WarMonitorLiveApp';
 import { TacticalCursor } from './components/TacticalCursor';
+import { AccessTokenGate } from './components/AccessTokenGate';
 import { BottomDock, type DockKey, type DockSubKey } from './components/BottomDock';
 import { TeamPage } from './components/TeamPage';
 import { SettingsDialog } from './components/SettingsDialog';
@@ -78,6 +79,9 @@ export function App() {
     <div className="min-h-screen bg-[#070A10] text-white overflow-x-hidden font-sans">
       {/* Custom Tactical Cyan-Outlined Thruster Arrow Cursor */}
       <TacticalCursor />
+
+      {/* Asks for the backend access token when none is saved or the backend rejects it */}
+      <AccessTokenGate />
 
       {/* 1. Melon Studio Signature Preloader Animation (~4s with system status & skip) */}
       {!hasLoaded && (

@@ -25,6 +25,7 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import { InterceptPost, VerifyResult } from '../types';
+import { chainOk, describeChain, NO_TIMESTAMP_NOTE } from '../utils/evidenceChain';
 import { prahariApi } from '../services/api';
 import { sound } from '../utils/audio';
 import { generateDossierPDF } from '../utils/pdfGenerator';
@@ -493,7 +494,7 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                       {verify && verify.state !== 'busy' && (
                         <div
                           className={`mt-1.5 p-1.5 rounded border text-[8.5px] font-mono leading-tight ${
-                            verify.state === 'ok' && verify.result.match
+                            verify.state === 'ok' && verify.result.match && chainOk(verify.result)
                               ? 'bg-emerald-50 border-emerald-600/50 text-emerald-900'
                               : verify.state === 'ok'
                               ? 'bg-red-50 border-red-600/60 text-red-900'
@@ -505,6 +506,12 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                           )}
                           {verify.state === 'ok' && !verify.result.match && (
                             <>MISMATCH: the stored text no longer hashes to the recorded digest{!verify.result.textCopiesAgree ? ' (the two stored copies of the text also differ)' : ''}. Treat this record as altered.</>
+                          )}
+                          {verify.state === 'ok' && describeChain(verify.result) && (
+                            <span className="mt-1 block">{describeChain(verify.result)}</span>
+                          )}
+                          {verify.state === 'ok' && verify.result.evidenceChain?.chained && (
+                            <span className="mt-1 block opacity-70">{NO_TIMESTAMP_NOTE}</span>
                           )}
                           {verify.state === 'missing' && <>Not on the server: this is a local sample record, so there is no stored copy to check.</>}
                           {verify.state === 'offline' && <>Backend not reachable (a free instance can take about a minute to wake up). Try again.</>}

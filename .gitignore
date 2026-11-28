@@ -27,6 +27,11 @@ dist-ssr
 # Python
 backend/venv
 venv
+.venv
+
+# Station signing key: never commit
+backend/keys/
+*.key
 __pycache__
 *.pyc
 *.db
