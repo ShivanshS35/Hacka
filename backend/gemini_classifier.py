@@ -107,10 +107,23 @@ def _candidates(key: str) -> list:
     return out
 
 
+def _parse_reply(out: dict) -> dict:
+    """Join all text parts (thinking models may split output), strip code fences, take the first JSON object."""
+    parts = out["candidates"][0]["content"]["parts"]
+    raw = "".join(p.get("text", "") for p in parts if not p.get("thought"))
+    raw = raw.strip()
+    if raw.startswith("```"):
+        raw = raw.strip("`")
+        raw = raw[4:] if raw[:4].lower() == "json" else raw
+    start, end = raw.find("{"), raw.rfind("}")
+    if start == -1 or end <= start:
+        raise ValueError("no json")
+    return json.loads(raw[start:end + 1])
+
+
 def _try_model(model: str, body: dict, key: str):
     out = _post(f"{API_ROOT}/models/{model}:generateContent", key, body)
-    raw = out["candidates"][0]["content"]["parts"][0]["text"]
-    return json.loads(raw)
+    return _parse_reply(out)
 
 
 def _call(text: str, key: str):
@@ -118,7 +131,7 @@ def _call(text: str, key: str):
     global _resolved_model
     body = {
         "contents": [{"parts": [{"text": PROMPT + text[:MAX_TEXT_CHARS]}]}],
-        "generationConfig": {"temperature": 0, "maxOutputTokens": 300, "responseMimeType": "application/json"},
+        "generationConfig": {"temperature": 0, "maxOutputTokens": 2048, "responseMimeType": "application/json"},
     }
     _last_tried.clear()
     tried = _last_tried
