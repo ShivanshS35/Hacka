@@ -13,7 +13,8 @@ import { useRajasthanGeoJSON } from '../hooks/useRajasthanGeoJSON';
 import { sound } from '../utils/audio';
 
 // No third-party world basemap: it would draw other countries' de-facto borders and labels around India.
-// Only the bundled Rajasthan district boundaries are drawn, on a plain dark background.
+// Boundaries come only from bundled files: the Rajasthan districts plus an India state outline that shows
+// India's official map (all of Jammu & Kashmir and Ladakh), on a plain dark background.
 const MAP_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {},
@@ -299,15 +300,36 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
       style: MAP_STYLE,
-      maxBounds: [[67.0, 21.0], [81.0, 32.0]],
+      maxBounds: [[58.0, 2.0], [102.0, 42.0]],
       center: DEFAULT_CENTER,
       zoom: DEFAULT_ZOOM,
-      minZoom: 5,
+      minZoom: 3.2,
       maxZoom: 12,
       attributionControl: false,
     });
 
-    map.on('load', () => setMapLoaded(true));
+    map.on('load', () => {
+      setMapLoaded(true);
+      // India state outline (official boundary) drawn beneath the Rajasthan district layers.
+      fetch('/india-states.geojson')
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+        .then((data) => {
+          if (!mapRef.current || map.getSource('india-states')) return;
+          const before = map.getLayer('rajasthan-districts-fill') ? 'rajasthan-districts-fill' : undefined;
+          map.addSource('india-states', { type: 'geojson', data });
+          map.addLayer(
+            { id: 'india-states-fill', type: 'fill', source: 'india-states', paint: { 'fill-color': '#0a1322', 'fill-opacity': 0.9 } },
+            before
+          );
+          map.addLayer(
+            { id: 'india-states-line', type: 'line', source: 'india-states', paint: { 'line-color': '#4b6a8f', 'line-width': 0.8, 'line-opacity': 0.8 } },
+            before
+          );
+        })
+        .catch(() => {
+          /* outline is decorative; districts still render without it */
+        });
+    });
 
     mapRef.current = map;
 
@@ -449,6 +471,7 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
         id: 'threat-pins-label',
         type: 'symbol',
         source: 'threat-pins',
+        minzoom: 4.8, // hide district labels on the national view to avoid clutter
         layout: {
           'text-field': ['get', 'label'],
           'text-size': 10.5,
