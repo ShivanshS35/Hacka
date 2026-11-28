@@ -172,7 +172,7 @@ parts = []
 # ---- cover + 1 executive summary
 parts.append(f"""
 <div class="cover">
- <span class="tag">R4C HACKATHON 2026  -  PS02  -  TEAM V3S</span>
+ <span class="tag">R4C HACKATHON 2026  -  PS02  -  TEAM SQUIRTLE</span>
  <h1>PRAHARI<br/>Hackathon Prep Guide</h1>
  <p style="font-size:13pt;margin:0 0 6mm">Telegram and Social Media Illegal Trade Monitor<br/>Evidence-based pitch, demo and judge Q&amp;A guide</p>
  <p class="small">Version 2, prepared {today} from a read-only audit of the repository (branch fix/audit-tier2, PR #21: includes the classifier fixes, case workflow, audit log, image intake and the district-boundary fix). All accuracy numbers are on synthetic data we wrote; real-world accuracy is not yet measured. Nothing in this guide claims a feature that is not in the code. Where a number is not measured it says <b>to be measured</b> and gives the method.</p>
@@ -334,7 +334,7 @@ html = f'<!doctype html><html lang="en"><head><meta charset="utf-8"><title>PRAHA
 open(os.path.join(OUT, "PRAHARI_Hackathon_Prep_Guide.html"), "w", encoding="utf8").write(html)
 
 # ---------------------------------------------------------------- markdown source
-md = ["# PRAHARI Hackathon Prep Guide (version 2)", f"Prepared {today}. R4C Hackathon 2026, PS02, Team V3S. Read-only audit of the repository; nothing here claims an unbuilt feature.\n",
+md = ["# PRAHARI Hackathon Prep Guide (version 2)", f"Prepared {today}. R4C Hackathon 2026, PS02, Team Squirtle. Read-only audit of the repository; nothing here claims an unbuilt feature.\n",
       "See the PDF for the formatted version with screenshots and diagrams (images in `img/`).\n",
       "## 1. Executive summary\n- Problem: sellers advertise on public channels in coded Hinglish; identifiers are rarely collated.\n- Solution: import, scan or upload, classify (232-term lexicon + context rules, optional Gemini), extract identifiers and direction, link across channels (identifiers, text, images), risk-score with reasons, analyst status with a hash-chained audit trail, re-verifiable evidence dossier.\n- Measured on synthetic data: dev P 100% / R 83.3% (n=60, tuned on); held-out P 94.4% / R 68.0% (n=50, not tuned on); 45 evasion cases pass; 92 backend tests pass. Real-world accuracy not yet measured.\n- Limits: no trained ML model, no logins, no signature; hash is a content digest, not a legal certificate.\n",
       "## 2. Requirement traceability matrix\n| Group | Requirement | Where | Status | Note |\n|---|---|---|---|---|"]
