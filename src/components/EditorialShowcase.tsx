@@ -231,13 +231,13 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
           {/* 3 Telemetry Pillars */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-16 pt-10 border-t border-slate-800/80 font-mono">
             <div className="bg-[#0d121a] p-4 rounded-xl border border-slate-800">
-              <div className="text-2xl sm:text-3xl font-black text-cyan-400">189</div>
+              <div className="text-2xl sm:text-3xl font-black text-cyan-400">232</div>
               <div className="text-[11px] text-slate-400 uppercase tracking-wider mt-1">
                 SLANG TERMS IN LEXICON
               </div>
             </div>
             <div className="bg-[#0d121a] p-4 rounded-xl border border-slate-800">
-              <div className="text-2xl sm:text-3xl font-black text-emerald-400">89.5%</div>
+              <div className="text-2xl sm:text-3xl font-black text-emerald-400">94.4%</div>
               <div className="text-[11px] text-slate-400 uppercase tracking-wider mt-1">
                 PRECISION · 50 HELD-OUT POSTS
               </div>
@@ -279,7 +279,7 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
                 DETECTION LEXICON
               </div>
               <div className="text-4xl sm:text-5xl font-mono font-black text-white mb-2">
-                189
+                232
               </div>
               <p className="text-slate-400 text-sm leading-relaxed">
                 Curated slang, emoji and Hinglish terms across drugs, arms, documents and financial-account ads (measured from the lexicon file).
@@ -292,10 +292,10 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
                 IMPORT SPEED
               </div>
               <div className="text-4xl sm:text-5xl font-mono font-black text-slate-300 mb-2">
-                1.5 s
+                ~2 s
               </div>
               <p className="text-slate-400 text-sm leading-relaxed">
-                To import and score 500 posts on the demo backend (measured). Rules alone take under a millisecond per post.
+                To import, score and save 500 posts (measured on the development server). Rules alone take about a millisecond per post.
               </p>
             </div>
 

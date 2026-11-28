@@ -11,7 +11,7 @@ from typing import Dict, List, Any, Optional, Tuple
 # they are capped below the "confident" level so a Gemini second opinion is requested.
 SLANG_DICTIONARY: Dict[str, List[Dict[str, Any]]] = {
     "DRUGS": [
-        {"terms": ["chitta", "chita", "चिट्टा"], "weight": 0.96},
+        {"terms": ["chitta", "chita", "cheeta", "chhita", "chiita", "चिट्टा", "चीटा"], "weight": 0.96},
         {"terms": ["pure white"], "weight": 0.96, "ambiguous": True},
         {"terms": ["afeem", "अफ़ीम", "doda post", "dodapost"], "weight": 0.94},
         {"terms": ["opium", "doda"], "weight": 0.94, "ambiguous": True},
@@ -29,7 +29,8 @@ SLANG_DICTIONARY: Dict[str, List[Dict[str, Any]]] = {
         {"terms": ["🔥", "❄️", "🌿", "💊", "💉", "🍁"], "weight": 0.75, "ambiguous": True},
     ],
     "ARMS": [
-        {"terms": ["desi katta", "katta", "कट्टा", "देशी कट्टा"], "weight": 0.98},
+        {"terms": ["desi katta", "desi kata", "katta", "kaata", "kattaa", "कट्टा", "देशी कट्टा"], "weight": 0.98},
+        {"terms": ["kata"], "weight": 0.95, "ambiguous": True},
         {"terms": [".32 bore", "32 bore", ".315 bore", "315 bore", "315 बोर", ".12 bore", "12 bore", "7.65 bore"], "weight": 0.97},
         {"terms": ["country made pistol", "country made gun", "country-made", "desi pistol", "desi gun", "desi revolver"], "weight": 0.95},
         {"terms": ["tamancha", "तमंचा"], "weight": 0.96},
@@ -47,7 +48,8 @@ SLANG_DICTIONARY: Dict[str, List[Dict[str, Any]]] = {
         {"terms": ["fake pan", "pan card set", "pan bypass", "फ़र्ज़ी पैन", "forged pan", "pan card forged", "fake id", "fake license", "fake licence"], "weight": 0.96},
         {"terms": ["fake marksheet", "fake degree", "fake certificate", "fake documents", "fake rc", "fake voter id",
                    "fake passport", "fake visa", "fake ration card", "nakli aadhar", "nakli aadhaar", "nakli pan",
-                   "nakli license", "nakli licence", "bogus marksheet", "bogus degree"], "weight": 0.94},
+                   "nakli license", "nakli licence", "bogus marksheet", "bogus degree", "nakli marksheet", "nakli degree",
+                   "nakli certificate", "nakli documents", "nakli passport"], "weight": 0.94},
         {"terms": ["10th marksheet", "12th marksheet"], "weight": 0.94, "ambiguous": True},
         {"terms": ["marksheet", "degree", "diploma"], "weight": 0.55},
         {"terms": ["forged", "forgery"], "weight": 0.75, "ambiguous": True},
@@ -63,11 +65,18 @@ SLANG_DICTIONARY: Dict[str, List[Dict[str, Any]]] = {
         {"terms": ["mule account", "खाता rent"], "weight": 0.96},
         {"terms": ["mule"], "weight": 0.96, "ambiguous": True},
         {"terms": ["current account", "saving account"], "weight": 0.60},
-        {"terms": ["atm kit", "net-banking kit", "debit card kit"], "weight": 0.95},
+        {"terms": ["atm kit", "net-banking kit", "debit card kit", "netbanking kit", "net banking kit", "passbook kit",
+                   "login kit", "bank logins", "netbanking logins", "net-banking logins", "net-banking id", "netbanking id",
+                   "atm cards with pin", "atm card with pin"], "weight": 0.95},
         {"terms": ["atm card", "cheque book"], "weight": 0.95, "ambiguous": True},
         {"terms": ["kiraya pe", "account kiraya", "rent account", "account for rent", "account on rent",
                    "accounts on rent", "account rent", "account kiraye", "bank account on rent"], "weight": 0.96},
         {"terms": ["usdt buy sell", "hawala cash", "hawala transfer"], "weight": 0.90},
+        # SIM cards sold for fraud (no KYC, bulk, OTP access). Plain "sim card" is ordinary and is not a term.
+        {"terms": ["pre-activated sim", "preactivated sim", "pre activated sim", "fake kyc sim", "no kyc sim", "sim no kyc",
+                   "sim without kyc", "sim cards without kyc", "sim card without kyc", "sim without documents",
+                   "sim cards without documents", "sim card without documents", "sim without id", "verified sim",
+                   "sim card kit", "sim kit", "bulk sim", "bulk sims", "sim box"], "weight": 0.95},
         {"terms": ["usdt arbitrage", "crypto arbitrage"], "weight": 0.90, "ambiguous": True},
         {"terms": ["daily limit 50l", "fullz kit"], "weight": 0.92},
         {"terms": ["withdrawal limit", "corporate account"], "weight": 0.92, "ambiguous": True},
@@ -94,8 +103,30 @@ FORGERY_RE = re.compile(
     r"(?<!\w)(fake|nakli|naqli|bogus|forged|duplicate|jugaad|bypass|original-looking|without (test|exam|licen[cs]e))(?!\w)",
     re.IGNORECASE,
 )
+UNLICENSED_RE = re.compile(r"(?<!\w)((with)?out|no) (licen[cs]e|papers|permit|paperwork)(?!\w)", re.IGNORECASE)
 ACCOUNT_KIT_RE = re.compile(
     r"(?<!\w)(kit|passbook|sim|login|logins|credentials|verified accounts?|no kyc|otc)(?!\w)", re.IGNORECASE
+)
+# Words that make a post read like a trade offer rather than just contact details. "call"/"dm"/phone numbers
+# alone are not enough once the post reads like news, a warning or an ordinary shop notice.
+EXPLICIT_SALE_RE = re.compile(
+    r"(?<!\w)(available|avail|selling|sell|for sale|sale|rates?|price|in stock|stock|ready|delivery|deliver|supply|"
+    r"escrow|cod|dispatch(ed)?|bulk|milega|milegi|chahiye|hand to hand|kiraya|kiraye|उपलब्ध|डिलीवरी)(?!\w)",
+    re.IGNORECASE,
+)
+# News, warnings, awareness posts, official-service notices and toys. Contact details do not make these a sale.
+REPORTING_RE = re.compile(
+    r"(?<!\w)(police|seized|seizure|recovered|arrest(ed)?|busted|raid(ed)?|nabbed|jailed|court|verdict|ncb|news|"
+    r"headline|reported|warning|beware|scam(s|mers?)?|fraudsters?|awareness|alert|how to|step by step|steps to|"
+    r"apply for|renewal|renew|assistance|csc|rto|toy|replica|airsoft|story|novel|movie|film|song|lol|lost my|"
+    r"never share|prepaid|postpaid|recharge|esim|terms apply)(?!\w)",
+    re.IGNORECASE,
+)
+# Ordinary trade words. With these, a lone ambiguous word ("maal" = goods) is not enough to flag.
+LEGIT_TRADE_RE = re.compile(
+    r"(?<!\w)(goods|wholesale|retail|showroom|garments?|clothes|clothing|fabric|furniture|groceries|grocery|"
+    r"electronics|sarees?|snacks|restaurant|tea|chai)(?!\w)",
+    re.IGNORECASE,
 )
 # Phrases where an otherwise suspicious word is clearly harmless; removed before matching.
 NEGATIVE_PHRASES = re.compile(
@@ -117,10 +148,35 @@ _SPACED_LETTERS = re.compile(r"(?<!\w)(?:\w[ \t.\-_*]){2,}\w(?!\w)")
 _WORDLIKE_TERM = re.compile(r"[a-z][a-z ]{3,}[a-z]")  # only plain-letter terms of 5+ chars use obfuscation variants
 
 
+# Letters from other scripts that look like Latin letters (Cyrillic, Greek, Latin Extended). They are mapped
+# to ASCII only inside a word that already contains an ASCII letter, so genuine Cyrillic/Greek text is untouched.
+HOMOGLYPHS = {
+    "а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "х": "x", "у": "y", "і": "i", "ј": "j", "ѕ": "s",
+    "ԁ": "d", "һ": "h", "ɡ": "g", "ɑ": "a", "ᴀ": "a", "ο": "o", "ν": "v", "ι": "i", "κ": "k", "ρ": "p",
+    "τ": "t", "α": "a", "ε": "e", "ϲ": "c", "ⅰ": "i", "ӏ": "l", "ո": "n", "օ": "o", "ս": "u",
+    "А": "a", "В": "b", "Е": "e", "К": "k", "М": "m", "Н": "h", "О": "o", "Р": "p", "С": "c", "Т": "t", "Х": "x",
+    "Α": "a", "Β": "b", "Ε": "e", "Ζ": "z", "Η": "h", "Ι": "i", "Κ": "k", "Μ": "m", "Ν": "n", "Ο": "o", "Ρ": "p",
+    "Τ": "t", "Υ": "y", "Χ": "x",
+}
+_HOMOGLYPH_TABLE = {ord(k): v for k, v in HOMOGLYPHS.items()}
+_ASCII_ALPHA = re.compile(r"[A-Za-z]")
+
+
+def fold_homoglyphs(text: str) -> str:
+    def fix(m: "re.Match[str]") -> str:
+        tok = m.group(0)
+        if _ASCII_ALPHA.search(tok) and any(ord(c) in _HOMOGLYPH_TABLE for c in tok):
+            return tok.translate(_HOMOGLYPH_TABLE)
+        return tok
+    return re.sub(r"\S+", fix, text)
+
+
 def _fold(text: str) -> str:
-    """NFKC folds fullwidth and math-bold letters to ASCII; format characters (zero-width etc.) are removed."""
+    """NFKC folds fullwidth and math-bold letters to ASCII; format characters (zero-width etc.) are removed;
+    look-alike Cyrillic/Greek letters inside Latin words are mapped back to Latin."""
     text = unicodedata.normalize("NFKC", text)
-    return "".join(ch for ch in text if unicodedata.category(ch) != "Cf").lower()
+    text = "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
+    return fold_homoglyphs(text).lower()
 
 
 def _squash(text: str) -> str:
@@ -154,9 +210,11 @@ def _compile(term: str) -> "re.Pattern[str]":
 
 
 # Pre-compiled once: (category, term, weight, ambiguous, pattern, obfuscation_ok, squeezed_pattern_or_None)
-_TERMS: List[Tuple[str, str, float, bool, "re.Pattern[str]", bool, Optional["re.Pattern[str]"]]] = []
+_TERMS: List[Tuple[str, str, float, bool, "re.Pattern[str]", bool, Optional["re.Pattern[str]"], int]] = []
+_GID = 0
 for _cat, _groups in SLANG_DICTIONARY.items():
     for _g in _groups:
+        _GID += 1   # every term in a group is one concept (spelling variants), so "chitta"+"chita" is one signal
         for _t in _g["terms"]:
             _norm = _normalize(_t)
             _wordlike = bool(_WORDLIKE_TERM.fullmatch(_norm))
@@ -164,7 +222,29 @@ for _cat, _groups in SLANG_DICTIONARY.items():
             # Repeated-letter matching ("chiitta") only for terms that stay 5+ letters when squeezed,
             # otherwise ordinary words such as "kata" would match "katta".
             _fuzzy = re.compile(rf"(?<!\w){re.escape(_sq)}(?!\w)") if _wordlike and len(_sq) >= 5 else None
-            _TERMS.append((_cat, _t, _g["weight"], bool(_g.get("ambiguous")), _compile(_t), _wordlike, _fuzzy))
+            _TERMS.append((_cat, _t, _g["weight"], bool(_g.get("ambiguous")), _compile(_t), _wordlike, _fuzzy, _GID))
+
+
+BUY_RE = re.compile(
+    r"(?<!\w)(looking for|looking to buy|want to buy|wanted|need|needed|require|required|requirement|chahiye|"
+    r"lena hai|buyer|buyers|buying|will buy|ready to buy|paying)(?!\w)", re.IGNORECASE)
+SELL_RE = re.compile(
+    r"(?<!\w)(available|avail|selling|sell|for sale|sale|in stock|stock|supply|milega|milegi|dispatch(ed)?|"
+    r"delivery|deliver|ready|rate|rates|price|cod|bulk|उपलब्ध)(?!\w)", re.IGNORECASE)
+RENT_RE = re.compile(r"(?<!\w)(rent|rental|kiraya|kiraye|kirya|on hire)(?!\w)", re.IGNORECASE)
+
+
+def detect_direction(text: str) -> str:
+    """SELL / BUY / RENT_OFFER / RENT_WANTED / UNKNOWN. Keyword rules on the folded text; a hint, not a verdict."""
+    norm = _normalize(text)
+    buy, sell, rent = bool(BUY_RE.search(norm)), bool(SELL_RE.search(norm)), bool(RENT_RE.search(norm))
+    if rent:
+        return "RENT_WANTED" if buy and not sell else "RENT_OFFER"
+    if buy and not sell:
+        return "BUY"
+    if sell:
+        return "SELL"
+    return "UNKNOWN"
 
 
 def classify_text(text: str) -> Dict[str, Any]:
@@ -177,13 +257,21 @@ def classify_text(text: str) -> Dict[str, Any]:
     decoded = _decode_leet(norm)
     squeezed = [_squeeze(v) for v in (norm, collapsed, decoded)]
 
-    has_commerce = bool(COMMERCE_RE.search(norm))
-    has_quantity = bool(QUANTITY_RE.search(norm))
-    has_forgery = bool(FORGERY_RE.search(norm))
-    has_account_kit = bool(ACCOUNT_KIT_RE.search(norm))
+    # Context words are looked for in every variant too, so "ch1tta deliv3ry" and "k a t t a  a v a i l" keep their sale context.
+    views = (norm, collapsed, decoded)
+    def seen(rx: "re.Pattern[str]") -> bool:
+        return any(rx.search(v) for v in views)
+    has_commerce = seen(COMMERCE_RE)
+    has_quantity = seen(QUANTITY_RE)
+    has_forgery = seen(FORGERY_RE)
+    has_account_kit = seen(ACCOUNT_KIT_RE)
+    has_unlicensed = seen(UNLICENSED_RE)
+    # News/warnings/shop notices need an explicit offer to sell; contact details alone do not count.
+    reporting_only = seen(REPORTING_RE) and not seen(EXPLICIT_SALE_RE)
+    legit_trade = seen(LEGIT_TRADE_RE)
 
     per_category: Dict[str, Dict[str, Any]] = {}
-    for category, term, weight, ambiguous, pattern, wordlike, fuzzy in _TERMS:
+    for category, term, weight, ambiguous, pattern, wordlike, fuzzy, gid in _TERMS:
         hit = bool(pattern.search(norm))
         if not hit and wordlike:
             hit = bool(pattern.search(collapsed)) or bool(pattern.search(decoded))
@@ -191,32 +279,49 @@ def classify_text(text: str) -> Dict[str, Any]:
             hit = any(fuzzy.search(v) for v in squeezed)
         if not hit:
             continue
-        entry = per_category.setdefault(category, {"strong": [], "ambiguous": []})
+        entry = per_category.setdefault(category, {"strong": [], "ambiguous": [], "gids": set()})
         entry["ambiguous" if ambiguous else "strong"].append((term, weight))
+        entry["gids"].add(gid)
 
     matched_categories = []
     for category, entry in per_category.items():
         strong, amb = entry["strong"], entry["ambiguous"]
         strong_score = max((w for _, w in strong), default=0.0)
         terms = sorted({t for t, _ in strong + amb})
+        concepts = len(entry["gids"])
+        sale_context = (
+            has_commerce
+            or (has_quantity and category in ("DRUGS", "ARMS"))
+            or (has_unlicensed and category == "ARMS")
+            or (has_forgery and category == "DOCUMENTS")
+            or (has_account_kit and category == "FINANCIAL")
+        )
+        if reporting_only:
+            sale_context = False
+        # A strong keyword on its own is not enough ("Chitta village fair on Sunday", "my cousin Katta"):
+        # it needs a sale context or at least one more matched term. News and warnings need an explicit offer.
+        if strong and not (sale_context or (concepts >= 2 and not reporting_only)):
+            strong_score = min(strong_score, AMBIGUOUS_NO_CONTEXT)
         amb_score = 0.0
         if amb:
             amb_max = max(w for _, w in amb)
-            sale_context = (
-                has_commerce
-                or (has_quantity and category in ("DRUGS", "ARMS"))
-                or (has_forgery and category == "DOCUMENTS")
-                or (has_account_kit and category == "FINANCIAL")
-            )
+            # Emoji alone are weak: one emoji plus a phone number is a holiday ad ("Snow ❄️ trip, call ..."),
+            # so a category matched only by emoji needs two different emoji.
+            emoji_only = not strong and all(not any(c.isalnum() for c in t) for t, _ in amb)
+            if emoji_only and len({t for t, _ in amb}) < 2:
+                sale_context = False
+            # "maal" in a post about ordinary goods/wholesale is not a drug term on its own.
+            if legit_trade and not strong:
+                sale_context = False
             if sale_context:
                 amb_score = min(amb_max, AMBIGUOUS_CAP)
-                if len(terms) >= 2:   # another matched term (even a weak one) corroborates
+                if concepts >= 2:   # another matched concept (even a weak one) corroborates
                     amb_score = max(amb_score, min(amb_max, AMBIGUOUS_CORROBORATED))
             else:
                 amb_score = min(amb_max, AMBIGUOUS_NO_CONTEXT)
         base = max(strong_score, amb_score)
         # A display score based on rule matches, not a calibrated probability.
-        boost = min(0.01 * (len(terms) - 1), 0.03)
+        boost = min(0.01 * (concepts - 1), 0.03)
         matched_categories.append({"category": category, "score": min(base + boost, 0.99), "terms": terms})
 
     matched_categories.sort(key=lambda x: x["score"], reverse=True)
@@ -236,5 +341,6 @@ def classify_text(text: str) -> Dict[str, Any]:
         "categories": categories,
         "confidence": round(confidence, 2),
         "matched_slang": list(set(all_matched_terms)),
-        "primary_category": categories[0] if categories else None
+        "primary_category": categories[0] if categories else None,
+        "direction": detect_direction(text) if categories else "UNKNOWN",
     }
