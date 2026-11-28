@@ -76,7 +76,9 @@ export const BottomDock: React.FC<BottomDockProps> = ({ activeKey, onSelect }) =
   // ---- sliding highlight behind the active item
   const measure = useCallback(() => {
     const btn = activeKey ? buttonRefs.current[activeKey] : null;
-    setHighlight(btn ? { x: btn.offsetLeft, w: btn.offsetWidth } : null);
+    // Each button sits in its own positioned wrapper, so measure the wrapper's offset inside the bar.
+    const wrapper = btn?.parentElement as HTMLElement | null;
+    setHighlight(btn && wrapper ? { x: wrapper.offsetLeft + btn.offsetLeft, w: btn.offsetWidth } : null);
   }, [activeKey]);
   useLayoutEffect(measure, [measure]);
   useEffect(() => {

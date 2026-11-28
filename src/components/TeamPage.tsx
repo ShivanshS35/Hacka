@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Github, Linkedin, Mail, ShieldCheck } from 'lucide-react';
-import { TEAM, TEAM_NAME, type TeamMember } from '../data/team';
+import { TEAM, TEAM_NAME, TEAM_TAG, type TeamMember } from '../data/team';
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
 
 // Chamfered "agency badge" outline: top-left and bottom-right corners cut.
@@ -124,7 +124,7 @@ const TeamCard: React.FC<{ member: TeamMember; index: number; reduced: boolean }
         <div className="h-full p-px bg-gradient-to-b from-cyan-300/55 via-white/[0.08] to-cyan-300/30" style={{ clipPath: CHAMFER }}>
           <div className="relative h-full bg-[#0A0F19]" style={{ clipPath: CHAMFER }}>
             <div className="flex items-center justify-between px-4 pt-3 pb-2 font-mono text-[9px] tracking-[0.25em] text-slate-500">
-              <span>V3S · {String(index + 1).padStart(2, '0')}</span>
+              <span>{TEAM_TAG} · {String(index + 1).padStart(2, '0')}</span>
               <ShieldCheck aria-hidden="true" className="w-3.5 h-3.5 text-cyan-300/60" />
             </div>
             <div className="mx-3 overflow-hidden rounded-sm border border-white/[0.06]">
@@ -190,7 +190,7 @@ export const TeamPage: React.FC = () => {
           </div>
         </motion.header>
 
-        <ul aria-label={`${TEAM_NAME} members`} className="mt-12 sm:mt-14 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-7">
+        <ul aria-label={`${TEAM_NAME} members`} className={`mt-12 sm:mt-14 mx-auto grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-7 ${TEAM.length === 3 ? 'lg:grid-cols-3 max-w-4xl' : 'lg:grid-cols-4'}`}>
           {TEAM.map((m, i) => (
             <TeamCard key={m.id} member={m} index={i} reduced={reduced} />
           ))}

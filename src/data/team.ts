@@ -1,4 +1,4 @@
-// Team V3S: edit this list to change the Meet the Team page (/team).
+// Team Squirtle: edit this list to change the Meet the Team page (/team).
 //
 // photo:    a file name inside /public/team/ (for example 'shivansh.jpg'). Leave '' to show the placeholder avatar.
 // role:     'TODO' shows "Role to be added" on the card.
@@ -16,43 +16,36 @@ export interface TeamMember {
   linkedin: string;
 }
 
-export const TEAM_NAME = 'Team V3S';
+export const TEAM_NAME = 'Team Squirtle';
+/** Short code printed on each card (e.g. "SQT · 01"). */
+export const TEAM_TAG = 'SQT';
 
 export const TEAM: TeamMember[] = [
   {
-    id: 'shivansh',
-    name: 'Shivansh',
-    role: 'Team Leader & Lead Developer',
+    id: 'atharv-singh',
+    name: 'Atharv Singh',
+    role: 'Team Leader',
+    photo: '',
+    email: '',
+    github: '',
+    linkedin: '',
+  },
+  {
+    id: 'sanskaar-tiwari',
+    name: 'Sanskaar Tiwari',
+    role: 'TODO',
+    photo: '',
+    email: '',
+    github: '',
+    linkedin: '',
+  },
+  {
+    id: 'shivansh-singh',
+    name: 'Shivansh Singh',
+    role: 'Lead Developer',
     photo: '',
     email: '',
     github: 'https://github.com/ShivanshS35',
-    linkedin: '',
-  },
-  {
-    id: 'vivek-rajput',
-    name: 'Vivek Rajput',
-    role: 'TODO',
-    photo: '',
-    email: '',
-    github: '',
-    linkedin: '',
-  },
-  {
-    id: 'shubh-agrawal',
-    name: 'Shubh Agrawal',
-    role: 'TODO',
-    photo: '',
-    email: '',
-    github: '',
-    linkedin: '',
-  },
-  {
-    id: 'shreyansh-saxena',
-    name: 'Shreyansh Saxena',
-    role: 'TODO',
-    photo: '',
-    email: '',
-    github: '',
     linkedin: '',
   },
 ];
