@@ -231,21 +231,21 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
           {/* 3 Telemetry Pillars */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-16 pt-10 border-t border-slate-800/80 font-mono">
             <div className="bg-[#0d121a] p-4 rounded-xl border border-slate-800">
-              <div className="text-2xl sm:text-3xl font-black text-cyan-400">1,428+</div>
+              <div className="text-2xl sm:text-3xl font-black text-cyan-400">151</div>
               <div className="text-[11px] text-slate-400 uppercase tracking-wider mt-1">
-                PUBLIC CHANNELS MONITORED
+                SLANG TERMS IN LEXICON
               </div>
             </div>
             <div className="bg-[#0d121a] p-4 rounded-xl border border-slate-800">
-              <div className="text-2xl sm:text-3xl font-black text-emerald-400">96.8%</div>
+              <div className="text-2xl sm:text-3xl font-black text-emerald-400">96.9%</div>
               <div className="text-[11px] text-slate-400 uppercase tracking-wider mt-1">
-                HINGLISH SLANG PRECISION
+                PRECISION · 60 SYNTHETIC POSTS
               </div>
             </div>
             <div className="bg-[#0d121a] p-4 rounded-xl border border-slate-800">
-              <div className="text-2xl sm:text-3xl font-black text-yellow-400">&lt; 3.0s</div>
+              <div className="text-2xl sm:text-3xl font-black text-yellow-400">64.6%</div>
               <div className="text-[11px] text-slate-400 uppercase tracking-wider mt-1">
-                CROSS-CHANNEL CORRELATION
+                RECALL · LEXICON ONLY
               </div>
             </div>
             <div className="bg-[#0d121a] p-4 rounded-xl border border-slate-800">
@@ -338,7 +338,7 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
               </h2>
             </div>
             <div className="mt-4 md:mt-0 font-mono text-xs text-slate-500">
-              STACK: TELETHON · SCIKIT-LEARN · NETWORKX · IMAGEHASH · HASHLIB · REPORTLAB
+              STACK: REACT · FASTAPI · SCIKIT-LEARN · SQLITE · SHA-256 · JSPDF
             </div>
           </div>
 
@@ -351,7 +351,7 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
               </div>
               <div className="text-sm font-bold font-mono text-white mb-1">COLLECT</div>
               <div className="text-xs text-slate-400 leading-relaxed">
-                Public channels live stream via Telethon daemon + CSV / JSON drag-and-drop batch ingestion.
+                Public Telegram channel previews (t.me/s) + CSV / JSON drag-and-drop batch ingestion.
               </div>
             </div>
 
@@ -362,7 +362,7 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
               </div>
               <div className="text-sm font-bold font-mono text-white mb-1">CLASSIFY</div>
               <div className="text-xs text-slate-400 leading-relaxed">
-                Hinglish, Hindi, English, and coded emoji detection engine across DRUGS, ARMS, DOCUMENTS & FINANCIAL.
+                Hinglish, Hindi, English and coded-emoji keyword lexicon across DRUGS, ARMS, DOCUMENTS & FINANCIAL.
               </div>
             </div>
 
@@ -384,7 +384,7 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
               </div>
               <div className="text-sm font-bold font-mono text-white mb-1">LINK</div>
               <div className="text-xs text-slate-400 leading-relaxed">
-                NetworkX graph topology linking the same identifier across disconnected channels and crime types.
+                Link graph joining the same identifier across channels and crime types, plus near-duplicate ad grouping.
               </div>
             </div>
 
@@ -395,7 +395,7 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
               </div>
               <div className="text-sm font-bold font-mono text-white mb-1">ALERT</div>
               <div className="text-xs text-slate-400 leading-relaxed">
-                Demonstration district map, raw text SHA-256 digest, and prototype report export.
+                Risk-scored alerts with reasons, district map, raw text SHA-256 digest, and prototype report export.
               </div>
             </div>
           </div>
@@ -412,7 +412,7 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
             SLANG-AWARE. EMOJI-AWARE. HINGLISH-AWARE.
           </h2>
           <p className="text-slate-400 text-sm sm:text-base max-w-2xl mb-8">
-            Criminal syndicates deliberately bypass keyword blocks by combining Hinglish phonetics (<em>maal, chitta, desi katta</em>), coded emojis (🔥, 💊, 🔫), and obfuscated text. PRAHARI uses weighted multi-lingual dictionary vectors.
+            Criminal syndicates deliberately bypass keyword blocks by combining Hinglish phonetics (<em>maal, chitta, desi katta</em>), coded emojis (🔥, 💊, 🔫), and obfuscated text. PRAHARI uses a weighted multilingual slang lexicon with whole-word matching, and flags only above a confidence threshold.
           </p>
 
           {/* Interactive Playground Component */}

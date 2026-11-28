@@ -12,15 +12,15 @@ export const WarMonitorBootLoader: React.FC<WarMonitorBootLoaderProps> = ({ onCo
   const [authProgress, setAuthProgress] = useState(false);
 
   const bootLogs = [
-    "[INT] Connecting to Telethon Telegram OSINT aggregators...",
-    "[INT] Initializing Rajasthan UPI Escrow monitoring endpoints...",
-    "[SEC] Loading District Threat Matrix (33 Rajasthan jurisdictions)...",
-    "[SEC] Loading Hinglish illicit trade dictionary (4,280 terms)...",
-    "[SEC] Initializing Cross-Channel Entity Correlation Engine...",
-    "[HUD] Loading Mapbox Dark vector district geometries...",
-    "[VIS] Configuring Palantir Gotham tactical telemetry overlays...",
-    "[CAM] Indexing CCTV and transport checkpoints in Jaipur/Jodhpur...",
-    "[AIS] Connecting to border surveillance relays (Barmer/Jaisalmer)...",
+    "[INT] Loading public Telegram preview collector and CSV / JSON importer...",
+    "[INT] Initializing identifier extractor (UPI, phone, handle, wallet)...",
+    "[SEC] Loading Rajasthan district map...",
+    "[SEC] Loading Hinglish slang lexicon (151 terms)...",
+    "[SEC] Initializing cross-channel link graph...",
+    "[HUD] Loading district geometries...",
+    "[VIS] Configuring map overlays...",
+    "[ALR] Preparing risk-scored alerts and evidence digests...",
+    "[SIM] Starting synthetic demo stream...",
     "[DEMO] Loading synthetic telemetry and source labels...",
     "[OK] Prototype interface ready; no live collection implied.",
     "[OK] PRAHARI OSINT Command Center ready. Welcome, Operator."

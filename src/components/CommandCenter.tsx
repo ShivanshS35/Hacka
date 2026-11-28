@@ -196,14 +196,14 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </span>
             <span className="text-[#94A3B8]">GRID:</span>
-            <span className="text-emerald-400 font-mono font-medium">LIVE // 14ms</span>
+            <span className="text-emerald-400 font-mono font-medium">DEMO</span>
           </div>
 
           <div className="h-3.5 w-[1px] bg-white/[0.08]" />
 
           <div className="flex items-center gap-1.5">
             <span className="text-[#94A3B8]">CHANNELS:</span>
-            <span className="text-cyan-400 font-mono font-semibold">1,428</span>
+            <span className="text-cyan-400 font-mono font-semibold">DEMO</span>
           </div>
 
           <div className="h-3.5 w-[1px] bg-white/[0.08]" />
