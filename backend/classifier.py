@@ -113,14 +113,22 @@ QUANTITY_RE = re.compile(
 
 # Obfuscation handling: people write "c h i t t a", "ch1tta", "ｃｈｉｔｔａ" or add invisible characters.
 _LEET = str.maketrans({"0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "@": "a", "$": "s"})
-_SPACED_LETTERS = re.compile(r"(?<!\w)(?:\w[ \t.\-_*]){3,}\w(?!\w)")
-_WORDLIKE_TERM = re.compile(r"[a-z][a-z ]{4,}[a-z]$")  # only plain-letter terms of 5+ chars use fuzzy variants
+_SPACED_LETTERS = re.compile(r"(?<!\w)(?:\w[ \t.\-_*]){2,}\w(?!\w)")
+_WORDLIKE_TERM = re.compile(r"[a-z][a-z ]{3,}[a-z]")  # only plain-letter terms of 5+ chars use obfuscation variants
 
 
-def _normalize(text: str) -> str:
+def _fold(text: str) -> str:
     """NFKC folds fullwidth and math-bold letters to ASCII; format characters (zero-width etc.) are removed."""
     text = unicodedata.normalize("NFKC", text)
     return "".join(ch for ch in text if unicodedata.category(ch) != "Cf").lower()
+
+
+def _squash(text: str) -> str:
+    return re.sub(r"\s+", " ", text)
+
+
+def _normalize(text: str) -> str:
+    return _squash(_fold(text))
 
 
 def _collapse_spaced_letters(text: str) -> str:
@@ -145,22 +153,27 @@ def _compile(term: str) -> "re.Pattern[str]":
     return re.compile(rf"(?<!\w){re.escape(_normalize(term))}(?!\w)")
 
 
-# Pre-compiled once: (category, term, weight, ambiguous, pattern, fuzzy_pattern_or_None)
-_TERMS: List[Tuple[str, str, float, bool, "re.Pattern[str]", Optional["re.Pattern[str]"]]] = []
+# Pre-compiled once: (category, term, weight, ambiguous, pattern, obfuscation_ok, squeezed_pattern_or_None)
+_TERMS: List[Tuple[str, str, float, bool, "re.Pattern[str]", bool, Optional["re.Pattern[str]"]]] = []
 for _cat, _groups in SLANG_DICTIONARY.items():
     for _g in _groups:
         for _t in _g["terms"]:
             _norm = _normalize(_t)
-            _fuzzy = None
-            if _WORDLIKE_TERM.fullmatch(_norm):
-                _fuzzy = re.compile(rf"(?<!\w){re.escape(_squeeze(_norm))}(?!\w)")
-            _TERMS.append((_cat, _t, _g["weight"], bool(_g.get("ambiguous")), _compile(_t), _fuzzy))
+            _wordlike = bool(_WORDLIKE_TERM.fullmatch(_norm))
+            _sq = _squeeze(_norm)
+            # Repeated-letter matching ("chiitta") only for terms that stay 5+ letters when squeezed,
+            # otherwise ordinary words such as "kata" would match "katta".
+            _fuzzy = re.compile(rf"(?<!\w){re.escape(_sq)}(?!\w)") if _wordlike and len(_sq) >= 5 else None
+            _TERMS.append((_cat, _t, _g["weight"], bool(_g.get("ambiguous")), _compile(_t), _wordlike, _fuzzy))
 
 
 def classify_text(text: str) -> Dict[str, Any]:
-    norm = NEGATIVE_PHRASES.sub(" ", _normalize(text))
+    # Keep runs of spaces: in "k a t t a   a v a i l" they separate words. Harmless phrases are cut out
+    # first so none of the obfuscation variants below can see them either.
+    folded = NEGATIVE_PHRASES.sub(" ", _fold(text))
+    norm = _squash(folded)
     # Variants only matter for plain-letter terms, so compute them once per post.
-    collapsed = _collapse_spaced_letters(norm)
+    collapsed = _squash(_collapse_spaced_letters(folded))
     decoded = _decode_leet(norm)
     squeezed = [_squeeze(v) for v in (norm, collapsed, decoded)]
 
@@ -170,11 +183,12 @@ def classify_text(text: str) -> Dict[str, Any]:
     has_account_kit = bool(ACCOUNT_KIT_RE.search(norm))
 
     per_category: Dict[str, Dict[str, Any]] = {}
-    for category, term, weight, ambiguous, pattern, fuzzy in _TERMS:
+    for category, term, weight, ambiguous, pattern, wordlike, fuzzy in _TERMS:
         hit = bool(pattern.search(norm))
+        if not hit and wordlike:
+            hit = bool(pattern.search(collapsed)) or bool(pattern.search(decoded))
         if not hit and fuzzy is not None:
-            hit = (bool(pattern.search(collapsed)) or bool(pattern.search(decoded))
-                   or any(fuzzy.search(v) for v in squeezed))
+            hit = any(fuzzy.search(v) for v in squeezed)
         if not hit:
             continue
         entry = per_category.setdefault(category, {"strong": [], "ambiguous": []})
