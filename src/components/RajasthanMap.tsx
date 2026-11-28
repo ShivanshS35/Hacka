@@ -21,11 +21,6 @@ const MAP_STYLE: maplibregl.StyleSpecification = {
   layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#04070d' } }],
 };
 const DEFAULT_CENTER: [number, number] = [73.9, 26.6];
-
-// Each district gets one of 5 tints, chosen so no two neighbouring districts share a colour (like the official
-// district map). The index is precomputed into the boundary file as `colorIdx`.
-const DISTRICT_TINTS = ['#a78bfa', '#4ade80', '#facc15', '#f472b6', '#60a5fa'];
-const DISTRICT_FILL: any = ['match', ['get', 'colorIdx'], ...DISTRICT_TINTS.flatMap((c, i) => [i, c]), '#00E5FF'];
 const DEFAULT_ZOOM = 5.45;
 
 // District name normalization map for GeoJSON spellings and variations (41 districts across 7 divisions)
@@ -371,8 +366,8 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
         type: 'fill',
         source: 'rajasthan-districts',
         paint: {
-          'fill-color': DISTRICT_FILL,
-          'fill-opacity': 0.2,
+          'fill-color': '#00E5FF',
+          'fill-opacity': 0.03,
         },
       });
 
@@ -381,16 +376,11 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
         type: 'line',
         source: 'rajasthan-districts',
         paint: {
-          'line-color': '#9BE7FF',
-          'line-width': 1.1,
-          'line-opacity': 0.85,
+          'line-color': '#00E5FF',
+          'line-width': 1,
+          'line-opacity': 0.45,
         },
       });
-
-      // The India outline may have finished loading first and been added on top; keep it beneath the districts.
-      for (const id of ['india-states-fill', 'india-states-line']) {
-        if (map.getLayer(id)) map.moveLayer(id, 'rajasthan-districts-fill');
-      }
 
       // Interactive hover & click handlers on district polygons
       map.on('mousemove', 'rajasthan-districts-fill', (e: maplibregl.MapLayerMouseEvent) => {
@@ -520,12 +510,12 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
       map.setPaintProperty('rajasthan-districts-fill', 'fill-opacity', [
         'case',
         ['==', ['get', 'districtId'], selectedId],
-        0.42,
+        0.22,
         ['in', ['get', 'districtId'], ['literal', highlighted]],
-        0.38,
+        0.22,
         ['==', ['get', 'districtId'], hoveredId],
-        0.4,
-        0.2,
+        0.16,
+        0.02,
       ]);
     }
 
@@ -538,7 +528,7 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
         '#00E5FF',
         ['==', ['get', 'districtId'], hoveredId],
         '#38BDF8',
-        '#9BE7FF',
+        '#00E5FF',
       ]);
       map.setPaintProperty('rajasthan-districts-line', 'line-width', [
         'case',
@@ -553,8 +543,8 @@ export const RajasthanMap: React.FC<RajasthanMapProps> = ({
         ['==', ['get', 'districtId'], selectedId],
         0.95,
         ['==', ['get', 'districtId'], hoveredId],
-        0.95,
-        0.85,
+        0.8,
+        0.45,
       ]);
     }
 
