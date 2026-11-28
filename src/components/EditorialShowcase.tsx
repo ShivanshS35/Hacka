@@ -231,21 +231,21 @@ export const EditorialShowcase: React.FC<EditorialShowcaseProps> = ({
           {/* 3 Telemetry Pillars */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-16 pt-10 border-t border-slate-800/80 font-mono">
             <div className="bg-[#0d121a] p-4 rounded-xl border border-slate-800">
-              <div className="text-2xl sm:text-3xl font-black text-cyan-400">151</div>
+              <div className="text-2xl sm:text-3xl font-black text-cyan-400">189</div>
               <div className="text-[11px] text-slate-400 uppercase tracking-wider mt-1">
                 SLANG TERMS IN LEXICON
               </div>
             </div>
             <div className="bg-[#0d121a] p-4 rounded-xl border border-slate-800">
-              <div className="text-2xl sm:text-3xl font-black text-emerald-400">96.9%</div>
+              <div className="text-2xl sm:text-3xl font-black text-emerald-400">89.5%</div>
               <div className="text-[11px] text-slate-400 uppercase tracking-wider mt-1">
-                PRECISION · 60 SYNTHETIC POSTS
+                PRECISION · 50 HELD-OUT POSTS
               </div>
             </div>
             <div className="bg-[#0d121a] p-4 rounded-xl border border-slate-800">
-              <div className="text-2xl sm:text-3xl font-black text-yellow-400">64.6%</div>
+              <div className="text-2xl sm:text-3xl font-black text-yellow-400">68.0%</div>
               <div className="text-[11px] text-slate-400 uppercase tracking-wider mt-1">
-                RECALL · LEXICON ONLY
+                RECALL · KEYWORDS ONLY
               </div>
             </div>
             <div className="bg-[#0d121a] p-4 rounded-xl border border-slate-800">

@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import json
 import os
 import tempfile
 import unittest
@@ -188,12 +189,17 @@ def test_gemini_check_endpoint_never_echoes_key():
 
 
 def test_classifier_eval_numbers_match_site_claims():
-    """The landing page quotes ~97% precision / ~65% recall on the synthetic set; keep that honest."""
-    from eval_classifier import evaluate
-    r = evaluate()
-    assert r["n"] == 60
-    assert round(r["precision"] * 100, 1) == 96.9
-    assert round(r["recall"] * 100, 1) == 64.6
+    """The landing page quotes 89.5% precision / 68.0% recall on the 50-post held-out set; keep that honest."""
+    from eval_classifier import evaluate, HOLDOUT
+    r = evaluate(HOLDOUT)
+    assert r["n"] == 50
+    assert round(r["precision"] * 100, 1) == 89.5
+    assert round(r["recall"] * 100, 1) == 68.0
+
+
+def test_lexicon_term_count_matches_site_claim():
+    import classifier
+    assert sum(len(g["terms"]) for gs in classifier.SLANG_DICTIONARY.values() for g in gs) == 189
 
 
 def _fake_gemini(monkeypatch, payload, counter):
@@ -397,3 +403,77 @@ def test_gemini_slow_model_times_out_then_next_model_works(monkeypatch):
         assert res["model"] != "slow-model"
     finally:
         srv.shutdown()
+
+
+# ---------- hardening tests (stress-test findings) ----------
+
+def test_extractor_is_linear_on_crafted_input():
+    import time
+    from extractor import extract_entities
+    for text in ["a." * 24000 + "@x", "@" * 49000, "a@" * 24000, "-" * 25000 + "@" + "-" * 24000,
+                 " ".join(f"a{i}@bank{i}" for i in range(3000))]:
+        t0 = time.time()
+        extract_entities(text)
+        assert time.time() - t0 < 1.0
+
+
+def test_extractor_still_finds_upis_phones_and_ignores_emails():
+    from extractor import extract_entities
+    r = extract_entities("pay raj.pay@oksbi or john.doe@gmail.com, DM @seller_raj, call 9876543210")
+    assert r["upis"] == ["raj.pay@oksbi"]
+    assert r["handles"] == ["@seller_raj"]
+    assert r["phones"] == ["9876543210"]
+
+
+def test_classifier_resists_unicode_and_spacing_evasion():
+    for text in ["ｃｈｉｔｔａ ｄｅｌｉｖｅｒｙ", "𝐜𝐡𝐢𝐭𝐭𝐚 delivery", "ch​itta de​liv​ery",
+                 "c h i t t a available", "ch1tta deliv3ry", "chiitta ki delivery"]:
+        assert "DRUGS" in classify_text(text)["categories"], text
+
+
+def test_ambiguous_words_alone_are_not_flagged():
+    for text in ["Weed out the bad apples from the team", "Mule kya hota hai? an animal", "Pistol shooting is an Olympic sport",
+                 "I need a driving license renewal, how to apply online?", "Weed killer spray for the garden",
+                 "Ice cream available at half price", "My atm card got blocked"]:
+        assert classify_text(text)["categories"] == [], text
+
+
+def test_ambiguous_words_with_sale_context_are_flagged_but_not_confident():
+    r = classify_text("smack ki delivery aaj raat")
+    assert "DRUGS" in r["categories"] and r["confidence"] < 0.85     # goes to Gemini for a second opinion
+
+
+def test_ai_can_clear_a_weak_keyword_flag(monkeypatch):
+    g = _fake_gemini(monkeypatch, {"category": "NONE", "confidence": 0.9, "reason": "weed killer ad", "slang": []}, [])
+    r = g.hybrid_classify("Weed killer for sale, call 9876543210", "AIzaFakeKey1234567890")
+    # the keyword layer ignores 'weed killer'; use a post that still trips the lexicon
+    r = g.hybrid_classify("smack ki delivery aaj raat", "AIzaFakeKey1234567890")
+    assert r["categories"] == [] and r["ai"]["status"] == "ai_cleared"
+
+
+def test_ai_cannot_clear_a_confident_keyword_flag(monkeypatch):
+    g = _fake_gemini(monkeypatch, {"category": "NONE", "confidence": 0.99, "reason": "x", "slang": []}, [])
+    r = g.hybrid_classify("Pure white chitta consignment ready, 10g available", "AIzaFakeKey1234567890")
+    assert "DRUGS" in r["categories"]
+
+
+def test_blank_text_rejected_and_telegram_export_accepted():
+    from fastapi.testclient import TestClient
+    import main
+    c = TestClient(main.app)
+    assert c.post("/api/scan/text", json={"channel": "@t", "text": "   \n\t"}).status_code == 422
+    export = {"name": "Demo Channel", "messages": [
+        {"id": 1, "type": "service", "text": ""},
+        {"id": 2, "type": "message", "text": ["chitta ", {"type": "bold", "text": "delivery"}, " ready 10g"]},
+        {"id": 3, "type": "message", "text": "plain hello"},
+    ]}
+    r = c.post("/api/ingest/file", files={"file": ("result.json", json.dumps(export), "application/json")})
+    assert r.status_code == 200 and r.json()["ingested_count"] == 2
+    assert r.json()["records"][0]["channel"] == "@Demo Channel"
+
+
+def test_channel_names_cannot_carry_spreadsheet_formulas():
+    import main
+    assert main._clean_channel("=cmd|' /C calc'!A0") == "@cmd C calcA0"
+    assert main._clean_channel("@delhi_highs") == "@delhi_highs"
+    assert main._clean_channel("!!!") == "@unknown"

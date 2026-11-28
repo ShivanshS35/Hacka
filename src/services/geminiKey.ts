@@ -14,10 +14,16 @@ export function getGeminiKey(): string {
   }
 }
 
+/** Same shape rules as the backend: a real key is one token of 10-200 characters with no spaces. */
+export function isPlausibleKey(key: string): boolean {
+  const clean = key.trim();
+  return clean.length >= 10 && clean.length <= 200 && !/\s/.test(clean);
+}
+
 export function setGeminiKey(key: string): boolean {
   try {
     const clean = key.trim();
-    if (!clean) return false;
+    if (!isPlausibleKey(clean)) return false;
     localStorage.setItem(STORAGE_KEY, clean);
     listeners.forEach((l) => l());
     return true;

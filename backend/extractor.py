@@ -1,3 +1,4 @@
+import bisect
 import re
 import hashlib
 from typing import Dict, List, Any
@@ -50,20 +51,96 @@ RAJASTHAN_DISTRICT_SYNONYMS = {
     "karauli": ["karauli", "करौली"]
 }
 
+_UPI_LEFT_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_")
+_ASCII_LETTERS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+_UPI_MAX_LEFT = 256
+_UPI_MAX_RIGHT = 64
+_EMAIL_MAX_LEFT = 320
+_EMAIL_MAX_RIGHT = 255
+
+
+def _is_word(ch: str) -> bool:
+    return ch.isalnum() or ch == "_"
+
+
+def _find_at_matches(text: str):
+    """Single linear pass over every '@' to find UPI-like handles and email spans.
+
+    Replaces two unanchored regexes that took quadratic time on crafted input such as
+    'a.a.a.a...@x' (50 KB took about 8 s and froze the server). Each '@' is expanded
+    left and right by at most a fixed number of characters, so total work is linear.
+    """
+    upis: List[tuple] = []     # (start, end) spans of UPI-like matches
+    emails: List[tuple] = []   # (start, end) spans of email addresses
+    last_upi_end = 0
+    last_email_end = 0
+    n = len(text)
+    i = text.find("@")
+    while i != -1:
+        # ---- UPI: [A-Za-z0-9._-]{2,256} @ [A-Za-z]{2,64}
+        s = i
+        floor = max(last_upi_end, i - _UPI_MAX_LEFT)
+        while s > floor and text[s - 1] in _UPI_LEFT_CHARS:
+            s -= 1
+        e = i + 1
+        ceil = min(n, i + 1 + _UPI_MAX_RIGHT)
+        while e < ceil and text[e] in _ASCII_LETTERS:
+            e += 1
+        if i - s >= 2 and e - (i + 1) >= 2:
+            upis.append((s, e))
+            last_upi_end = e
+
+        # ---- Email: \b[\w.+-]+ @ [\w.-]+\.[A-Za-z]{2,}\b   (only used to exclude false UPIs)
+        s = i
+        floor = max(last_email_end, i - _EMAIL_MAX_LEFT)
+        while s > floor and (_is_word(text[s - 1]) or text[s - 1] in ".+-"):
+            s -= 1
+        while s < i and not _is_word(text[s]):   # \b needs a word character at the start
+            s += 1
+        if s < i:
+            r_end = i + 1
+            r_ceil = min(n, i + 1 + _EMAIL_MAX_RIGHT)
+            while r_end < r_ceil and (_is_word(text[r_end]) or text[r_end] in ".-"):
+                r_end += 1
+            chosen = -1
+            for end in range(r_end, i + 1, -1):
+                nxt = text[end] if end < n else ""
+                if nxt and _is_word(nxt):
+                    continue
+                k = end
+                while k > i + 1 and text[k - 1] in _ASCII_LETTERS:
+                    k -= 1
+                if end - k >= 2 and k - 1 > i + 1 and text[k - 1] == ".":
+                    chosen = end
+                    break
+            if chosen != -1:
+                emails.append((s, chosen))
+                last_email_end = chosen
+        i = text.find("@", i + 1)
+    return upis, emails
+
+
+def _inside_any(spans: List[tuple], starts: List[int], start: int, end: int) -> bool:
+    """Spans are sorted and non-overlapping, so only the nearest earlier span can contain [start, end]."""
+    idx = bisect.bisect_right(starts, start) - 1
+    return idx >= 0 and spans[idx][0] <= start and end <= spans[idx][1]
+
+
 def extract_entities(text: str) -> Dict[str, Any]:
-    # 1. UPI addresses
-    email_spans = [m.span() for m in re.finditer(r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b", text)]
-    upi_matches = []
-    for match in re.finditer(REGEX_PATTERNS["upi"], text, re.IGNORECASE):
-        if not any(start <= match.start() and match.end() <= end for start, end in email_spans):
-            upi_matches.append(match.group(0))
-    upis = list(set(upi_matches))
+    # 1. UPI addresses (linear scan; see _find_at_matches)
+    upi_spans, email_spans = _find_at_matches(text)
+    email_starts = [a for a, _ in email_spans]
+    upis = list({text[a:b] for a, b in upi_spans if not _inside_any(email_spans, email_starts, a, b)})
 
     # 2. Telegram Handles
-    raw_handles = list(set(re.findall(REGEX_PATTERNS["telegram"], text)))
-    handles = [h for h in raw_handles if not any(h.lower() in u.lower() for u in upis)
-               and not any(start <= m.start() < end for start, end in email_spans
-                           for m in re.finditer(re.escape(h), text, re.IGNORECASE))]
+    upi_suffixes = "\n".join({u[u.find("@"):].lower() for u in upis})
+    dropped, seen = set(), []
+    for m in re.finditer(REGEX_PATTERNS["telegram"], text):
+        h = m.group(0)
+        seen.append(h)
+        if _inside_any(email_spans, email_starts, m.start(), m.start() + 1):
+            dropped.add(h)
+    handles = [h for h in set(seen) if h not in dropped and h.lower() not in upi_suffixes]
 
     # 3. Cryptocurrency Wallets (BTC, ETH, TRON USDT)
     btc_wallets = list(set(re.findall(REGEX_PATTERNS["crypto_btc"], text)))
