@@ -38,7 +38,7 @@ class IngestionTests(unittest.TestCase):
         self.assertEqual(record["sha256Scope"], "UTF-8 rawText bytes")
         self.assertEqual(record["sourceType"], "ANALYST_SUBMISSION")
         self.assertFalse(record["verified"])
-        self.assertFalse(record["section65B"]["certified"])
+        self.assertFalse(record["evidenceDigest"]["certified"])
 
     def test_failed_persistence_does_not_publish_an_in_memory_record(self):
         existing_count = len(INTERCEPTS_STORE)

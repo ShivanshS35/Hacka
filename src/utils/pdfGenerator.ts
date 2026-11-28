@@ -78,7 +78,7 @@ export function generateDossierPDF(post: InterceptPost) {
   doc.setTextColor(244, 63, 94); // Rose red #F43F5E
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
-  doc.text('CONFIDENTIAL // LAW ENFORCEMENT & JUDICIAL EVIDENCE USE ONLY', pageWidth / 2, y, { align: 'center' });
+  doc.text('CONFIDENTIAL // LAW ENFORCEMENT HANDLING // PROTOTYPE RECORD, NOT A LEGAL CERTIFICATE', pageWidth / 2, y, { align: 'center' });
 
   y += 4;
   doc.setDrawColor(0, 229, 255);
@@ -220,7 +220,7 @@ export function generateDossierPDF(post: InterceptPost) {
   doc.text('INGESTION STATUS:', col2LabelX, rY);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(245, 158, 11); // Amber
-  doc.text(`${post.status.toUpperCase()} // SEALED`, col2ValX, rY);
+  doc.text(`${post.status.toUpperCase()} // DIGEST RECORDED`, col2ValX, rY);
 
   y += tableHeight + 5;
 

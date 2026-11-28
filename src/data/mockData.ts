@@ -695,7 +695,7 @@ export const INITIAL_INTERCEPTS: InterceptPost[] = [
     views: 3105,
     verified: false,
     sourceType: 'SYNTHETIC_DEMO',
-    status: 'SEALED'
+    status: 'DIGESTED'
   },
   {
     id: 'post_003',
@@ -845,7 +845,7 @@ export const INITIAL_INTERCEPTS: InterceptPost[] = [
     views: 2204,
     verified: false,
     sourceType: 'SYNTHETIC_DEMO',
-    status: 'SEALED'
+    status: 'DIGESTED'
   }
 ];
 

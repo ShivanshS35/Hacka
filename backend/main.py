@@ -104,14 +104,15 @@ def load_from_db() -> List[Dict[str, Any]]:
         posts = []
         for post_id, raw_json in rows:
             post = json.loads(raw_json)
-            previous_evidence = post.get("section65B") or {}
+            previous_evidence = post.get("evidenceDigest") or post.get("section65B") or {}
             if "sourceType" not in post or post.get("verified") or previous_evidence.get("certified"):
                 post["sourceType"] = "LEGACY_UNKNOWN"
                 post["verified"] = False
                 if isinstance(post.get("rawText"), str):
                     post["sha256"] = generate_sha256(post["rawText"])
                     post["sha256Scope"] = "UTF-8 rawText bytes"
-                post["section65B"] = {
+                post["evidenceDigest"] = {
+                    "note": "Content digest of rawText; not a legal certificate",
                     "certified": False,
                     "status": "NOT_CERTIFIED",
                     "hashAlgorithm": "SHA-256",
@@ -229,7 +230,8 @@ def process_and_store_post(channel: str, raw_text: str, district_hint: str = "",
         "capturedAtUtc": now.astimezone(datetime.timezone.utc).isoformat(),
         "verified": False,
         "status": "FLAGGED" if classification["categories"] else "UNCLASSIFIED",
-        "section65B": {
+        "evidenceDigest": {
+            "note": "Content digest of rawText; not a legal certificate",
             "certified": False,
             "status": "NOT_CERTIFIED",
             "hashAlgorithm": "SHA-256 (FIPS PUB 180-4)",
@@ -437,7 +439,7 @@ def root_dashboard():
           </div>
           <div class="metric-box">
             <div class="metric-val">SHA-256</div>
-            <div class="metric-lbl">SEC 65B CHAIN</div>
+            <div class="metric-lbl">SHA-256 DIGEST</div>
           </div>
         </div>
 

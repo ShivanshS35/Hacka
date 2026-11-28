@@ -8,7 +8,7 @@ REGEX_PATTERNS = {
     "phone": r"(?:(?:\+91|91|0)[-.\s]?)?[6-9]\d{4}[-.\s]?\d{5}\b",
     "upi": r"[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}",
     "telegram": r"@[a-zA-Z0-9_]{4,32}\b",
-    "crypto_btc": r"(?:bc1|[13])[a-zA-HJ-NP-Z0-9]{25,39}\b",
+    "crypto_btc": r"\bbc1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{14,87}\b|\b[13][a-zA-HJ-NP-Z0-9]{25,39}\b",
     "crypto_eth_usdt": r"0x[a-fA-F0-9]{40}\b",
     "crypto_tron": r"T[A-Za-z1-9]{33}\b",
     "bank_account": r"\b\d{9,18}\b",
