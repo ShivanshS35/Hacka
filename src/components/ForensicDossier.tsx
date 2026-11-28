@@ -108,7 +108,10 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
     }
   };
 
-  const catStyle = getCategoryColor(activePost.categories[0] || 'DRUGS');
+  const isUnclassified = activePost.categories.length === 0;
+  const catStyle = isUnclassified
+    ? { text: '#94A3B8', bg: 'rgba(148, 163, 184, 0.15)', border: '#94A3B8', label: 'UNCLASSIFIED' }
+    : getCategoryColor(activePost.categories[0]);
 
   return (
     <div className="relative w-full h-full bg-[#110C09] text-amber-100 overflow-hidden select-none font-sans flex flex-col">
@@ -355,7 +358,7 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                           EXHIBIT #01 · {activePost.categories[0] || 'UNCLASSIFIED'}
                         </div>
                         <div className="text-[9px] text-stone-500 font-serif italic">
-                          Click to inspect high-res seizure
+                          Click to inspect classification
                         </div>
                       </div>
                     </motion.div>
@@ -375,7 +378,7 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                     >
                       {/* Red Stamp Label */}
                       <div className="absolute -top-2 right-4 bg-red-700 text-white font-mono text-[8px] font-bold px-1.5 py-0.5 rounded shadow">
-                        AUTHENTICATED
+                        {isUnclassified ? 'HASHED' : 'FLAGGED'}
                       </div>
 
                       {/* Simulated Screen Capture */}
@@ -398,7 +401,7 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                           EXHIBIT #02 · TELEGRAM CHAT
                         </div>
                         <div className="text-[9px] text-stone-500 font-serif italic">
-                          Tamper-proof digital packet
+                          Text digest (SHA-256)
                         </div>
                       </div>
                     </motion.div>
@@ -431,7 +434,9 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                       </div>
                       <div className="mt-1.5 text-[9px] text-stone-600 font-mono flex items-center justify-between">
                         <span>Synthetic sample</span>
-                        <span className="text-red-700 font-semibold">FLAGGED</span>
+                        <span className={isUnclassified ? 'text-stone-500 font-semibold' : 'text-red-700 font-semibold'}>
+                          {isUnclassified ? 'NOT FLAGGED' : 'FLAGGED'}
+                        </span>
                       </div>
                     </motion.div>
 
@@ -563,7 +568,7 @@ export const ForensicDossier: React.FC<ForensicDossierProps> = ({
                         <div className="flex justify-between items-center text-[11px]">
                           <span className="text-stone-600">CRIME VERTICAL:</span>
                           <span className="font-bold" style={{ color: catStyle.text }}>
-                            {activePost.categories.join(' · ')}
+                            {isUnclassified ? 'UNCLASSIFIED' : activePost.categories.join(' · ')}
                           </span>
                         </div>
                         <div className="flex justify-between items-center text-[11px]">
